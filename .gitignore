@@ -1,17 +1,41 @@
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
-dist/
 build/
 .eggs/
 *.egg
-.env
 .venv/
 venv/
+
+# Node
+node_modules/
+frontend/dist/
+electron/dist/
+
+# Database
 *.db
 *.sqlite
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Cache
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Credentials
 credentials.json
 token.json
+
+# Electron build
+release/

@@ -1,0 +1,23 @@
+{
+  "appId": "com.openrecruiter.app",
+  "productName": "Open Recruiter",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "electron/dist/**/*",
+    "frontend/dist/**/*",
+    "backend/**/*",
+    "!backend/.venv/**",
+    "!backend/__pycache__/**"
+  ],
+  "mac": {
+    "target": "dmg"
+  },
+  "win": {
+    "target": "nsis"
+  },
+  "linux": {
+    "target": "AppImage"
+  }
+}

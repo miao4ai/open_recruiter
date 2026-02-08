@@ -1,0 +1,21 @@
+{
+  "name": "open-recruiter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-powered recruitment automation agent",
+  "main": "electron/dist/main.js",
+  "scripts": {
+    "dev:backend": "cd backend && python3 -m uvicorn app.main:app --port 8000 --reload",
+    "dev:frontend": "cd frontend && npx vite",
+    "dev": "npm run dev:backend & npm run dev:frontend",
+    "build:frontend": "cd frontend && npm run build",
+    "build:electron": "cd electron && npx tsc",
+    "build": "npm run build:frontend && npm run build:electron",
+    "electron:dev": "npm run build:electron && electron .",
+    "start": "npm run build && electron ."
+  },
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "typescript": "~5.7.0"
+  }
+}
