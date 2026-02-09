@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 
 from app import database as db
+from app import vectorstore
 from app.models import Candidate, CandidateUpdate, MatchRequest
 
 router = APIRouter()
@@ -87,6 +88,21 @@ async def upload_resume(file: UploadFile = File(...), job_id: str = Form("")):
         job_id=job_id,
     )
     db.insert_candidate(candidate.model_dump())
+
+    try:
+        embed_text = vectorstore.build_candidate_embed_text(candidate)
+        vectorstore.index_candidate(
+            candidate_id=candidate.id,
+            text=embed_text,
+            metadata={
+                "name": candidate.name,
+                "job_id": candidate.job_id,
+                "current_title": candidate.current_title,
+            },
+        )
+    except Exception as e:
+        log.warning("Failed to index candidate in vector store: %s", e)
+
     return candidate.model_dump()
 
 
@@ -109,19 +125,66 @@ async def update_candidate_route(candidate_id: str, update: CandidateUpdate):
 
 @router.post("/match")
 async def match_candidates(req: MatchRequest):
-    """Match selected candidates against a job. Phase 2 will use the Matching Agent."""
+    """Match selected candidates against a job using vector similarity + LLM."""
+    from app.agents.matching import match_candidate_to_job, rank_candidates_for_job
+    from app.routes.settings import get_config
+
+    job = db.get_job(req.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Stage 1: vector similarity ranking
+    rankings = rank_candidates_for_job(
+        job_id=req.job_id,
+        candidate_ids=req.candidate_ids,
+    )
+
+    # Build a lookup for vector scores
+    vector_scores = {r["candidate_id"]: r["score"] for r in rankings}
+
+    # Stage 2: LLM evaluation (optional)
+    cfg = get_config()
+    has_key = (
+        (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
+        or (cfg.llm_provider == "openai" and cfg.openai_api_key)
+    )
+
     results = []
     for cid in req.candidate_ids:
         c = db.get_candidate(cid)
-        if c:
-            results.append({
-                "candidate_id": cid,
-                "candidate_name": c["name"],
-                "score": 0.0,
+        if not c:
+            continue
+
+        vscore = vector_scores.get(cid, 0.0)
+
+        if has_key:
+            match_data = match_candidate_to_job(cfg, req.job_id, cid)
+        else:
+            match_data = {
+                "score": vscore,
                 "strengths": [],
                 "gaps": [],
-                "reasoning": "Matching not yet implemented — coming in Phase 2.",
-            })
+                "reasoning": f"Vector similarity: {vscore:.2f} (configure LLM key for detailed evaluation)",
+            }
+
+        # Persist match results to SQLite
+        db.update_candidate(cid, {
+            "match_score": match_data["score"],
+            "match_reasoning": match_data["reasoning"],
+            "strengths": match_data["strengths"],
+            "gaps": match_data["gaps"],
+            "updated_at": datetime.now().isoformat(),
+        })
+
+        results.append({
+            "candidate_id": cid,
+            "candidate_name": c["name"],
+            "vector_score": vscore,
+            "score": match_data["score"],
+            "strengths": match_data["strengths"],
+            "gaps": match_data["gaps"],
+            "reasoning": match_data["reasoning"],
+        })
     return results
 
 

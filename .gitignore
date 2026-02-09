@@ -16,6 +16,7 @@ electron/dist/
 # Database
 *.db
 *.sqlite
+chroma_data/
 
 # Environment
 .env
