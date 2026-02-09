@@ -1,13 +1,22 @@
 """Candidate routes — CRUD, resume upload, matching."""
 
-from datetime import datetime
+from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Query
+import logging
+from datetime import datetime
+from pathlib import Path
+
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 
 from app import database as db
 from app.models import Candidate, CandidateUpdate, MatchRequest
 
 router = APIRouter()
+log = logging.getLogger(__name__)
+
+# Directory to persist uploaded resume files
+UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 
 @router.get("")
@@ -19,14 +28,62 @@ async def list_candidates_route(
 
 
 @router.post("/upload")
-async def upload_resume(file: UploadFile = File(...), job_id: str = ""):
-    """Upload a resume file. Phase 2 will parse it with the Resume Agent."""
-    content = await file.read()
-    # Phase 1: store file metadata, placeholder candidate
+async def upload_resume(file: UploadFile = File(...), job_id: str = Form("")):
+    """Upload a resume file (PDF / DOCX / TXT).
+
+    Pipeline:
+      1. Save file to disk
+      2. PyMuPDF extracts raw text
+      3. LLM parses text into structured fields
+      4. Store Candidate in SQLite
+    """
+    file_bytes = await file.read()
+    filename = file.filename or "resume"
+
+    # ── Step 1: save file ──────────────────────────────────────────────
+    save_path = UPLOAD_DIR / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}"
+    save_path.write_bytes(file_bytes)
+
+    # ── Step 2: extract text ───────────────────────────────────────────
+    from app.tools.resume_parser import extract_text
+
+    try:
+        raw_text = extract_text(file_bytes, filename)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # ── Step 3: LLM structured parsing ─────────────────────────────────
+    parsed: dict = {}
+    try:
+        from app.routes.settings import get_config
+        cfg = get_config()
+
+        # Only call LLM if an API key is configured
+        has_key = (
+            (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
+            or (cfg.llm_provider == "openai" and cfg.openai_api_key)
+        )
+        if has_key:
+            from app.agents.resume import parse_resume_text
+            parsed = parse_resume_text(cfg, raw_text)
+        else:
+            log.warning("No LLM API key configured — skipping structured parsing.")
+    except Exception as e:
+        # LLM failure is non-fatal; we still have the raw text
+        log.error("LLM resume parsing failed: %s", e)
+
+    # ── Step 4: build Candidate and store ──────────────────────────────
     candidate = Candidate(
-        name=file.filename or "Unknown",
-        resume_path=file.filename or "",
-        resume_summary=f"Uploaded file: {file.filename} ({len(content)} bytes)",
+        name=parsed.get("name") or _guess_name(filename),
+        email=parsed.get("email", ""),
+        phone=parsed.get("phone", ""),
+        current_title=parsed.get("current_title", ""),
+        current_company=parsed.get("current_company", ""),
+        skills=parsed.get("skills", []),
+        experience_years=parsed.get("experience_years"),
+        location=parsed.get("location", ""),
+        resume_path=str(save_path),
+        resume_summary=parsed.get("resume_summary", "") or raw_text[:500],
         job_id=job_id,
     )
     db.insert_candidate(candidate.model_dump())
@@ -53,7 +110,6 @@ async def update_candidate_route(candidate_id: str, update: CandidateUpdate):
 @router.post("/match")
 async def match_candidates(req: MatchRequest):
     """Match selected candidates against a job. Phase 2 will use the Matching Agent."""
-    # Phase 1: return mock scores
     results = []
     for cid in req.candidate_ids:
         c = db.get_candidate(cid)
@@ -67,3 +123,14 @@ async def match_candidates(req: MatchRequest):
                 "reasoning": "Matching not yet implemented — coming in Phase 2.",
             })
     return results
+
+
+def _guess_name(filename: str) -> str:
+    """Best-effort name from filename (e.g. 'Alice_Wang_Resume.pdf' → 'Alice Wang')."""
+    stem = Path(filename).stem
+    # Remove common suffixes
+    for word in ("resume", "cv", "简历", "Resume", "CV"):
+        stem = stem.replace(word, "")
+    # Replace separators with spaces
+    name = stem.replace("_", " ").replace("-", " ").strip()
+    return name if name else "Unknown"

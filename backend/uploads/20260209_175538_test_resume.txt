@@ -1,0 +1,27 @@
+Alice Wang
+alice.wang@email.com | (555) 123-4567 | San Francisco, CA
+
+SUMMARY
+Senior Full-Stack Engineer with 8 years of experience building scalable web applications.
+Passionate about clean code, system design, and mentoring junior developers.
+
+EXPERIENCE
+Senior Software Engineer — Google (2020 - Present)
+- Led development of internal tools serving 10,000+ employees
+- Built microservices with Go and Python, deployed on Kubernetes
+- Mentored 5 junior engineers
+
+Software Engineer — Stripe (2017 - 2020)
+- Developed payment processing features handling $1B+ in transactions
+- Built React/TypeScript frontend for merchant dashboard
+- Improved API latency by 40% through caching optimizations
+
+Junior Developer — Startup Inc (2015 - 2017)
+- Full-stack development with Node.js and React
+- Built REST APIs and PostgreSQL database schemas
+
+SKILLS
+Python, Go, TypeScript, React, Node.js, PostgreSQL, Kubernetes, Docker, AWS, System Design
+
+EDUCATION
+B.S. Computer Science — Stanford University (2015)
