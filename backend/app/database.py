@@ -63,6 +63,19 @@ def init_db() -> None:
             updated_at TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS slack_audit_log (
+            id TEXT PRIMARY KEY,
+            slack_user_id TEXT,
+            slack_channel TEXT,
+            slack_thread_ts TEXT,
+            source_type TEXT,
+            original_filename TEXT,
+            candidate_id TEXT,
+            processing_status TEXT DEFAULT 'pending',
+            error_message TEXT,
+            created_at TEXT
+        );
+
         CREATE TABLE IF NOT EXISTS emails (
             id TEXT PRIMARY KEY,
             candidate_id TEXT,
@@ -312,3 +325,62 @@ def _row_to_email(row) -> dict:
     d["sent"] = bool(d["sent"])
     d["reply_received"] = bool(d["reply_received"])
     return d
+
+
+# ── Slack Audit Log ───────────────────────────────────────────────────────
+
+def insert_audit_log(entry: dict) -> None:
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO slack_audit_log
+           (id, slack_user_id, slack_channel, slack_thread_ts, source_type,
+            original_filename, candidate_id, processing_status, error_message, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            entry["id"], entry.get("slack_user_id", ""),
+            entry.get("slack_channel", ""), entry.get("slack_thread_ts", ""),
+            entry.get("source_type", ""), entry.get("original_filename", ""),
+            entry.get("candidate_id", ""), entry.get("processing_status", "pending"),
+            entry.get("error_message", ""), entry["created_at"],
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_audit_log(log_id: str, updates: dict) -> bool:
+    conn = get_conn()
+    sets = []
+    params = []
+    for k, v in updates.items():
+        sets.append(f"{k} = ?")
+        params.append(v)
+    if not sets:
+        conn.close()
+        return False
+    params.append(log_id)
+    conn.execute(f"UPDATE slack_audit_log SET {', '.join(sets)} WHERE id = ?", params)
+    conn.commit()
+    conn.close()
+    return True
+
+
+def list_audit_logs(
+    slack_user_id: str | None = None,
+    candidate_id: str | None = None,
+    limit: int = 50,
+) -> list[dict]:
+    conn = get_conn()
+    query = "SELECT * FROM slack_audit_log WHERE 1=1"
+    params: list = []
+    if slack_user_id:
+        query += " AND slack_user_id = ?"
+        params.append(slack_user_id)
+    if candidate_id:
+        query += " AND candidate_id = ?"
+        params.append(candidate_id)
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

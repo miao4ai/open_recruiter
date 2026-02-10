@@ -24,6 +24,10 @@ def _build_config() -> Config:
         recruiter_name=db.get("recruiter_name", ""),
         recruiter_email=db.get("recruiter_email", ""),
         recruiter_company=db.get("recruiter_company", ""),
+        slack_bot_token=db.get("slack_bot_token", env.slack_bot_token),
+        slack_app_token=db.get("slack_app_token", env.slack_app_token),
+        slack_signing_secret=db.get("slack_signing_secret", env.slack_signing_secret),
+        slack_intake_channel=db.get("slack_intake_channel", env.slack_intake_channel),
     )
 
 
@@ -46,6 +50,10 @@ async def get_settings_route():
         recruiter_name=cfg.recruiter_name,
         recruiter_email=cfg.recruiter_email,
         recruiter_company=cfg.recruiter_company,
+        slack_bot_token=cfg.slack_bot_token,
+        slack_app_token=cfg.slack_app_token,
+        slack_signing_secret=cfg.slack_signing_secret,
+        slack_intake_channel=cfg.slack_intake_channel,
     )
 
 
@@ -75,3 +83,22 @@ async def test_email():
     """Placeholder for email connectivity test."""
     cfg = _build_config()
     return {"status": "ok", "backend": cfg.email_backend, "message": "Email test not yet implemented."}
+
+
+@router.post("/test-slack")
+async def test_slack():
+    """Quick connectivity test for the Slack bot."""
+    cfg = _build_config()
+    if not cfg.slack_bot_token:
+        return {"status": "error", "message": "Slack bot token not configured."}
+    try:
+        from slack_sdk.web.async_client import AsyncWebClient
+        client = AsyncWebClient(token=cfg.slack_bot_token)
+        resp = await client.auth_test()
+        return {
+            "status": "ok",
+            "bot_user": resp.get("user"),
+            "team": resp.get("team"),
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
 from app.routes import agent, candidates, emails, jobs, search, settings
+from app.slack import routes as slack_routes
+from app.slack.bot import init_slack_app
 from app.vectorstore import init_vectorstore
 
 
@@ -14,6 +16,12 @@ from app.vectorstore import init_vectorstore
 async def lifespan(app: FastAPI):
     init_db()
     init_vectorstore()
+
+    # Initialize Slack bot (gracefully skips if tokens not configured)
+    from app.routes.settings import get_config
+    cfg = get_config()
+    init_slack_app(cfg)
+
     yield
 
 
@@ -33,6 +41,7 @@ app.include_router(emails.router, prefix="/api/emails", tags=["emails"])
 app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
 app.include_router(search.router, prefix="/api/search", tags=["search"])
+app.include_router(slack_routes.router, prefix="/slack", tags=["slack"])
 
 
 @app.get("/health")

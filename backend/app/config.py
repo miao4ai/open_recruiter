@@ -25,6 +25,12 @@ class Config:
     recruiter_email: str = ""
     recruiter_company: str = ""
 
+    # Slack integration
+    slack_bot_token: str = ""
+    slack_app_token: str = ""
+    slack_signing_secret: str = ""
+    slack_intake_channel: str = ""
+
     def __post_init__(self) -> None:
         if not self.llm_model:
             self.llm_model = {
@@ -43,4 +49,8 @@ def load_config_from_env() -> Config:
         email_backend=os.getenv("EMAIL_BACKEND", "console"),
         sendgrid_api_key=os.getenv("SENDGRID_API_KEY", ""),
         email_from=os.getenv("EMAIL_FROM", "recruiter@example.com"),
+        slack_bot_token=os.getenv("SLACK_BOT_TOKEN", ""),
+        slack_app_token=os.getenv("SLACK_APP_TOKEN", ""),
+        slack_signing_secret=os.getenv("SLACK_SIGNING_SECRET", ""),
+        slack_intake_channel=os.getenv("SLACK_INTAKE_CHANNEL", ""),
     )

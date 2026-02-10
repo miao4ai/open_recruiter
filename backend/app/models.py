@@ -118,6 +118,21 @@ class AgentEvent(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict)
 
 
+# ── Slack Audit Log ────────────────────────────────────────────────────────
+
+class SlackAuditLog(BaseModel):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
+    slack_user_id: str = ""
+    slack_channel: str = ""
+    slack_thread_ts: str = ""
+    source_type: str = ""  # "file" | "text"
+    original_filename: str = ""
+    candidate_id: str = ""
+    processing_status: str = "pending"  # "pending" | "success" | "error"
+    error_message: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
 # ── Settings ───────────────────────────────────────────────────────────────
 
 class Settings(BaseModel):
@@ -131,3 +146,7 @@ class Settings(BaseModel):
     recruiter_name: str = ""
     recruiter_email: str = ""
     recruiter_company: str = ""
+    slack_bot_token: str = ""
+    slack_app_token: str = ""
+    slack_signing_secret: str = ""
+    slack_intake_channel: str = ""
