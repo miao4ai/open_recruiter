@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-#  Open Recruiter — Linux / macOS Automated Setup
+#  Open Recruiter — Linux / macOS Fully Automated Setup
 #  Run:  chmod +x setup.sh && ./setup.sh
 # ============================================================================
 
@@ -19,14 +19,45 @@ echo -e "${CYAN}  Open Recruiter — Automated Setup${NC}"
 echo -e "${CYAN}========================================${NC}"
 echo ""
 
-# ── 1. Check Python ──────────────────────────────────────────────────────
+# Detect OS
+OS="unknown"
+PKG_INSTALL=""
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    case "$ID" in
+        debian|ubuntu|raspbian) OS="debian"; PKG_INSTALL="sudo apt-get install -y" ;;
+        fedora)                 OS="fedora"; PKG_INSTALL="sudo dnf install -y" ;;
+        arch|manjaro)           OS="arch";   PKG_INSTALL="sudo pacman -S --noconfirm" ;;
+    esac
+elif [[ "$(uname)" == "Darwin" ]]; then
+    OS="macos"
+fi
+echo -e "  Detected OS: ${CYAN}${OS}${NC}"
+echo ""
 
-echo -e "${YELLOW}[1/6] Checking Python...${NC}"
+# ── Helper: ask to install ────────────────────────────────────────────────
+
+try_install() {
+    local name="$1"
+    shift
+    echo -ne "  ${CYAN}$name not found. Install automatically? (Y/n): ${NC}"
+    read -r ans
+    if [ "$ans" = "n" ] || [ "$ans" = "N" ]; then
+        echo -e "  ${RED}Skipped. Please install $name manually and re-run.${NC}"
+        exit 1
+    fi
+    echo -e "  ${CYAN}Installing $name...${NC}"
+    "$@"
+}
+
+# ── 1. Python 3.11+ ──────────────────────────────────────────────────────
+
+echo -e "${YELLOW}[1/6] Checking Python 3.11+...${NC}"
 PYTHON=""
 for cmd in python3 python; do
     if command -v "$cmd" &>/dev/null; then
         ver=$("$cmd" --version 2>&1)
-        minor=$(echo "$ver" | grep -oP 'Python 3\.\K\d+')
+        minor=$(echo "$ver" | grep -oP 'Python 3\.\K\d+' || true)
         if [ -n "$minor" ] && [ "$minor" -ge 11 ]; then
             PYTHON="$cmd"
             echo -e "  ${GREEN}OK: $ver${NC}"
@@ -36,64 +67,126 @@ for cmd in python3 python; do
 done
 
 if [ -z "$PYTHON" ]; then
-    echo -e "  ${RED}ERROR: Python 3.11+ is required.${NC}"
-    echo "  Install: https://www.python.org/downloads/"
-    echo "  Or: sudo apt install python3 (Debian/Ubuntu)"
-    echo "      brew install python@3.12 (macOS)"
-    exit 1
+    case "$OS" in
+        debian)
+            try_install "Python 3" $PKG_INSTALL python3 python3-venv python3-dev
+            ;;
+        fedora)
+            try_install "Python 3" $PKG_INSTALL python3 python3-devel
+            ;;
+        arch)
+            try_install "Python 3" $PKG_INSTALL python
+            ;;
+        macos)
+            if command -v brew &>/dev/null; then
+                try_install "Python 3" brew install python@3.12
+            else
+                echo -e "  ${RED}Homebrew not found. Install Python from https://www.python.org/downloads/${NC}"
+                exit 1
+            fi
+            ;;
+        *)
+            echo -e "  ${RED}Cannot auto-install Python on this OS.${NC}"
+            echo "  Install Python 3.11+ from https://www.python.org/downloads/"
+            exit 1
+            ;;
+    esac
+    # Re-check
+    for cmd in python3 python; do
+        if command -v "$cmd" &>/dev/null; then
+            ver=$("$cmd" --version 2>&1)
+            minor=$(echo "$ver" | grep -oP 'Python 3\.\K\d+' || true)
+            if [ -n "$minor" ] && [ "$minor" -ge 11 ]; then
+                PYTHON="$cmd"
+                echo -e "  ${GREEN}Installed: $ver${NC}"
+                break
+            fi
+        fi
+    done
+    if [ -z "$PYTHON" ]; then
+        echo -e "  ${RED}Python 3.11+ still not available after install. Check your system.${NC}"
+        exit 1
+    fi
 fi
 
-# ── 2. Check / Install uv ────────────────────────────────────────────────
+# ── 2. uv ────────────────────────────────────────────────────────────────
 
-echo -e "${YELLOW}[2/6] Checking uv (Python package manager)...${NC}"
+echo -e "${YELLOW}[2/6] Checking uv...${NC}"
 if command -v uv &>/dev/null; then
     echo -e "  ${GREEN}OK: $(uv --version)${NC}"
 else
     echo -e "  ${CYAN}Installing uv...${NC}"
     curl -LsSf https://astral.sh/uv/install.sh | sh
-    # Source the env so uv is available
     export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
     if command -v uv &>/dev/null; then
         echo -e "  ${GREEN}Installed: $(uv --version)${NC}"
     else
-        echo -e "  ${RED}ERROR: uv installation failed.${NC}"
-        echo "  Install manually: https://docs.astral.sh/uv/"
+        echo -e "  ${RED}uv installation failed. See https://docs.astral.sh/uv/${NC}"
         exit 1
     fi
 fi
 
-# ── 3. Check Node.js ─────────────────────────────────────────────────────
+# ── 3. Node.js 18+ ───────────────────────────────────────────────────────
 
-echo -e "${YELLOW}[3/6] Checking Node.js...${NC}"
+echo -e "${YELLOW}[3/6] Checking Node.js 18+...${NC}"
+NODE_OK=0
 if command -v node &>/dev/null; then
     NODE_VER=$(node --version)
-    NODE_MAJOR=$(echo "$NODE_VER" | grep -oP 'v\K\d+')
+    NODE_MAJOR=$(echo "$NODE_VER" | grep -oP 'v\K\d+' || echo "0")
     if [ "$NODE_MAJOR" -ge 18 ]; then
         echo -e "  ${GREEN}OK: node $NODE_VER${NC}"
-    else
-        echo -e "  ${RED}ERROR: Node.js 18+ required (found $NODE_VER).${NC}"
-        exit 1
+        NODE_OK=1
     fi
-else
-    echo -e "  ${RED}ERROR: Node.js 18+ is required.${NC}"
-    echo "  Install: https://nodejs.org/"
-    echo "  Or: sudo apt install nodejs npm (Debian/Ubuntu)"
-    echo "      brew install node (macOS)"
-    exit 1
 fi
 
-# ── 4. Install backend dependencies ──────────────────────────────────────
+if [ "$NODE_OK" -eq 0 ]; then
+    case "$OS" in
+        debian)
+            # Use NodeSource for up-to-date Node
+            try_install "Node.js 20.x" bash -c "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs"
+            ;;
+        fedora)
+            try_install "Node.js" $PKG_INSTALL nodejs npm
+            ;;
+        arch)
+            try_install "Node.js" $PKG_INSTALL nodejs npm
+            ;;
+        macos)
+            if command -v brew &>/dev/null; then
+                try_install "Node.js" brew install node
+            else
+                echo -e "  ${RED}Homebrew not found. Install Node.js from https://nodejs.org/${NC}"
+                exit 1
+            fi
+            ;;
+        *)
+            echo -e "  ${RED}Cannot auto-install Node.js on this OS.${NC}"
+            echo "  Install Node.js 18+ from https://nodejs.org/"
+            exit 1
+            ;;
+    esac
+    # Re-check
+    if command -v node &>/dev/null; then
+        NODE_VER=$(node --version)
+        echo -e "  ${GREEN}Installed: node $NODE_VER${NC}"
+    else
+        echo -e "  ${RED}Node.js still not available after install.${NC}"
+        exit 1
+    fi
+fi
 
-echo -e "${YELLOW}[4/6] Installing backend dependencies...${NC}"
+# ── 4. Backend dependencies ──────────────────────────────────────────────
+
+echo -e "${YELLOW}[4/6] Installing backend dependencies (Python)...${NC}"
 cd "$ROOT/backend"
 uv sync
 echo -e "  ${GREEN}Backend OK${NC}"
 
-# ── 5. Install frontend dependencies ─────────────────────────────────────
+# ── 5. Frontend dependencies ─────────────────────────────────────────────
 
-echo -e "${YELLOW}[5/6] Installing frontend dependencies...${NC}"
+echo -e "${YELLOW}[5/6] Installing frontend dependencies (Node)...${NC}"
 cd "$ROOT/frontend"
-npm install --silent
+npm install --silent 2>&1 | tail -1
 echo -e "  ${GREEN}Frontend OK${NC}"
 
 cd "$ROOT"
@@ -102,6 +195,7 @@ cd "$ROOT"
 
 echo -e "${YELLOW}[6/6] Configuring environment...${NC}"
 ENV_FILE="$ROOT/backend/.env"
+SKIP_ENV=""
 
 if [ -f "$ENV_FILE" ]; then
     echo -ne "  ${CYAN}.env already exists. Overwrite? (y/N): ${NC}"
