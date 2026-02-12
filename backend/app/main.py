@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
-from app.routes import agent, candidates, emails, jobs, search, settings
+from app.routes import agent, auth, candidates, emails, jobs, search, settings
 from app.slack import routes as slack_routes
 from app.slack.bot import init_slack_app
 from app.vectorstore import init_vectorstore
@@ -35,6 +35,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(candidates.router, prefix="/api/candidates", tags=["candidates"])
 app.include_router(emails.router, prefix="/api/emails", tags=["emails"])

@@ -77,6 +77,14 @@ def init_db() -> None:
             created_at TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            name TEXT,
+            created_at TEXT
+        );
+
         CREATE TABLE IF NOT EXISTS emails (
             id TEXT PRIMARY KEY,
             candidate_id TEXT,
@@ -121,6 +129,32 @@ def put_settings(data: dict[str, str]) -> None:
         )
     conn.commit()
     conn.close()
+
+
+# ── Users ──────────────────────────────────────────────────────────────────
+
+def insert_user(user: dict) -> None:
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO users (id, email, password_hash, name, created_at) VALUES (?, ?, ?, ?, ?)",
+        (user["id"], user["email"], user["password_hash"], user.get("name", ""), user["created_at"]),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_user_by_email(email: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_user_by_id(user_id: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 # ── Jobs ───────────────────────────────────────────────────────────────────

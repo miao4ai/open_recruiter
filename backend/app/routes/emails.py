@@ -2,21 +2,22 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app import database as db
+from app.auth import get_current_user
 from app.models import Email, EmailDraftRequest
 
 router = APIRouter()
 
 
 @router.get("")
-async def list_emails_route(candidate_id: str | None = Query(None)):
+async def list_emails_route(candidate_id: str | None = Query(None), _user: dict = Depends(get_current_user)):
     return db.list_emails(candidate_id=candidate_id)
 
 
 @router.post("/draft")
-async def draft_email(req: EmailDraftRequest):
+async def draft_email(req: EmailDraftRequest, _user: dict = Depends(get_current_user)):
     """Generate an email draft. Phase 2 will use the Communication Agent."""
     candidate = db.get_candidate(req.candidate_id)
     if not candidate:
@@ -36,19 +37,19 @@ async def draft_email(req: EmailDraftRequest):
 
 
 @router.get("/pending")
-async def pending_emails():
+async def pending_emails(_user: dict = Depends(get_current_user)):
     all_emails = db.list_emails()
     return [e for e in all_emails if not e["sent"] and not e["approved"]]
 
 
 @router.get("/followups")
-async def followup_emails():
+async def followup_emails(_user: dict = Depends(get_current_user)):
     all_emails = db.list_emails()
     return [e for e in all_emails if e["sent"] and not e["reply_received"]]
 
 
 @router.post("/{email_id}/approve")
-async def approve_email(email_id: str):
+async def approve_email(email_id: str, _user: dict = Depends(get_current_user)):
     email = db.get_email(email_id)
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
@@ -57,7 +58,7 @@ async def approve_email(email_id: str):
 
 
 @router.post("/{email_id}/send")
-async def send_email(email_id: str):
+async def send_email(email_id: str, _user: dict = Depends(get_current_user)):
     email = db.get_email(email_id)
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")

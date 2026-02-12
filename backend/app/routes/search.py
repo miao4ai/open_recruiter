@@ -1,10 +1,11 @@
 """Search routes — semantic similarity powered by ChromaDB."""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app import database as db
 from app import vectorstore
+from app.auth import get_current_user
 
 router = APIRouter()
 
@@ -19,6 +20,7 @@ class TextSearchRequest(BaseModel):
 async def search_candidates_for_job(
     job_id: str,
     n: int = Query(20, ge=1, le=100, description="Number of results"),
+    _user: dict = Depends(get_current_user),
 ):
     """Find candidates semantically similar to a job description."""
     job = db.get_job(job_id)
@@ -42,6 +44,7 @@ async def search_candidates_for_job(
 async def search_similar_candidates(
     candidate_id: str,
     n: int = Query(10, ge=1, le=100),
+    _user: dict = Depends(get_current_user),
 ):
     """Find candidates similar to a given candidate."""
     candidate = db.get_candidate(candidate_id)
@@ -64,7 +67,7 @@ async def search_similar_candidates(
 
 
 @router.post("/text")
-async def search_by_text(req: TextSearchRequest):
+async def search_by_text(req: TextSearchRequest, _user: dict = Depends(get_current_user)):
     """Free-text semantic search against jobs or candidates."""
     if req.collection not in ("jobs", "candidates"):
         raise HTTPException(status_code=400, detail="collection must be 'jobs' or 'candidates'")
@@ -91,7 +94,7 @@ async def search_by_text(req: TextSearchRequest):
 
 
 @router.post("/reindex")
-async def reindex_all():
+async def reindex_all(_user: dict = Depends(get_current_user)):
     """Rebuild all ChromaDB embeddings from SQLite data.
 
     Useful after first install, data migration, or model change.
@@ -110,7 +113,7 @@ async def reindex_all():
 
 
 @router.get("/stats")
-async def vector_stats():
+async def vector_stats(_user: dict = Depends(get_current_user)):
     """Return document counts in each ChromaDB collection."""
     return {
         "jobs_count": vectorstore.get_collection_count(vectorstore.JOBS_COLLECTION),

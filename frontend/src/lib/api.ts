@@ -1,7 +1,46 @@
 import axios from "axios";
-import type { Candidate, Email, Job, Settings } from "../types";
+import type { Candidate, Email, Job, Settings, User } from "../types";
 
 const api = axios.create({ baseURL: "/api" });
+
+// ── Auth interceptors ────────────────────────────────────────────────────
+
+const TOKEN_KEY = "or_token";
+
+export const getToken = () => localStorage.getItem(TOKEN_KEY);
+export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token);
+export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+
+api.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      clearToken();
+      window.location.href = "/login";
+    }
+    return Promise.reject(error);
+  },
+);
+
+// ── Auth ─────────────────────────────────────────────────────────────────
+export const register = (email: string, password: string, name: string) =>
+  api
+    .post<{ token: string; user: User }>("/auth/register", { email, password, name })
+    .then((r) => r.data);
+export const login = (email: string, password: string) =>
+  api
+    .post<{ token: string; user: User }>("/auth/login", { email, password })
+    .then((r) => r.data);
+export const getMe = () =>
+  api.get<User>("/auth/me").then((r) => r.data);
 
 // ── Jobs ──────────────────────────────────────────────────────────────────
 export const listJobs = () => api.get<Job[]>("/jobs").then((r) => r.data);

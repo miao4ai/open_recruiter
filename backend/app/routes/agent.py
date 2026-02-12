@@ -3,16 +3,17 @@
 import asyncio
 import json
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sse_starlette.sse import EventSourceResponse
 
+from app.auth import get_current_user
 from app.models import AgentRequest
 
 router = APIRouter()
 
 
 @router.post("/run")
-async def run_agent(req: AgentRequest):
+async def run_agent(req: AgentRequest, _user: dict = Depends(get_current_user)):
     """Execute a natural language instruction via the orchestrator.
 
     Returns an SSE stream with plan/progress/result events.

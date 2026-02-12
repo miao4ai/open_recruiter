@@ -1,7 +1,8 @@
 """Settings routes — API key management, config."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.auth import get_current_user
 from app.config import Config, load_config_from_env
 from app.database import get_settings, put_settings
 from app.models import Settings
@@ -37,8 +38,10 @@ def get_config() -> Config:
 
 
 @router.get("", response_model=Settings)
-async def get_settings_route():
+async def get_settings_route(current_user: dict = Depends(get_current_user)):
     cfg = _build_config()
+    # Override email_from and recruiter_email with logged-in user's email
+    user_email = current_user["email"]
     return Settings(
         llm_provider=cfg.llm_provider,
         llm_model=cfg.llm_model,
@@ -46,9 +49,9 @@ async def get_settings_route():
         openai_api_key=cfg.openai_api_key,
         email_backend=cfg.email_backend,
         sendgrid_api_key=cfg.sendgrid_api_key,
-        email_from=cfg.email_from,
-        recruiter_name=cfg.recruiter_name,
-        recruiter_email=cfg.recruiter_email,
+        email_from=user_email,
+        recruiter_name=cfg.recruiter_name or current_user.get("name", ""),
+        recruiter_email=user_email,
         recruiter_company=cfg.recruiter_company,
         slack_bot_token=cfg.slack_bot_token,
         slack_app_token=cfg.slack_app_token,
@@ -58,7 +61,7 @@ async def get_settings_route():
 
 
 @router.put("")
-async def update_settings(s: Settings):
+async def update_settings(s: Settings, _user: dict = Depends(get_current_user)):
     data = s.model_dump()
     # Store all non-empty values
     to_store = {k: v for k, v in data.items() if v}
@@ -67,7 +70,7 @@ async def update_settings(s: Settings):
 
 
 @router.post("/test-llm")
-async def test_llm():
+async def test_llm(_user: dict = Depends(get_current_user)):
     """Quick connectivity test for the LLM."""
     cfg = _build_config()
     try:
@@ -79,14 +82,14 @@ async def test_llm():
 
 
 @router.post("/test-email")
-async def test_email():
+async def test_email(_user: dict = Depends(get_current_user)):
     """Placeholder for email connectivity test."""
     cfg = _build_config()
     return {"status": "ok", "backend": cfg.email_backend, "message": "Email test not yet implemented."}
 
 
 @router.post("/test-slack")
-async def test_slack():
+async def test_slack(_user: dict = Depends(get_current_user)):
     """Quick connectivity test for the Slack bot."""
     cfg = _build_config()
     if not cfg.slack_bot_token:

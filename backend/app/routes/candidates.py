@@ -6,10 +6,11 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 
 from app import database as db
 from app import vectorstore
+from app.auth import get_current_user
 from app.models import Candidate, CandidateUpdate, MatchRequest
 
 router = APIRouter()
@@ -24,12 +25,13 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 async def list_candidates_route(
     job_id: str | None = Query(None),
     status: str | None = Query(None),
+    _user: dict = Depends(get_current_user),
 ):
     return db.list_candidates(job_id=job_id, status=status)
 
 
 @router.post("/upload")
-async def upload_resume(file: UploadFile = File(...), job_id: str = Form("")):
+async def upload_resume(file: UploadFile = File(...), job_id: str = Form(""), _user: dict = Depends(get_current_user)):
     """Upload a resume file (PDF / DOCX / TXT).
 
     Pipeline:
@@ -107,7 +109,7 @@ async def upload_resume(file: UploadFile = File(...), job_id: str = Form("")):
 
 
 @router.get("/{candidate_id}")
-async def get_candidate_route(candidate_id: str):
+async def get_candidate_route(candidate_id: str, _user: dict = Depends(get_current_user)):
     c = db.get_candidate(candidate_id)
     if not c:
         raise HTTPException(status_code=404, detail="Candidate not found")
@@ -115,7 +117,7 @@ async def get_candidate_route(candidate_id: str):
 
 
 @router.patch("/{candidate_id}")
-async def update_candidate_route(candidate_id: str, update: CandidateUpdate):
+async def update_candidate_route(candidate_id: str, update: CandidateUpdate, _user: dict = Depends(get_current_user)):
     updates = update.model_dump(exclude_none=True)
     updates["updated_at"] = datetime.now().isoformat()
     if not db.update_candidate(candidate_id, updates):
@@ -124,7 +126,7 @@ async def update_candidate_route(candidate_id: str, update: CandidateUpdate):
 
 
 @router.post("/match")
-async def match_candidates(req: MatchRequest):
+async def match_candidates(req: MatchRequest, _user: dict = Depends(get_current_user)):
     """Match selected candidates against a job using vector similarity + LLM."""
     from app.agents.matching import match_candidate_to_job, rank_candidates_for_job
     from app.routes.settings import get_config
