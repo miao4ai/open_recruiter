@@ -1,12 +1,290 @@
-import { useCallback } from "react";
-import { Mail, Send, Check } from "lucide-react";
+import { useCallback, useState } from "react";
+import { Mail, Send, Check, Plus, X, Trash2, Pencil } from "lucide-react";
 import { useApi } from "../hooks/useApi";
-import { listEmails, approveEmail, sendEmail } from "../lib/api";
+import {
+  listEmails,
+  approveEmail,
+  sendEmail,
+  composeEmail,
+  updateEmailDraft,
+  deleteEmail,
+} from "../lib/api";
+import type { Email, EmailType } from "../types";
+
+// ── Email templates ──────────────────────────────────────────────────────
+
+const EMAIL_TEMPLATES: Record<
+  EmailType,
+  { subject: string; body: string }
+> = {
+  outreach: {
+    subject: "Exciting Career Opportunity — [Position Title]",
+    body: `Hi [Candidate Name],
+
+I hope this message finds you well. I came across your profile and was very impressed by your background and experience.
+
+We are currently looking for talented professionals to join our team, and I believe your skills would be a great fit for a role we have open.
+
+Here are a few highlights:
+• Competitive compensation and benefits
+• Collaborative and innovative team environment
+• Opportunities for growth and career development
+
+Would you be open to a brief conversation to learn more? I'd love to share the details and answer any questions you might have.
+
+Looking forward to hearing from you!
+
+Best regards`,
+  },
+  followup: {
+    subject: "Following Up — Career Opportunity",
+    body: `Hi [Candidate Name],
+
+I wanted to follow up on my previous message regarding the opportunity I shared with you.
+
+I understand you may be busy, but I wanted to reiterate my interest in connecting with you. The role is still available and I think it could be a great match for your experience.
+
+Would you have 15 minutes this week for a quick call?
+
+Best regards`,
+  },
+  interview_invite: {
+    subject: "Interview Invitation — [Position Title]",
+    body: `Hi [Candidate Name],
+
+Thank you for your interest in the position. We were very impressed with your background and would like to invite you to an interview.
+
+Here are the details:
+• Date: [Date]
+• Time: [Time]
+• Format: [Video call / In-person]
+• Duration: Approximately 45 minutes
+
+Please let me know if this works for you, or if you'd prefer an alternative time.
+
+Looking forward to speaking with you!
+
+Best regards`,
+  },
+  rejection: {
+    subject: "Update on Your Application",
+    body: `Hi [Candidate Name],
+
+Thank you for taking the time to speak with us about the opportunity. We truly appreciated learning about your experience and accomplishments.
+
+After careful consideration, we have decided to move forward with other candidates whose qualifications more closely align with our current needs.
+
+This decision was not easy, and we encourage you to apply for future openings that match your skills. We will keep your profile on file for future reference.
+
+We wish you all the best in your career journey.
+
+Warm regards`,
+  },
+};
+
+const EMAIL_TYPE_LABELS: Record<EmailType, string> = {
+  outreach: "Outreach",
+  followup: "Follow-up",
+  interview_invite: "Interview Invite",
+  rejection: "Rejection",
+};
+
+// ── Compose / Edit Modal ─────────────────────────────────────────────────
+
+interface ComposeModalProps {
+  draft?: Email;
+  onClose: () => void;
+  onDone: () => void;
+}
+
+function ComposeModal({ draft, onClose, onDone }: ComposeModalProps) {
+  const isEdit = !!draft;
+
+  const [emailType, setEmailType] = useState<EmailType>(
+    draft?.email_type ?? "outreach"
+  );
+  const [toEmail, setToEmail] = useState(draft?.to_email ?? "");
+  const [subject, setSubject] = useState(
+    draft?.subject ?? EMAIL_TEMPLATES.outreach.subject
+  );
+  const [body, setBody] = useState(
+    draft?.body ?? EMAIL_TEMPLATES.outreach.body
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleTypeChange = (type: EmailType) => {
+    setEmailType(type);
+    // Only auto-fill template content for new emails
+    if (!isEdit) {
+      setSubject(EMAIL_TEMPLATES[type].subject);
+      setBody(EMAIL_TEMPLATES[type].body);
+    }
+  };
+
+  const handleSave = async (andSend: boolean) => {
+    if (!toEmail.trim()) {
+      setError("Recipient email is required");
+      return;
+    }
+    setError("");
+    setSaving(true);
+    try {
+      const payload = {
+        to_email: toEmail.trim(),
+        subject,
+        body,
+        email_type: emailType,
+      };
+
+      let emailId: string;
+      if (isEdit) {
+        const updated = await updateEmailDraft(draft.id, payload);
+        emailId = updated.id;
+      } else {
+        const created = await composeEmail(payload);
+        emailId = created.id;
+      }
+
+      if (andSend) {
+        await sendEmail(emailId);
+      }
+      onDone();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail || "Failed to save email";
+      setError(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="relative mx-4 flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+          <h2 className="text-lg font-semibold">
+            {isEdit ? "Edit Draft" : "Compose Email"}
+          </h2>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
+          {error && (
+            <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {/* Email Type */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Template
+            </label>
+            <div className="flex gap-2">
+              {(Object.keys(EMAIL_TYPE_LABELS) as EmailType[]).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => handleTypeChange(type)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    emailType === type
+                      ? "bg-blue-600 text-white"
+                      : "border border-gray-300 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {EMAIL_TYPE_LABELS[type]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* To */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              To
+            </label>
+            <input
+              type="email"
+              value={toEmail}
+              onChange={(e) => setToEmail(e.target.value)}
+              placeholder="recipient@example.com"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Subject */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Subject
+            </label>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Body */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Body
+            </label>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={14}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm leading-relaxed focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => handleSave(false)}
+            disabled={saving}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            {isEdit ? "Save Draft" : "Save as Draft"}
+          </button>
+          <button
+            onClick={() => handleSave(true)}
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            <Send className="h-4 w-4" />
+            {saving ? "Sending..." : "Send Now"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ────────────────────────────────────────────────────────────
 
 export default function Outreach() {
   const { data: emails, refresh } = useApi(
     useCallback(() => listEmails(), [])
   );
+  const [composeMode, setComposeMode] = useState<
+    { open: false } | { open: true; draft?: Email }
+  >({ open: false });
 
   const pending = emails?.filter((e) => !e.sent) ?? [];
   const sent = emails?.filter((e) => e.sent) ?? [];
@@ -17,12 +295,47 @@ export default function Outreach() {
   };
 
   const handleSend = async (id: string) => {
-    await sendEmail(id);
+    try {
+      await sendEmail(id);
+      refresh();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail || "Failed to send";
+      alert(msg);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteEmail(id);
     refresh();
   };
 
   return (
     <div className="space-y-6">
+      {/* Compose / Edit modal */}
+      {composeMode.open && (
+        <ComposeModal
+          draft={composeMode.draft}
+          onClose={() => setComposeMode({ open: false })}
+          onDone={() => {
+            setComposeMode({ open: false });
+            refresh();
+          }}
+        />
+      )}
+
+      {/* Header with compose button */}
+      <div className="flex items-center justify-between">
+        <div />
+        <button
+          onClick={() => setComposeMode({ open: true })}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          <Plus className="h-4 w-4" /> Compose Email
+        </button>
+      </div>
+
       {/* Pending queue */}
       <div>
         <h2 className="mb-3 text-lg font-semibold">
@@ -39,8 +352,20 @@ export default function Outreach() {
                 className="rounded-xl border border-gray-200 bg-white p-5"
               >
                 <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-medium">{e.subject}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-medium">{e.subject}</p>
+                      {!e.approved && (
+                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          Draft
+                        </span>
+                      )}
+                      {e.approved && (
+                        <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                          Approved
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-0.5 text-sm text-gray-500">
                       To: {e.to_email || e.candidate_name} &middot;{" "}
                       <span className="capitalize">
@@ -48,7 +373,16 @@ export default function Outreach() {
                       </span>
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="ml-4 flex shrink-0 gap-2">
+                    <button
+                      onClick={() =>
+                        setComposeMode({ open: true, draft: e })
+                      }
+                      className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      title="Edit draft"
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Edit
+                    </button>
                     {!e.approved && (
                       <button
                         onClick={() => handleApprove(e.id)}
@@ -63,6 +397,13 @@ export default function Outreach() {
                     >
                       <Send className="h-3.5 w-3.5" /> Send
                     </button>
+                    <button
+                      onClick={() => handleDelete(e.id)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                      title="Delete"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
                 <div className="mt-3 whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-sm text-gray-700">
@@ -75,7 +416,7 @@ export default function Outreach() {
           <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center">
             <Mail className="mx-auto h-8 w-8 text-gray-300" />
             <p className="mt-2 text-sm text-gray-400">
-              No pending emails. Draft emails from the Candidates page.
+              No pending emails. Click "Compose Email" to create one.
             </p>
           </div>
         )}
@@ -103,7 +444,11 @@ export default function Outreach() {
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-gray-400">
-                  <span>{e.sent_at ? new Date(e.sent_at).toLocaleDateString() : ""}</span>
+                  <span>
+                    {e.sent_at
+                      ? new Date(e.sent_at).toLocaleDateString()
+                      : ""}
+                  </span>
                   {e.reply_received && (
                     <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">
                       Replied

@@ -90,10 +90,32 @@ export const draftEmail = (
   api
     .post<Email>("/emails/draft", { candidate_id, job_id, email_type })
     .then((r) => r.data);
+export const composeEmail = (data: {
+  to_email: string;
+  subject: string;
+  body: string;
+  email_type?: string;
+  candidate_id?: string;
+  candidate_name?: string;
+}) =>
+  api.post<Email>("/emails/compose", data).then((r) => r.data);
 export const approveEmail = (id: string) =>
   api.post(`/emails/${id}/approve`).then((r) => r.data);
 export const sendEmail = (id: string) =>
   api.post(`/emails/${id}/send`).then((r) => r.data);
+export const updateEmailDraft = (
+  id: string,
+  data: {
+    to_email: string;
+    subject: string;
+    body: string;
+    email_type?: string;
+    candidate_id?: string;
+    candidate_name?: string;
+  }
+) => api.put<Email>(`/emails/${id}`, data).then((r) => r.data);
+export const deleteEmail = (id: string) =>
+  api.delete(`/emails/${id}`).then((r) => r.data);
 export const pendingEmails = () =>
   api.get<Email[]>("/emails/pending").then((r) => r.data);
 

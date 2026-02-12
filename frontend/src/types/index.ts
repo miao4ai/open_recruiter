@@ -91,6 +91,10 @@ export interface Settings {
   email_backend: string;
   sendgrid_api_key: string;
   email_from: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_username: string;
+  smtp_password: string;
   recruiter_name: string;
   recruiter_email: string;
   recruiter_company: string;

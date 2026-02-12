@@ -22,6 +22,10 @@ def _build_config() -> Config:
         email_backend=db.get("email_backend", env.email_backend),
         sendgrid_api_key=db.get("sendgrid_api_key", env.sendgrid_api_key),
         email_from=db.get("email_from", env.email_from),
+        smtp_host=db.get("smtp_host", env.smtp_host),
+        smtp_port=int(db.get("smtp_port", str(env.smtp_port))),
+        smtp_username=db.get("smtp_username", env.smtp_username),
+        smtp_password=db.get("smtp_password", env.smtp_password),
         recruiter_name=db.get("recruiter_name", ""),
         recruiter_email=db.get("recruiter_email", ""),
         recruiter_company=db.get("recruiter_company", ""),
@@ -50,6 +54,10 @@ async def get_settings_route(current_user: dict = Depends(get_current_user)):
         email_backend=cfg.email_backend,
         sendgrid_api_key=cfg.sendgrid_api_key,
         email_from=user_email,
+        smtp_host=cfg.smtp_host,
+        smtp_port=cfg.smtp_port,
+        smtp_username=cfg.smtp_username,
+        smtp_password=cfg.smtp_password,
         recruiter_name=cfg.recruiter_name or current_user.get("name", ""),
         recruiter_email=user_email,
         recruiter_company=cfg.recruiter_company,
@@ -63,8 +71,8 @@ async def get_settings_route(current_user: dict = Depends(get_current_user)):
 @router.put("")
 async def update_settings(s: Settings, _user: dict = Depends(get_current_user)):
     data = s.model_dump()
-    # Store all non-empty values
-    to_store = {k: v for k, v in data.items() if v}
+    # Store all non-empty values; convert non-str to str for DB
+    to_store = {k: str(v) for k, v in data.items() if v}
     put_settings(to_store)
     return {"status": "ok"}
 
@@ -82,10 +90,22 @@ async def test_llm(_user: dict = Depends(get_current_user)):
 
 
 @router.post("/test-email")
-async def test_email(_user: dict = Depends(get_current_user)):
-    """Placeholder for email connectivity test."""
+async def test_email(current_user: dict = Depends(get_current_user)):
+    """Test email connectivity."""
     cfg = _build_config()
-    return {"status": "ok", "backend": cfg.email_backend, "message": "Email test not yet implemented."}
+    from app.tools.email_sender import send_email as do_send
+    result = do_send(
+        backend=cfg.email_backend,
+        from_email=current_user["email"],
+        to_email=current_user["email"],
+        subject="Open Recruiter — Test Email",
+        body="This is a test email from Open Recruiter. If you received this, your email is configured correctly!",
+        smtp_host=cfg.smtp_host,
+        smtp_port=cfg.smtp_port,
+        smtp_username=cfg.smtp_username,
+        smtp_password=cfg.smtp_password,
+    )
+    return result
 
 
 @router.post("/test-slack")

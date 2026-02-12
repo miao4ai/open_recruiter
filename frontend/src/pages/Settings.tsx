@@ -19,6 +19,10 @@ export default function Settings() {
     email_backend: "console",
     sendgrid_api_key: "",
     email_from: "",
+    smtp_host: "",
+    smtp_port: 587,
+    smtp_username: "",
+    smtp_password: "",
     recruiter_name: "",
     recruiter_email: "",
     recruiter_company: "",
@@ -128,19 +132,10 @@ export default function Settings() {
             className="input"
           >
             <option value="console">Console (print to terminal)</option>
+            <option value="gmail">Gmail (SMTP)</option>
+            <option value="smtp">Custom SMTP</option>
             <option value="sendgrid">SendGrid</option>
-            <option value="gmail">Gmail</option>
           </select>
-        </Field>
-        <Field label="SendGrid API Key">
-          <input
-            name="sendgrid_api_key"
-            type="password"
-            value={form.sendgrid_api_key}
-            onChange={handleChange}
-            placeholder="SG...."
-            className="input"
-          />
         </Field>
         <Field label="From Email">
           <input
@@ -149,8 +144,73 @@ export default function Settings() {
             onChange={handleChange}
             placeholder="recruiter@company.com"
             className="input"
+            readOnly
           />
+          <p className="mt-1 text-xs text-gray-400">Auto-set to your login email</p>
         </Field>
+        {form.email_backend === "sendgrid" && (
+          <Field label="SendGrid API Key">
+            <input
+              name="sendgrid_api_key"
+              type="password"
+              value={form.sendgrid_api_key}
+              onChange={handleChange}
+              placeholder="SG...."
+              className="input"
+            />
+          </Field>
+        )}
+        {(form.email_backend === "gmail" || form.email_backend === "smtp") && (
+          <>
+            {form.email_backend === "smtp" && (
+              <>
+                <Field label="SMTP Host">
+                  <input
+                    name="smtp_host"
+                    value={form.smtp_host}
+                    onChange={handleChange}
+                    placeholder="smtp.example.com"
+                    className="input"
+                  />
+                </Field>
+                <Field label="SMTP Port">
+                  <input
+                    name="smtp_port"
+                    type="number"
+                    value={form.smtp_port}
+                    onChange={handleChange}
+                    placeholder="587"
+                    className="input"
+                  />
+                </Field>
+                <Field label="SMTP Username">
+                  <input
+                    name="smtp_username"
+                    value={form.smtp_username}
+                    onChange={handleChange}
+                    placeholder="your-email@example.com"
+                    className="input"
+                  />
+                </Field>
+              </>
+            )}
+            <Field label={form.email_backend === "gmail" ? "Gmail App Password" : "SMTP Password"}>
+              <input
+                name="smtp_password"
+                type="password"
+                value={form.smtp_password}
+                onChange={handleChange}
+                placeholder={form.email_backend === "gmail" ? "xxxx xxxx xxxx xxxx" : "password"}
+                className="input"
+              />
+            </Field>
+            {form.email_backend === "gmail" && (
+              <p className="text-xs text-gray-500">
+                Go to Google Account → Security → 2-Step Verification → App Passwords to generate one.
+              </p>
+            )}
+          </>
+        )}
         <button
           onClick={handleTestEmail}
           className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"

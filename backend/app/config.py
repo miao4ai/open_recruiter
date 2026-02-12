@@ -20,6 +20,10 @@ class Config:
     email_backend: str = "console"
     sendgrid_api_key: str = ""
     email_from: str = "recruiter@example.com"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
 
     recruiter_name: str = ""
     recruiter_email: str = ""
@@ -49,6 +53,10 @@ def load_config_from_env() -> Config:
         email_backend=os.getenv("EMAIL_BACKEND", "console"),
         sendgrid_api_key=os.getenv("SENDGRID_API_KEY", ""),
         email_from=os.getenv("EMAIL_FROM", "recruiter@example.com"),
+        smtp_host=os.getenv("SMTP_HOST", ""),
+        smtp_port=int(os.getenv("SMTP_PORT", "587")),
+        smtp_username=os.getenv("SMTP_USERNAME", ""),
+        smtp_password=os.getenv("SMTP_PASSWORD", ""),
         slack_bot_token=os.getenv("SLACK_BOT_TOKEN", ""),
         slack_app_token=os.getenv("SLACK_APP_TOKEN", ""),
         slack_signing_secret=os.getenv("SLACK_SIGNING_SECRET", ""),

@@ -115,6 +115,14 @@ class EmailDraftRequest(BaseModel):
     job_id: str
     email_type: EmailType = EmailType.OUTREACH
 
+class EmailComposeRequest(BaseModel):
+    to_email: str
+    subject: str
+    body: str
+    email_type: EmailType = EmailType.OUTREACH
+    candidate_id: str = ""
+    candidate_name: str = ""
+
 class Email(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
     candidate_id: str = ""
@@ -165,6 +173,10 @@ class Settings(BaseModel):
     email_backend: str = "console"
     sendgrid_api_key: str = ""
     email_from: str = ""
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
     recruiter_name: str = ""
     recruiter_email: str = ""
     recruiter_company: str = ""
