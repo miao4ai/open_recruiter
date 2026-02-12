@@ -78,8 +78,22 @@ class Job(BaseModel):
 # ── Candidate ──────────────────────────────────────────────────────────────
 
 class CandidateUpdate(BaseModel):
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    current_title: str | None = None
+    current_company: str | None = None
+    skills: list[str] | None = None
+    experience_years: int | None = None
+    location: str | None = None
     status: CandidateStatus | None = None
     notes: str | None = None
+
+class JobUpdate(BaseModel):
+    title: str | None = None
+    company: str | None = None
+    posted_date: str | None = None
+    raw_text: str | None = None
 
 class MatchRequest(BaseModel):
     job_id: str

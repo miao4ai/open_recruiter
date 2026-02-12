@@ -1,26 +1,32 @@
 import { useCallback, useState } from "react";
-import { Plus, Trash2, Users } from "lucide-react";
+import { Plus, Trash2, Users, Pencil, X, Save } from "lucide-react";
 import { useApi } from "../hooks/useApi";
-import { listJobs, createJob, deleteJob } from "../lib/api";
+import { listJobs, createJob, updateJob, deleteJob } from "../lib/api";
+import type { Job } from "../types";
 
 export default function Jobs() {
   const { data: jobs, refresh } = useApi(useCallback(() => listJobs(), []));
   const [showForm, setShowForm] = useState(false);
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [title, setTitle] = useState("");
   const [company, setCompany] = useState("");
   const [postedDate, setPostedDate] = useState("");
   const [rawText, setRawText] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const resetForm = () => {
+    setTitle("");
+    setCompany("");
+    setPostedDate("");
+    setRawText("");
+  };
+
   const handleCreate = async () => {
     if (!rawText.trim()) return;
     setSubmitting(true);
     try {
       await createJob({ title, company, posted_date: postedDate, raw_text: rawText });
-      setTitle("");
-      setCompany("");
-      setPostedDate("");
-      setRawText("");
+      resetForm();
       setShowForm(false);
       refresh();
     } finally {
@@ -28,10 +34,44 @@ export default function Jobs() {
     }
   };
 
+  const startEdit = (job: Job) => {
+    setEditingJob(job);
+    setTitle(job.title);
+    setCompany(job.company);
+    setPostedDate(job.posted_date);
+    setRawText(job.raw_text);
+    setShowForm(false);
+  };
+
+  const handleUpdate = async () => {
+    if (!editingJob) return;
+    setSubmitting(true);
+    try {
+      await updateJob(editingJob.id, {
+        title,
+        company,
+        posted_date: postedDate,
+        raw_text: rawText,
+      });
+      setEditingJob(null);
+      resetForm();
+      refresh();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingJob(null);
+    resetForm();
+  };
+
   const handleDelete = async (id: string) => {
     await deleteJob(id);
     refresh();
   };
+
+  const isFormOpen = showForm || editingJob;
 
   return (
     <div className="space-y-4">
@@ -43,18 +83,23 @@ export default function Jobs() {
             ({jobs?.length ?? 0})
           </span>
         </h2>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4" />
-          New Job
-        </button>
+        {!isFormOpen && (
+          <button
+            onClick={() => { resetForm(); setShowForm(true); }}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" />
+            New Job
+          </button>
+        )}
       </div>
 
-      {/* New job form */}
-      {showForm && (
+      {/* Create / Edit form */}
+      {isFormOpen && (
         <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+          <h3 className="font-semibold">
+            {editingJob ? "Edit Job" : "New Job"}
+          </h3>
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -105,19 +150,40 @@ export default function Jobs() {
             />
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={handleCreate}
-              disabled={submitting || !rawText.trim()}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {submitting ? "Creating..." : "Create Job"}
-            </button>
-            <button
-              onClick={() => setShowForm(false)}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
+            {editingJob ? (
+              <>
+                <button
+                  onClick={handleUpdate}
+                  disabled={submitting}
+                  className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Save className="h-4 w-4" />
+                  {submitting ? "Saving..." : "Save Changes"}
+                </button>
+                <button
+                  onClick={cancelEdit}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={handleCreate}
+                  disabled={submitting || !rawText.trim()}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {submitting ? "Creating..." : "Create Job"}
+                </button>
+                <button
+                  onClick={() => { setShowForm(false); resetForm(); }}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -141,12 +207,22 @@ export default function Jobs() {
                   <p className="mt-0.5 text-xs text-gray-400">Posted: {job.posted_date}</p>
                 )}
               </div>
-              <button
-                onClick={() => handleDelete(job.id)}
-                className="text-gray-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <button
+                  onClick={() => startEdit(job)}
+                  className="text-gray-300 hover:text-blue-500"
+                  title="Edit"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleDelete(job.id)}
+                  className="text-gray-300 hover:text-red-500"
+                  title="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
             {job.required_skills.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1">
@@ -171,7 +247,7 @@ export default function Jobs() {
 
       {(!jobs || jobs.length === 0) && !showForm && (
         <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
-          <Briefcase className="mx-auto h-10 w-10 text-gray-300" />
+          <BriefcaseIcon className="mx-auto h-10 w-10 text-gray-300" />
           <p className="mt-3 text-sm text-gray-500">
             No jobs yet. Click <strong>New Job</strong> to add one.
           </p>
@@ -181,7 +257,7 @@ export default function Jobs() {
   );
 }
 
-function Briefcase(props: React.SVGProps<SVGSVGElement>) {
+function BriefcaseIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

@@ -221,6 +221,27 @@ def get_job(job_id: str) -> dict | None:
     return d
 
 
+def update_job(job_id: str, updates: dict) -> bool:
+    conn = get_conn()
+    sets = []
+    params = []
+    for k, v in updates.items():
+        if k in ("required_skills", "preferred_skills"):
+            v = json.dumps(v)
+        if isinstance(v, bool):
+            v = int(v)
+        sets.append(f"{k} = ?")
+        params.append(v)
+    if not sets:
+        conn.close()
+        return False
+    params.append(job_id)
+    conn.execute(f"UPDATE jobs SET {', '.join(sets)} WHERE id = ?", params)
+    conn.commit()
+    conn.close()
+    return True
+
+
 def delete_job(job_id: str) -> bool:
     conn = get_conn()
     cur = conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))

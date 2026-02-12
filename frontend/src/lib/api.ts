@@ -52,6 +52,10 @@ export const createJob = (data: {
   posted_date?: string;
   raw_text: string;
 }) => api.post<Job>("/jobs", data).then((r) => r.data);
+export const updateJob = (
+  id: string,
+  data: { title?: string; company?: string; posted_date?: string; raw_text?: string }
+) => api.put<Job>(`/jobs/${id}`, data).then((r) => r.data);
 export const deleteJob = (id: string) =>
   api.delete(`/jobs/${id}`).then((r) => r.data);
 
@@ -70,7 +74,18 @@ export const uploadResume = (file: File, job_id: string = "") => {
 };
 export const updateCandidate = (
   id: string,
-  data: { status?: string; notes?: string }
+  data: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    current_title?: string;
+    current_company?: string;
+    skills?: string[];
+    experience_years?: number | null;
+    location?: string;
+    status?: string;
+    notes?: string;
+  }
 ) => api.patch<Candidate>(`/candidates/${id}`, data).then((r) => r.data);
 export const matchCandidates = (job_id: string, candidate_ids: string[]) =>
   api

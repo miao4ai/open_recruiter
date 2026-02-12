@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app import database as db
 from app import vectorstore
 from app.auth import get_current_user
-from app.models import Job, JobCreate
+from app.models import Job, JobCreate, JobUpdate
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +53,19 @@ async def get_job_route(job_id: str, _user: dict = Depends(get_current_user)):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+@router.put("/{job_id}")
+async def update_job_route(job_id: str, req: JobUpdate, _user: dict = Depends(get_current_user)):
+    """Update a job's editable fields."""
+    job = db.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    updates = req.model_dump(exclude_none=True)
+    if not updates:
+        return job
+    db.update_job(job_id, updates)
+    return db.get_job(job_id)
 
 
 @router.delete("/{job_id}")
