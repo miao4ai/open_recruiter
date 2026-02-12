@@ -107,7 +107,9 @@ def _auto_match_candidates_for_job(job_id: str) -> None:
     if not candidates:
         return
 
-    rankings = vectorstore.search_candidates_for_job(job_id=job_id, n_results=100)
+    rankings = vectorstore.search_candidates_for_job(
+        job_id=job_id, n_results=100, job_id_filter=job_id,
+    )
     score_map = {r["candidate_id"]: r["score"] for r in rankings}
 
     for c in candidates:

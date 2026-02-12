@@ -108,7 +108,9 @@ async def upload_resume(file: UploadFile = File(...), job_id: str = Form(""), _u
     # Auto-match against linked job (if any)
     if candidate.job_id:
         try:
-            rankings = vectorstore.search_candidates_for_job(job_id=candidate.job_id, n_results=100)
+            rankings = vectorstore.search_candidates_for_job(
+                job_id=candidate.job_id, n_results=100, job_id_filter=candidate.job_id,
+            )
             score_map = {r["candidate_id"]: r["score"] for r in rankings}
             score = score_map.get(candidate.id, 0.0)
             db.update_candidate(candidate.id, {
@@ -233,7 +235,9 @@ def _auto_match_candidate(candidate: dict) -> None:
     if not job_id:
         return
 
-    rankings = vectorstore.search_candidates_for_job(job_id=job_id, n_results=100)
+    rankings = vectorstore.search_candidates_for_job(
+        job_id=job_id, n_results=100, job_id_filter=job_id,
+    )
     score_map = {r["candidate_id"]: r["score"] for r in rankings}
     score = score_map.get(candidate["id"], 0.0)
 

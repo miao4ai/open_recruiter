@@ -1,8 +1,8 @@
-import { useCallback } from "react";
-import { Briefcase, Users, Mail, Calendar } from "lucide-react";
+import { useCallback, useMemo } from "react";
+import { Briefcase, Users, Mail, Calendar, Plus, Upload, Send } from "lucide-react";
 import { useApi } from "../hooks/useApi";
 import { listJobs, listCandidates, listEmails } from "../lib/api";
-import type { CandidateStatus } from "../types";
+import type { Job, Candidate, Email, CandidateStatus } from "../types";
 import { PIPELINE_COLUMNS } from "../types";
 
 function StatCard({
@@ -27,6 +27,116 @@ function StatCard({
       </div>
     </div>
   );
+}
+
+type ActivityItem = {
+  type: "job" | "candidate" | "email";
+  icon: React.ElementType;
+  iconColor: string;
+  title: string;
+  detail: string;
+  time: string;
+};
+
+function RecentActivity({
+  jobs,
+  candidates,
+  emails,
+}: {
+  jobs: Job[] | null;
+  candidates: Candidate[] | null;
+  emails: Email[] | null;
+}) {
+  const items = useMemo(() => {
+    const all: ActivityItem[] = [];
+
+    for (const j of jobs ?? []) {
+      all.push({
+        type: "job",
+        icon: Plus,
+        iconColor: "bg-blue-100 text-blue-600",
+        title: `Job created: ${j.title}`,
+        detail: j.company || "",
+        time: j.created_at,
+      });
+    }
+
+    for (const c of candidates ?? []) {
+      all.push({
+        type: "candidate",
+        icon: Upload,
+        iconColor: "bg-emerald-100 text-emerald-600",
+        title: `Candidate added: ${c.name || "Unnamed"}`,
+        detail: c.current_title ? `${c.current_title}${c.current_company ? ` at ${c.current_company}` : ""}` : "",
+        time: c.created_at,
+      });
+    }
+
+    for (const e of emails ?? []) {
+      const status = e.sent ? "sent" : e.approved ? "approved" : "drafted";
+      all.push({
+        type: "email",
+        icon: e.sent ? Send : Mail,
+        iconColor: e.sent
+          ? "bg-green-100 text-green-600"
+          : "bg-amber-100 text-amber-600",
+        title: `Email ${status}: ${e.subject}`,
+        detail: `To: ${e.to_email}${e.candidate_name ? ` (${e.candidate_name})` : ""}`,
+        time: e.sent_at || e.created_at,
+      });
+    }
+
+    // Sort by time descending, take latest 15
+    all.sort((a, b) => (b.time ?? "").localeCompare(a.time ?? ""));
+    return all.slice(0, 15);
+  }, [jobs, candidates, emails]);
+
+  if (items.length === 0) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-400">
+        No activity yet. Create a job and add candidates to get started.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white divide-y divide-gray-100">
+      {items.map((item, i) => (
+        <div key={i} className="flex items-start gap-3 px-4 py-3">
+          <div className={`mt-0.5 rounded-lg p-1.5 ${item.iconColor}`}>
+            <item.icon className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-gray-800 truncate">
+              {item.title}
+            </p>
+            {item.detail && (
+              <p className="text-xs text-gray-500 truncate">{item.detail}</p>
+            )}
+          </div>
+          <time className="shrink-0 text-xs text-gray-400">
+            {formatRelativeTime(item.time)}
+          </time>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function formatRelativeTime(isoStr: string): string {
+  if (!isoStr) return "";
+  const date = new Date(isoStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+
+  if (diffMin < 1) return "Just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return date.toLocaleDateString();
 }
 
 export default function Dashboard() {
@@ -118,12 +228,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Recent activity placeholder */}
+      {/* Recent Activity */}
       <div>
         <h2 className="mb-3 text-lg font-semibold">Recent Activity</h2>
-        <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-400">
-          No activity yet. Create a job and add candidates to get started.
-        </div>
+        <RecentActivity jobs={jobs} candidates={candidates} emails={emails} />
       </div>
     </div>
   );

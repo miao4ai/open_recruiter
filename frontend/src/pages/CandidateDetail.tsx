@@ -296,6 +296,18 @@ export default function CandidateDetail() {
             </p>
           </div>
 
+          {/* Candidate Summary */}
+          {candidate.resume_summary && (
+            <div className="mb-4">
+              <h4 className="mb-1 text-xs font-medium uppercase text-gray-500">
+                Candidate Summary
+              </h4>
+              <p className="text-sm leading-relaxed text-gray-600">
+                {candidate.resume_summary}
+              </p>
+            </div>
+          )}
+
           {/* Strengths */}
           {candidate.strengths.length > 0 && (
             <div className="mb-3">
