@@ -29,6 +29,7 @@ def init_db() -> None:
             id TEXT PRIMARY KEY,
             title TEXT,
             company TEXT,
+            posted_date TEXT,
             required_skills TEXT,   -- JSON array
             preferred_skills TEXT,  -- JSON array
             experience_years INTEGER,
@@ -92,6 +93,14 @@ def init_db() -> None:
         );
     """)
     conn.commit()
+
+    # Migration: add posted_date column to existing databases
+    try:
+        conn.execute("ALTER TABLE jobs ADD COLUMN posted_date TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
     conn.close()
 
 
@@ -119,11 +128,12 @@ def put_settings(data: dict[str, str]) -> None:
 def insert_job(job: dict) -> None:
     conn = get_conn()
     conn.execute(
-        """INSERT INTO jobs (id, title, company, required_skills, preferred_skills,
+        """INSERT INTO jobs (id, title, company, posted_date, required_skills, preferred_skills,
            experience_years, location, remote, salary_range, summary, raw_text, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             job["id"], job["title"], job["company"],
+            job.get("posted_date", ""),
             json.dumps(job.get("required_skills", [])),
             json.dumps(job.get("preferred_skills", [])),
             job.get("experience_years"),
@@ -146,6 +156,7 @@ def list_jobs() -> list[dict]:
         d["required_skills"] = json.loads(d["required_skills"] or "[]")
         d["preferred_skills"] = json.loads(d["preferred_skills"] or "[]")
         d["remote"] = bool(d["remote"])
+        d.setdefault("posted_date", "")
         # Count candidates
         conn2 = get_conn()
         cnt = conn2.execute(
@@ -167,6 +178,7 @@ def get_job(job_id: str) -> dict | None:
     d["required_skills"] = json.loads(d["required_skills"] or "[]")
     d["preferred_skills"] = json.loads(d["preferred_skills"] or "[]")
     d["remote"] = bool(d["remote"])
+    d.setdefault("posted_date", "")
     conn2 = get_conn()
     d["candidate_count"] = conn2.execute(
         "SELECT COUNT(*) as c FROM candidates WHERE job_id = ?", (d["id"],)

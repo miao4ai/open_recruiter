@@ -20,6 +20,7 @@ export interface Job {
   id: string;
   title: string;
   company: string;
+  posted_date: string;
   required_skills: string[];
   preferred_skills: string[];
   experience_years: number | null;

@@ -6,6 +6,9 @@ import { listJobs, createJob, deleteJob } from "../lib/api";
 export default function Jobs() {
   const { data: jobs, refresh } = useApi(useCallback(() => listJobs(), []));
   const [showForm, setShowForm] = useState(false);
+  const [title, setTitle] = useState("");
+  const [company, setCompany] = useState("");
+  const [postedDate, setPostedDate] = useState("");
   const [rawText, setRawText] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -13,7 +16,10 @@ export default function Jobs() {
     if (!rawText.trim()) return;
     setSubmitting(true);
     try {
-      await createJob(rawText);
+      await createJob({ title, company, posted_date: postedDate, raw_text: rawText });
+      setTitle("");
+      setCompany("");
+      setPostedDate("");
       setRawText("");
       setShowForm(false);
       refresh();
@@ -48,18 +54,57 @@ export default function Jobs() {
 
       {/* New job form */}
       {showForm && (
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            Paste the Job Description
-          </label>
-          <textarea
-            value={rawText}
-            onChange={(e) => setRawText(e.target.value)}
-            rows={8}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            placeholder="Paste the full job description here..."
-          />
-          <div className="mt-3 flex gap-2">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Job Title
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="e.g. Senior Frontend Engineer"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Company
+              </label>
+              <input
+                type="text"
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="e.g. Acme Corp"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Posted Date
+              </label>
+              <input
+                type="date"
+                value={postedDate}
+                onChange={(e) => setPostedDate(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Job Description
+            </label>
+            <textarea
+              value={rawText}
+              onChange={(e) => setRawText(e.target.value)}
+              rows={8}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="Paste the full job description here..."
+            />
+          </div>
+          <div className="flex gap-2">
             <button
               onClick={handleCreate}
               disabled={submitting || !rawText.trim()}
@@ -91,6 +136,9 @@ export default function Jobs() {
                 </h3>
                 {job.company && (
                   <p className="mt-0.5 text-sm text-gray-500">{job.company}</p>
+                )}
+                {job.posted_date && (
+                  <p className="mt-0.5 text-xs text-gray-400">Posted: {job.posted_date}</p>
                 )}
               </div>
               <button

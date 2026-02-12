@@ -35,12 +35,16 @@ class EmailType(str, Enum):
 # ── Job ────────────────────────────────────────────────────────────────────
 
 class JobCreate(BaseModel):
+    title: str = ""
+    company: str = ""
+    posted_date: str = ""
     raw_text: str
 
 class Job(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
     title: str = ""
     company: str = ""
+    posted_date: str = ""
     required_skills: list[str] = Field(default_factory=list)
     preferred_skills: list[str] = Field(default_factory=list)
     experience_years: int | None = None

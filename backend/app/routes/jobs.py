@@ -20,15 +20,17 @@ async def list_jobs_route():
 
 @router.post("")
 async def create_job(req: JobCreate):
-    """Create a job by pasting raw JD text. Agent will parse it later (Phase 2)."""
-    job = Job(raw_text=req.raw_text)
+    """Create a job from user-provided fields."""
+    title = req.title.strip() if req.title else ""
+    if not title:
+        title = "Untitled Position"
 
-    # Phase 1: store raw text, placeholder title
-    # Phase 2: call LLM to parse JD and fill fields
-    if not job.title:
-        # Simple heuristic: first non-empty line as title
-        lines = [l.strip() for l in req.raw_text.strip().splitlines() if l.strip()]
-        job.title = lines[0][:100] if lines else "Untitled Position"
+    job = Job(
+        title=title,
+        company=req.company,
+        posted_date=req.posted_date,
+        raw_text=req.raw_text,
+    )
 
     db.insert_job(job.model_dump())
 

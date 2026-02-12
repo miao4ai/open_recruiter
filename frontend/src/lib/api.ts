@@ -7,8 +7,12 @@ const api = axios.create({ baseURL: "/api" });
 export const listJobs = () => api.get<Job[]>("/jobs").then((r) => r.data);
 export const getJob = (id: string) =>
   api.get<Job>(`/jobs/${id}`).then((r) => r.data);
-export const createJob = (raw_text: string) =>
-  api.post<Job>("/jobs", { raw_text }).then((r) => r.data);
+export const createJob = (data: {
+  title?: string;
+  company?: string;
+  posted_date?: string;
+  raw_text: string;
+}) => api.post<Job>("/jobs", data).then((r) => r.data);
 export const deleteJob = (id: string) =>
   api.delete(`/jobs/${id}`).then((r) => r.data);
 
