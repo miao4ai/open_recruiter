@@ -149,6 +149,7 @@ class Email(BaseModel):
     sent: bool = False
     sent_at: str | None = None
     reply_received: bool = False
+    attachment_path: str = ""
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
@@ -160,6 +161,9 @@ class AgentRequest(BaseModel):
 class AgentEvent(BaseModel):
     type: str  # plan | progress | approval | result | error
     data: dict[str, Any] = Field(default_factory=dict)
+
+class ChatRequest(BaseModel):
+    message: str
 
 
 # ── Slack Audit Log ────────────────────────────────────────────────────────

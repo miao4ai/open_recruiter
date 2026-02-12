@@ -105,6 +105,19 @@ async def upload_resume(file: UploadFile = File(...), job_id: str = Form(""), _u
     except Exception as e:
         log.warning("Failed to index candidate in vector store: %s", e)
 
+    # Auto-match against linked job (if any)
+    if candidate.job_id:
+        try:
+            rankings = vectorstore.search_candidates_for_job(job_id=candidate.job_id, n_results=100)
+            score_map = {r["candidate_id"]: r["score"] for r in rankings}
+            score = score_map.get(candidate.id, 0.0)
+            db.update_candidate(candidate.id, {
+                "match_score": score,
+                "updated_at": datetime.now().isoformat(),
+            })
+        except Exception as e:
+            log.warning("Auto-match failed for new candidate %s: %s", candidate.id, e)
+
     return candidate.model_dump()
 
 
@@ -122,7 +135,31 @@ async def update_candidate_route(candidate_id: str, update: CandidateUpdate, _us
     updates["updated_at"] = datetime.now().isoformat()
     if not db.update_candidate(candidate_id, updates):
         raise HTTPException(status_code=404, detail="Candidate not found")
-    return db.get_candidate(candidate_id)
+
+    updated = db.get_candidate(candidate_id)
+
+    # Re-index in vector store
+    try:
+        embed_text = vectorstore.build_candidate_embed_text(updated)
+        vectorstore.index_candidate(
+            candidate_id=candidate_id,
+            text=embed_text,
+            metadata={
+                "name": updated.get("name", ""),
+                "job_id": updated.get("job_id", ""),
+                "current_title": updated.get("current_title", ""),
+            },
+        )
+    except Exception as e:
+        log.warning("Failed to reindex candidate in vector store: %s", e)
+
+    # Auto-match against linked job
+    try:
+        _auto_match_candidate(updated)
+    except Exception as e:
+        log.warning("Auto-match failed for candidate %s: %s", candidate_id, e)
+
+    return updated
 
 
 @router.post("/match")
@@ -188,6 +225,22 @@ async def match_candidates(req: MatchRequest, _user: dict = Depends(get_current_
             "reasoning": match_data["reasoning"],
         })
     return results
+
+
+def _auto_match_candidate(candidate: dict) -> None:
+    """Re-run vector-based matching for a single candidate against their linked job."""
+    job_id = candidate.get("job_id", "")
+    if not job_id:
+        return
+
+    rankings = vectorstore.search_candidates_for_job(job_id=job_id, n_results=100)
+    score_map = {r["candidate_id"]: r["score"] for r in rankings}
+    score = score_map.get(candidate["id"], 0.0)
+
+    db.update_candidate(candidate["id"], {
+        "match_score": score,
+        "updated_at": datetime.now().isoformat(),
+    })
 
 
 def _guess_name(filename: str) -> str:

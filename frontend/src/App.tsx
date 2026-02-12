@@ -7,6 +7,7 @@ import Jobs from "./pages/Jobs";
 import Candidates from "./pages/Candidates";
 import CandidateDetail from "./pages/CandidateDetail";
 import Outreach from "./pages/Outreach";
+import Chat from "./pages/Chat";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import { clearToken, getMe, getToken } from "./lib/api";
@@ -57,6 +58,7 @@ export default function App() {
             <Route path="/candidates" element={<Candidates />} />
             <Route path="/candidates/:id" element={<CandidateDetail />} />
             <Route path="/outreach" element={<Outreach />} />
+            <Route path="/chat" element={<Chat />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>

@@ -1,6 +1,7 @@
 """Job routes — CRUD + JD parsing."""
 
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -65,7 +66,26 @@ async def update_job_route(job_id: str, req: JobUpdate, _user: dict = Depends(ge
     if not updates:
         return job
     db.update_job(job_id, updates)
-    return db.get_job(job_id)
+
+    updated_job = db.get_job(job_id)
+
+    # Re-index in vector store
+    try:
+        vectorstore.index_job(
+            job_id=job_id,
+            text=updated_job.get("raw_text", ""),
+            metadata={"title": updated_job.get("title", ""), "company": updated_job.get("company", "")},
+        )
+    except Exception as e:
+        log.warning("Failed to reindex job in vector store: %s", e)
+
+    # Auto-match: re-run vector scoring for candidates linked to this job
+    try:
+        _auto_match_candidates_for_job(job_id)
+    except Exception as e:
+        log.warning("Auto-match failed for job %s: %s", job_id, e)
+
+    return updated_job
 
 
 @router.delete("/{job_id}")
@@ -79,3 +99,20 @@ async def delete_job_route(job_id: str, _user: dict = Depends(get_current_user))
         pass  # Non-fatal: embedding cleanup is best-effort
 
     return {"status": "deleted"}
+
+
+def _auto_match_candidates_for_job(job_id: str) -> None:
+    """Re-run vector-based matching for all candidates linked to a job."""
+    candidates = db.list_candidates(job_id=job_id)
+    if not candidates:
+        return
+
+    rankings = vectorstore.search_candidates_for_job(job_id=job_id, n_results=100)
+    score_map = {r["candidate_id"]: r["score"] for r in rankings}
+
+    for c in candidates:
+        score = score_map.get(c["id"], 0.0)
+        db.update_candidate(c["id"], {
+            "match_score": score,
+            "updated_at": datetime.now().isoformat(),
+        })

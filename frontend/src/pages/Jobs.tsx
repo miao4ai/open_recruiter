@@ -1,8 +1,16 @@
-import { useCallback, useState } from "react";
-import { Plus, Trash2, Users, Pencil, X, Save } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import { Plus, Trash2, Users, Pencil, X, Save, Mail, Send, Paperclip } from "lucide-react";
 import { useApi } from "../hooks/useApi";
-import { listJobs, createJob, updateJob, deleteJob } from "../lib/api";
-import type { Job } from "../types";
+import {
+  listJobs,
+  createJob,
+  updateJob,
+  deleteJob,
+  listCandidates,
+  composeEmailWithAttachment,
+  sendEmail,
+} from "../lib/api";
+import type { Job, Candidate } from "../types";
 
 export default function Jobs() {
   const { data: jobs, refresh } = useApi(useCallback(() => listJobs(), []));
@@ -13,6 +21,7 @@ export default function Jobs() {
   const [postedDate, setPostedDate] = useState("");
   const [rawText, setRawText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [emailJob, setEmailJob] = useState<Job | null>(null);
 
   const resetForm = () => {
     setTitle("");
@@ -209,6 +218,13 @@ export default function Jobs() {
               </div>
               <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                 <button
+                  onClick={() => setEmailJob(job)}
+                  className="text-gray-300 hover:text-green-500"
+                  title="Send Email to Company"
+                >
+                  <Mail className="h-4 w-4" />
+                </button>
+                <button
                   onClick={() => startEdit(job)}
                   className="text-gray-300 hover:text-blue-500"
                   title="Edit"
@@ -253,6 +269,224 @@ export default function Jobs() {
           </p>
         </div>
       )}
+
+      {/* Email modal */}
+      {emailJob && (
+        <JobEmailModal
+          job={emailJob}
+          onClose={() => setEmailJob(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── Job Email Modal ────────────────────────────────────────────────────── */
+
+function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
+  const { data: candidates } = useApi(
+    useCallback(() => listCandidates({ job_id: job.id }), [job.id])
+  );
+  const [toEmail, setToEmail] = useState("");
+  const [selectedCandidateId, setSelectedCandidateId] = useState("");
+  const [useCandidateResume, setUseCandidateResume] = useState(false);
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [subject, setSubject] = useState(
+    `Candidate Recommendation — ${job.title} at ${job.company}`
+  );
+  const [body, setBody] = useState(
+    `Dear Hiring Manager,\n\nI am writing to recommend a candidate for the ${job.title} position at ${job.company}.\n\nPlease find the candidate's resume attached. I believe their background and experience make them a strong fit for this role.\n\nI would welcome the opportunity to discuss this further at your convenience.\n\nBest regards`
+  );
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const selectedCandidate = candidates?.find(
+    (c) => c.id === selectedCandidateId
+  );
+
+  const handleCandidateChange = (cid: string) => {
+    setSelectedCandidateId(cid);
+    setUseCandidateResume(false);
+    setAttachment(null);
+  };
+
+  const handleSend = async (draft: boolean) => {
+    if (!toEmail.trim() || !subject.trim()) return;
+    setSending(true);
+    try {
+      const email = await composeEmailWithAttachment({
+        to_email: toEmail,
+        subject,
+        body,
+        email_type: "outreach",
+        candidate_id: selectedCandidateId,
+        candidate_name: selectedCandidate?.name || "",
+        job_id: job.id,
+        use_candidate_resume: useCandidateResume && !attachment,
+        attachment: attachment || undefined,
+      });
+
+      if (!draft) {
+        await sendEmail(email.id);
+      }
+
+      setSent(true);
+      setTimeout(onClose, 1000);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="mx-4 w-full max-w-2xl rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+          <h3 className="font-semibold">
+            Send Email to Company — {job.title}
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {sent ? (
+          <div className="p-8 text-center">
+            <p className="text-sm text-emerald-600 font-medium">Email saved successfully!</p>
+          </div>
+        ) : (
+          <div className="space-y-4 p-5">
+            {/* To */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">
+                Company Email
+              </label>
+              <input
+                type="email"
+                value={toEmail}
+                onChange={(e) => setToEmail(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="hr@company.com"
+              />
+            </div>
+
+            {/* Candidate selector */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">
+                Select Candidate (optional)
+              </label>
+              <select
+                value={selectedCandidateId}
+                onChange={(e) => handleCandidateChange(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">— None —</option>
+                {candidates?.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} — {c.current_title || "N/A"} ({Math.round(c.match_score * 100)}% match)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Attachment */}
+            {selectedCandidateId && (
+              <div className="space-y-2">
+                {selectedCandidate?.resume_path && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={useCandidateResume && !attachment}
+                      onChange={(e) => {
+                        setUseCandidateResume(e.target.checked);
+                        if (e.target.checked) setAttachment(null);
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <Paperclip className="h-3.5 w-3.5 text-gray-400" />
+                    Attach candidate's resume
+                  </label>
+                )}
+                <div className="flex items-center gap-2">
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
+                    <Paperclip className="h-3.5 w-3.5" />
+                    {attachment ? attachment.name : "Upload PDF"}
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          setAttachment(f);
+                          setUseCandidateResume(false);
+                        }
+                      }}
+                    />
+                  </label>
+                  {attachment && (
+                    <button
+                      onClick={() => {
+                        setAttachment(null);
+                        if (fileRef.current) fileRef.current.value = "";
+                      }}
+                      className="text-xs text-red-500 hover:underline"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Subject */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">
+                Subject
+              </label>
+              <input
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Body */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">
+                Body
+              </label>
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={8}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleSend(true)}
+                disabled={sending || !toEmail.trim()}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {sending ? "Saving..." : "Save as Draft"}
+              </button>
+              <button
+                onClick={() => handleSend(false)}
+                disabled={sending || !toEmail.trim()}
+                className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                <Send className="h-4 w-4" />
+                {sending ? "Sending..." : "Send Now"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

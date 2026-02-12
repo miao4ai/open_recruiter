@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import smtplib
+from email import encoders
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 
 
 def send_email(
@@ -18,6 +21,7 @@ def send_email(
     smtp_port: int = 587,
     smtp_username: str = "",
     smtp_password: str = "",
+    attachment_path: str = "",
 ) -> dict:
     """Send an email using the configured backend.
 
@@ -29,6 +33,8 @@ def send_email(
         print(f"  From: {from_email}")
         print(f"  To:   {to_email}")
         print(f"  Subject: {subject}")
+        if attachment_path:
+            print(f"  Attachment: {attachment_path}")
         print(f"{'='*60}")
         print(body)
         print(f"{'='*60}\n")
@@ -47,11 +53,25 @@ def send_email(
             return {"status": "error", "message": "SMTP password not configured (for Gmail, use an App Password)"}
 
         try:
-            msg = MIMEMultipart("alternative")
+            # Use "mixed" when there's an attachment, "alternative" otherwise
+            msg = MIMEMultipart("mixed" if attachment_path else "alternative")
             msg["From"] = from_email
             msg["To"] = to_email
             msg["Subject"] = subject
             msg.attach(MIMEText(body, "plain", "utf-8"))
+
+            # Attach file if provided
+            if attachment_path:
+                file_path = Path(attachment_path)
+                if file_path.exists():
+                    part = MIMEBase("application", "octet-stream")
+                    part.set_payload(file_path.read_bytes())
+                    encoders.encode_base64(part)
+                    part.add_header(
+                        "Content-Disposition",
+                        f'attachment; filename="{file_path.name}"',
+                    )
+                    msg.attach(part)
 
             with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
                 server.ehlo()

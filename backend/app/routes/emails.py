@@ -1,12 +1,16 @@
 """Email routes — CRUD, draft, compose, approve, send."""
 
 from datetime import datetime
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 
 from app import database as db
 from app.auth import get_current_user
 from app.models import Email, EmailComposeRequest, EmailDraftRequest
+
+UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 router = APIRouter()
 
@@ -45,6 +49,47 @@ async def compose_email(req: EmailComposeRequest, current_user: dict = Depends(g
         subject=req.subject,
         body=req.body,
         email_type=req.email_type,
+    )
+    db.insert_email(email.model_dump())
+    return email.model_dump()
+
+
+@router.post("/compose-with-attachment")
+async def compose_email_with_attachment(
+    to_email: str = Form(...),
+    subject: str = Form(...),
+    body: str = Form(...),
+    email_type: str = Form("outreach"),
+    candidate_id: str = Form(""),
+    candidate_name: str = Form(""),
+    job_id: str = Form(""),
+    use_candidate_resume: str = Form("false"),
+    attachment: UploadFile | None = File(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Compose an email with optional PDF attachment."""
+    attachment_path = ""
+
+    # If a file was uploaded, save it
+    if attachment and attachment.filename:
+        file_bytes = await attachment.read()
+        save_path = UPLOAD_DIR / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{attachment.filename}"
+        save_path.write_bytes(file_bytes)
+        attachment_path = str(save_path)
+    # Otherwise, if use_candidate_resume is true, use the candidate's existing resume
+    elif use_candidate_resume == "true" and candidate_id:
+        candidate = db.get_candidate(candidate_id)
+        if candidate and candidate.get("resume_path"):
+            attachment_path = candidate["resume_path"]
+
+    email = Email(
+        candidate_id=candidate_id,
+        candidate_name=candidate_name,
+        to_email=to_email,
+        subject=subject,
+        body=body,
+        email_type=email_type,
+        attachment_path=attachment_path,
     )
     db.insert_email(email.model_dump())
     return email.model_dump()
@@ -93,6 +138,7 @@ async def send_email(email_id: str, current_user: dict = Depends(get_current_use
         smtp_port=cfg.smtp_port,
         smtp_username=cfg.smtp_username,
         smtp_password=cfg.smtp_password,
+        attachment_path=email.get("attachment_path", ""),
     )
 
     if result["status"] != "ok":

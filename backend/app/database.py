@@ -99,6 +99,14 @@ def init_db() -> None:
             reply_received INTEGER DEFAULT 0,
             created_at TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
     """)
     conn.commit()
 
@@ -108,6 +116,13 @@ def init_db() -> None:
         conn.commit()
     except sqlite3.OperationalError:
         pass  # Column already exists
+
+    # Migration: add attachment_path to emails
+    try:
+        conn.execute("ALTER TABLE emails ADD COLUMN attachment_path TEXT DEFAULT ''")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
 
     conn.close()
 
@@ -334,14 +349,15 @@ def insert_email(e: dict) -> None:
     conn.execute(
         """INSERT INTO emails
            (id, candidate_id, candidate_name, to_email, subject, body,
-            email_type, approved, sent, sent_at, reply_received, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            email_type, approved, sent, sent_at, reply_received, attachment_path, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             e["id"], e.get("candidate_id", ""), e.get("candidate_name", ""),
             e.get("to_email", ""), e.get("subject", ""), e.get("body", ""),
             e.get("email_type", "outreach"), int(e.get("approved", False)),
             int(e.get("sent", False)), e.get("sent_at"),
-            int(e.get("reply_received", False)), e["created_at"],
+            int(e.get("reply_received", False)), e.get("attachment_path", ""),
+            e["created_at"],
         ),
     )
     conn.commit()
@@ -451,3 +467,32 @@ def list_audit_logs(
     rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ── Chat Messages ─────────────────────────────────────────────────────────
+
+def insert_chat_message(msg: dict) -> None:
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO chat_messages (id, user_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
+        (msg["id"], msg["user_id"], msg["role"], msg["content"], msg["created_at"]),
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_chat_messages(user_id: str, limit: int = 50) -> list[dict]:
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM chat_messages WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+        (user_id, limit),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in reversed(rows)]
+
+
+def clear_chat_messages(user_id: str) -> None:
+    conn = get_conn()
+    conn.execute("DELETE FROM chat_messages WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()

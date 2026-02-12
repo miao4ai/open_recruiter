@@ -4,6 +4,7 @@ import {
   Briefcase,
   Users,
   Mail,
+  MessageSquare,
   Settings,
   Bot,
 } from "lucide-react";
@@ -14,6 +15,7 @@ const NAV_ITEMS = [
   { to: "/jobs", icon: Briefcase, label: "Jobs" },
   { to: "/candidates", icon: Users, label: "Candidates" },
   { to: "/outreach", icon: Mail, label: "Outreach" },
+  { to: "/chat", icon: MessageSquare, label: "Chat" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 

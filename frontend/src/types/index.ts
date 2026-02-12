@@ -75,6 +75,7 @@ export interface Email {
   sent: boolean;
   sent_at: string | null;
   reply_received: boolean;
+  attachment_path: string;
   created_at: string;
 }
 
@@ -98,6 +99,14 @@ export interface Settings {
   recruiter_name: string;
   recruiter_email: string;
   recruiter_company: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  user_id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
 }
 
 // Pipeline columns for Kanban board

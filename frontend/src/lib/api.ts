@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { Candidate, Email, Job, Settings, User } from "../types";
+import type { Candidate, ChatMessage, Email, Job, Settings, User } from "../types";
 
 const api = axios.create({ baseURL: "/api" });
 
@@ -114,6 +114,29 @@ export const composeEmail = (data: {
   candidate_name?: string;
 }) =>
   api.post<Email>("/emails/compose", data).then((r) => r.data);
+export const composeEmailWithAttachment = (data: {
+  to_email: string;
+  subject: string;
+  body: string;
+  email_type?: string;
+  candidate_id?: string;
+  candidate_name?: string;
+  job_id?: string;
+  use_candidate_resume?: boolean;
+  attachment?: File;
+}) => {
+  const form = new FormData();
+  form.append("to_email", data.to_email);
+  form.append("subject", data.subject);
+  form.append("body", data.body);
+  if (data.email_type) form.append("email_type", data.email_type);
+  if (data.candidate_id) form.append("candidate_id", data.candidate_id);
+  if (data.candidate_name) form.append("candidate_name", data.candidate_name);
+  if (data.job_id) form.append("job_id", data.job_id);
+  if (data.use_candidate_resume) form.append("use_candidate_resume", "true");
+  if (data.attachment) form.append("attachment", data.attachment);
+  return api.post<Email>("/emails/compose-with-attachment", form).then((r) => r.data);
+};
 export const approveEmail = (id: string) =>
   api.post(`/emails/${id}/approve`).then((r) => r.data);
 export const sendEmail = (id: string) =>
@@ -147,3 +170,11 @@ export const testEmail = () =>
 // ── Agent (SSE) ───────────────────────────────────────────────────────────
 export const runAgent = (instruction: string) =>
   api.post("/agent/run", { instruction }).then((r) => r.data);
+
+// ── Chat ─────────────────────────────────────────────────────────────────
+export const sendChatMessage = (message: string) =>
+  api.post<{ reply: string }>("/agent/chat", { message }).then((r) => r.data);
+export const getChatHistory = () =>
+  api.get<ChatMessage[]>("/agent/chat/history").then((r) => r.data);
+export const clearChatHistory = () =>
+  api.delete("/agent/chat/history").then((r) => r.data);
