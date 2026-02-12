@@ -68,6 +68,7 @@ export default function Candidates() {
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50 text-xs uppercase text-gray-500">
                 <th className="px-4 py-3 font-medium">Name</th>
+                <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Title</th>
                 <th className="px-4 py-3 font-medium">Score</th>
                 <th className="px-4 py-3 font-medium">Status</th>
@@ -87,6 +88,9 @@ export default function Candidates() {
                     >
                       {c.name || "Unnamed"}
                     </Link>
+                  </td>
+                  <td className="px-4 py-3 text-gray-500">
+                    {c.email || "—"}
                   </td>
                   <td className="px-4 py-3 text-gray-600">
                     {c.current_title || "—"}
