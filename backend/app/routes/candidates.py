@@ -75,9 +75,20 @@ async def upload_resume(file: UploadFile = File(...), job_id: str = Form(""), _u
         # LLM failure is non-fatal; we still have the raw text
         log.error("LLM resume parsing failed: %s", e)
 
+    # ── Step 3.5: duplicate check ───────────────────────────────────────
+    parsed_name = parsed.get("name") or _guess_name(filename)
+    parsed_email = parsed.get("email", "")
+    if parsed_name and parsed_email:
+        existing = db.find_candidate_by_name_email(parsed_name, parsed_email)
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Candidate '{parsed_name}' ({parsed_email}) already exists in the database.",
+            )
+
     # ── Step 4: build Candidate and store ──────────────────────────────
     candidate = Candidate(
-        name=parsed.get("name") or _guess_name(filename),
+        name=parsed_name,
         email=parsed.get("email", ""),
         phone=parsed.get("phone", ""),
         current_title=parsed.get("current_title", ""),
@@ -162,6 +173,19 @@ async def update_candidate_route(candidate_id: str, update: CandidateUpdate, _us
         log.warning("Auto-match failed for candidate %s: %s", candidate_id, e)
 
     return updated
+
+
+@router.delete("/{candidate_id}")
+async def delete_candidate_route(candidate_id: str, _user: dict = Depends(get_current_user)):
+    if not db.delete_candidate(candidate_id):
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    try:
+        vectorstore.remove_candidate(candidate_id)
+    except Exception:
+        pass  # Non-fatal: embedding cleanup is best-effort
+
+    return {"status": "deleted"}
 
 
 @router.post("/match")

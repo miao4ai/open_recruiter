@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Mail,
-  XCircle,
+  Trash2,
   Pencil,
   Save,
   X,
@@ -14,6 +14,7 @@ import {
   listEmails,
   listJobs,
   updateCandidate,
+  deleteCandidate,
   composeEmail,
 } from "../lib/api";
 import type { Candidate } from "../types";
@@ -82,9 +83,10 @@ export default function CandidateDetail() {
     navigate("/outreach");
   };
 
-  const handleReject = async () => {
-    await updateCandidate(id!, { status: "rejected" });
-    refresh();
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete this candidate?")) return;
+    await deleteCandidate(id!);
+    navigate("/candidates");
   };
 
   const updateField = (key: string, value: string | string[] | number | null) => {
@@ -400,10 +402,10 @@ export default function CandidateDetail() {
               <Mail className="h-3.5 w-3.5" /> Send Email
             </button>
             <button
-              onClick={handleReject}
+              onClick={handleDelete}
               className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
             >
-              <XCircle className="h-3.5 w-3.5" /> Reject
+              <Trash2 className="h-3.5 w-3.5" /> Delete
             </button>
           </div>
         </div>

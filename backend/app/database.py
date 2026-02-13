@@ -333,6 +333,25 @@ def update_candidate(cid: str, updates: dict) -> bool:
     return True
 
 
+def delete_candidate(cid: str) -> bool:
+    conn = get_conn()
+    cur = conn.execute("DELETE FROM candidates WHERE id = ?", (cid,))
+    conn.commit()
+    conn.close()
+    return cur.rowcount > 0
+
+
+def find_candidate_by_name_email(name: str, email: str) -> dict | None:
+    """Return existing candidate if both name and email match (case-insensitive)."""
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT * FROM candidates WHERE LOWER(name) = LOWER(?) AND LOWER(email) = LOWER(?)",
+        (name, email),
+    ).fetchone()
+    conn.close()
+    return _row_to_candidate(row) if row else None
+
+
 def _row_to_candidate(row) -> dict:
     d = dict(row)
     d["skills"] = json.loads(d["skills"] or "[]")

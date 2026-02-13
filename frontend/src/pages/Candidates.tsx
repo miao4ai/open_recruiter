@@ -26,14 +26,23 @@ export default function Candidates() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState("");
+  const [uploadError, setUploadError] = useState("");
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setUploadError("");
     try {
       await uploadResume(file, selectedJobId);
       refresh();
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      if (err?.response?.status === 409 && detail) {
+        setUploadError(detail);
+      } else {
+        setUploadError("Upload failed. Please try again.");
+      }
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -77,6 +86,14 @@ export default function Candidates() {
           </label>
         </div>
       </div>
+
+      {/* Upload error */}
+      {uploadError && (
+        <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>{uploadError}</span>
+          <button onClick={() => setUploadError("")} className="ml-3 text-red-400 hover:text-red-600">&times;</button>
+        </div>
+      )}
 
       {/* Table */}
       {candidates && candidates.length > 0 ? (

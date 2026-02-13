@@ -90,6 +90,8 @@ export const updateCandidate = (
     job_id?: string;
   }
 ) => api.patch<Candidate>(`/candidates/${id}`, data).then((r) => r.data);
+export const deleteCandidate = (id: string) =>
+  api.delete(`/candidates/${id}`).then((r) => r.data);
 export const matchCandidates = (job_id: string, candidate_ids: string[]) =>
   api
     .post("/candidates/match", { job_id, candidate_ids })
