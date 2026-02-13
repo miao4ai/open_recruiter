@@ -88,6 +88,7 @@ class CandidateUpdate(BaseModel):
     location: str | None = None
     status: CandidateStatus | None = None
     notes: str | None = None
+    job_id: str | None = None
 
 class JobUpdate(BaseModel):
     title: str | None = None

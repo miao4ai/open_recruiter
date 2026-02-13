@@ -85,6 +85,7 @@ export const updateCandidate = (
     location?: string;
     status?: string;
     notes?: string;
+    job_id?: string;
   }
 ) => api.patch<Candidate>(`/candidates/${id}`, data).then((r) => r.data);
 export const matchCandidates = (job_id: string, candidate_ids: string[]) =>

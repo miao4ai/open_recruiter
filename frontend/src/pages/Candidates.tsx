@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Upload, Users } from "lucide-react";
 import { useApi } from "../hooks/useApi";
-import { listCandidates, uploadResume } from "../lib/api";
+import { listCandidates, listJobs, uploadResume } from "../lib/api";
 import type { CandidateStatus } from "../types";
 
 const STATUS_COLORS: Record<CandidateStatus, string> = {
@@ -22,15 +22,17 @@ export default function Candidates() {
   const { data: candidates, refresh } = useApi(
     useCallback(() => listCandidates(), [])
   );
+  const { data: jobs } = useApi(useCallback(() => listJobs(), []));
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState("");
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     try {
-      await uploadResume(file);
+      await uploadResume(file, selectedJobId);
       refresh();
     } finally {
       setUploading(false);
@@ -48,17 +50,32 @@ export default function Candidates() {
             ({candidates?.length ?? 0})
           </span>
         </h2>
-        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-          <Upload className="h-4 w-4" />
-          {uploading ? "Uploading..." : "Import Resume"}
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".pdf,.docx,.doc,.txt"
-            className="hidden"
-            onChange={handleUpload}
-          />
-        </label>
+        <div className="flex items-center gap-2">
+          {/* Job selector for upload */}
+          <select
+            value={selectedJobId}
+            onChange={(e) => setSelectedJobId(e.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">Link to Job (optional)</option>
+            {jobs?.map((j) => (
+              <option key={j.id} value={j.id}>
+                {j.title} — {j.company}
+              </option>
+            ))}
+          </select>
+          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <Upload className="h-4 w-4" />
+            {uploading ? "Uploading..." : "Import Resume"}
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.docx,.doc,.txt"
+              className="hidden"
+              onChange={handleUpload}
+            />
+          </label>
+        </div>
       </div>
 
       {/* Table */}
@@ -70,62 +87,69 @@ export default function Candidates() {
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Title</th>
+                <th className="px-4 py-3 font-medium">Job</th>
                 <th className="px-4 py-3 font-medium">Score</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Skills</th>
               </tr>
             </thead>
             <tbody>
-              {candidates.map((c) => (
-                <tr
-                  key={c.id}
-                  className="border-b border-gray-50 transition-colors hover:bg-gray-50"
-                >
-                  <td className="px-4 py-3">
-                    <Link
-                      to={`/candidates/${c.id}`}
-                      className="font-medium text-blue-600 hover:underline"
-                    >
-                      {c.name || "Unnamed"}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {c.email || "—"}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {c.current_title || "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <ScoreBar score={c.match_score} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        STATUS_COLORS[c.status] ?? "bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {c.status.replace(/_/g, " ")}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {c.skills.slice(0, 3).map((s) => (
-                        <span
-                          key={s}
-                          className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600"
-                        >
-                          {s}
-                        </span>
-                      ))}
-                      {c.skills.length > 3 && (
-                        <span className="text-xs text-gray-400">
-                          +{c.skills.length - 3}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {candidates.map((c) => {
+                const linkedJob = jobs?.find((j) => j.id === c.job_id);
+                return (
+                  <tr
+                    key={c.id}
+                    className="border-b border-gray-50 transition-colors hover:bg-gray-50"
+                  >
+                    <td className="px-4 py-3">
+                      <Link
+                        to={`/candidates/${c.id}`}
+                        className="font-medium text-blue-600 hover:underline"
+                      >
+                        {c.name || "Unnamed"}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {c.email || "\u2014"}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {c.current_title || "\u2014"}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">
+                      {linkedJob ? linkedJob.title : "\u2014"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <ScoreBar score={c.match_score} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                          STATUS_COLORS[c.status] ?? "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {c.status.replace(/_/g, " ")}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {c.skills.slice(0, 3).map((s) => (
+                          <span
+                            key={s}
+                            className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600"
+                          >
+                            {s}
+                          </span>
+                        ))}
+                        {c.skills.length > 3 && (
+                          <span className="text-xs text-gray-400">
+                            +{c.skills.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -12,6 +12,7 @@ import { useApi } from "../hooks/useApi";
 import {
   getCandidate,
   listEmails,
+  listJobs,
   updateCandidate,
   composeEmail,
 } from "../lib/api";
@@ -27,6 +28,7 @@ export default function CandidateDetail() {
   const { data: emails } = useApi(
     useCallback(() => listEmails(id!), [id])
   );
+  const { data: jobs } = useApi(useCallback(() => listJobs(), []));
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Candidate>>({});
@@ -52,6 +54,7 @@ export default function CandidateDetail() {
       experience_years: candidate.experience_years,
       location: candidate.location,
       notes: candidate.notes,
+      job_id: candidate.job_id,
     });
     setEditing(true);
   };
@@ -176,6 +179,23 @@ export default function CandidateDetail() {
               />
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-500">
+                  Linked Job
+                </label>
+                <select
+                  value={form.job_id ?? ""}
+                  onChange={(e) => updateField("job_id", e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">— None —</option>
+                  {jobs?.map((j) => (
+                    <option key={j.id} value={j.id}>
+                      {j.title} — {j.company}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">
                   Skills (comma separated)
                 </label>
                 <input
@@ -241,6 +261,18 @@ export default function CandidateDetail() {
                   </p>
                 )}
               </div>
+
+              {/* Linked Job */}
+              {candidate.job_id && (
+                <div className="mt-4">
+                  <h3 className="mb-1 text-xs font-medium uppercase text-gray-500">
+                    Linked Job
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {jobs?.find((j) => j.id === candidate.job_id)?.title ?? candidate.job_id}
+                  </p>
+                </div>
+              )}
 
               {/* Skills */}
               {candidate.skills.length > 0 && (

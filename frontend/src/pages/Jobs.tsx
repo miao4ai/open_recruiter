@@ -284,9 +284,21 @@ export default function Jobs() {
 /* ── Job Email Modal ────────────────────────────────────────────────────── */
 
 function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
-  const { data: candidates } = useApi(
+  // Load linked candidates first, then all candidates as fallback
+  const { data: linkedCandidates } = useApi(
     useCallback(() => listCandidates({ job_id: job.id }), [job.id])
   );
+  const { data: allCandidates } = useApi(
+    useCallback(() => listCandidates(), [])
+  );
+  // Show linked candidates first, then others
+  const candidates = (() => {
+    if (!allCandidates) return linkedCandidates;
+    const linkedIds = new Set((linkedCandidates ?? []).map((c) => c.id));
+    const linked = allCandidates.filter((c) => linkedIds.has(c.id));
+    const others = allCandidates.filter((c) => !linkedIds.has(c.id));
+    return [...linked, ...others];
+  })();
   const [toEmail, setToEmail] = useState("");
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
   const [useCandidateResume, setUseCandidateResume] = useState(false);
@@ -383,7 +395,7 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
                 <option value="">— None —</option>
                 {candidates?.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name} — {c.current_title || "N/A"} ({Math.round(c.match_score * 100)}% match)
+                    {c.name} — {c.current_title || "N/A"}{c.job_id === job.id ? ` (${Math.round(c.match_score * 100)}% match)` : ""}
                   </option>
                 ))}
               </select>
