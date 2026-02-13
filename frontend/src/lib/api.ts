@@ -58,6 +58,8 @@ export const updateJob = (
 ) => api.put<Job>(`/jobs/${id}`, data).then((r) => r.data);
 export const deleteJob = (id: string) =>
   api.delete(`/jobs/${id}`).then((r) => r.data);
+export const getRankedCandidates = (jobId: string) =>
+  api.get<Candidate[]>(`/jobs/${jobId}/ranked-candidates`).then((r) => r.data);
 
 // ── Candidates ────────────────────────────────────────────────────────────
 export const listCandidates = (params?: {

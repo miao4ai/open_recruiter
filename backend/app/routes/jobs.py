@@ -14,10 +14,24 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
+MATCH_THRESHOLD = 0.30  # minimum cosine similarity to count as a match
+
 
 @router.get("")
 async def list_jobs_route(_user: dict = Depends(get_current_user)):
-    return db.list_jobs()
+    jobs = db.list_jobs()
+    # Enrich with vector-based match counts (how many candidates match this job)
+    for j in jobs:
+        try:
+            rankings = vectorstore.search_candidates_for_job(
+                job_id=j["id"], n_results=200,
+            )
+            j["candidate_count"] = sum(
+                1 for r in rankings if r["score"] >= MATCH_THRESHOLD
+            )
+        except Exception:
+            pass  # Keep the DB-based count as fallback
+    return jobs
 
 
 @router.post("")
@@ -54,6 +68,33 @@ async def get_job_route(job_id: str, _user: dict = Depends(get_current_user)):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+@router.get("/{job_id}/ranked-candidates")
+async def ranked_candidates_route(job_id: str, _user: dict = Depends(get_current_user)):
+    """Return all candidates ranked by vector similarity to this job."""
+    job = db.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    try:
+        rankings = vectorstore.search_candidates_for_job(
+            job_id=job_id, n_results=200,
+        )
+    except Exception as e:
+        log.warning("Vector search failed for job %s: %s", job_id, e)
+        rankings = []
+
+    # Build a score lookup from vector results
+    score_map = {r["candidate_id"]: r["score"] for r in rankings}
+
+    # Get all candidates, enrich with scores, sort by score desc
+    all_candidates = db.list_candidates()
+    for c in all_candidates:
+        c["match_score"] = score_map.get(c["id"], 0.0)
+
+    all_candidates.sort(key=lambda c: c["match_score"], reverse=True)
+    return all_candidates
 
 
 @router.put("/{job_id}")

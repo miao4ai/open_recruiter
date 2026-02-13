@@ -1,13 +1,12 @@
 import { useCallback, useRef, useState } from "react";
-import { Plus, Trash2, Users, Pencil, X, Save, Mail, Send, Paperclip, Upload } from "lucide-react";
+import { Plus, Trash2, Users, Pencil, X, Save, Mail, Send, Paperclip } from "lucide-react";
 import { useApi } from "../hooks/useApi";
 import {
   listJobs,
   createJob,
   updateJob,
   deleteJob,
-  listCandidates,
-  uploadResume,
+  getRankedCandidates,
   composeEmailWithAttachment,
   sendEmail,
 } from "../lib/api";
@@ -23,28 +22,6 @@ export default function Jobs() {
   const [rawText, setRawText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [emailJob, setEmailJob] = useState<Job | null>(null);
-  const [uploadingJobId, setUploadingJobId] = useState<string | null>(null);
-  const jobFileRef = useRef<HTMLInputElement>(null);
-  const uploadJobIdRef = useRef<string>("");
-
-  const handleJobUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const jobId = uploadJobIdRef.current;
-    setUploadingJobId(jobId);
-    try {
-      await uploadResume(file, jobId);
-      refresh();
-    } finally {
-      setUploadingJobId(null);
-      if (jobFileRef.current) jobFileRef.current.value = "";
-    }
-  };
-
-  const triggerJobUpload = (jobId: string) => {
-    uploadJobIdRef.current = jobId;
-    jobFileRef.current?.click();
-  };
 
   const resetForm = () => {
     setTitle("");
@@ -220,15 +197,6 @@ export default function Jobs() {
         </div>
       )}
 
-      {/* Hidden file input for per-job resume upload */}
-      <input
-        ref={jobFileRef}
-        type="file"
-        accept=".pdf,.docx,.doc,.txt"
-        className="hidden"
-        onChange={handleJobUpload}
-      />
-
       {/* Job list */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {jobs?.map((job) => (
@@ -284,21 +252,10 @@ export default function Jobs() {
                 ))}
               </div>
             )}
-            <div className="mt-3 flex items-center justify-between">
-              <div className="flex items-center gap-1 text-xs text-gray-400">
-                <Users className="h-3.5 w-3.5" />
-                {job.candidate_count} candidate
-                {job.candidate_count !== 1 ? "s" : ""}
-              </div>
-              <button
-                onClick={() => triggerJobUpload(job.id)}
-                disabled={uploadingJobId === job.id}
-                className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50"
-                title="Import resume for this job"
-              >
-                <Upload className="h-3 w-3" />
-                {uploadingJobId === job.id ? "Uploading..." : "Import Resume"}
-              </button>
+            <div className="mt-3 flex items-center gap-1 text-xs text-gray-400">
+              <Users className="h-3.5 w-3.5" />
+              {job.candidate_count} matched candidate
+              {job.candidate_count !== 1 ? "s" : ""}
             </div>
           </div>
         ))}
@@ -327,28 +284,17 @@ export default function Jobs() {
 /* ── Job Email Modal ────────────────────────────────────────────────────── */
 
 function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
-  // Load linked candidates first, then all candidates as fallback
-  const { data: linkedCandidates } = useApi(
-    useCallback(() => listCandidates({ job_id: job.id }), [job.id])
+  // Load all candidates ranked by vector similarity to this job
+  const { data: candidates } = useApi(
+    useCallback(() => getRankedCandidates(job.id), [job.id])
   );
-  const { data: allCandidates } = useApi(
-    useCallback(() => listCandidates(), [])
-  );
-  // Show linked candidates first, then others
-  const candidates = (() => {
-    if (!allCandidates) return linkedCandidates;
-    const linkedIds = new Set((linkedCandidates ?? []).map((c) => c.id));
-    const linked = allCandidates.filter((c) => linkedIds.has(c.id));
-    const others = allCandidates.filter((c) => !linkedIds.has(c.id));
-    return [...linked, ...others];
-  })();
   const [toEmail, setToEmail] = useState("");
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
   const [useCandidateResume, setUseCandidateResume] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [subject, setSubject] = useState(
-    `Candidate Recommendation — ${job.title} at ${job.company}`
+    `Candidate Recommendation \u2014 ${job.title} at ${job.company}`
   );
   const [body, setBody] = useState(
     `Dear Hiring Manager,\n\nI am writing to recommend a candidate for the ${job.title} position at ${job.company}.\n\nPlease find the candidate's resume attached. I believe their background and experience make them a strong fit for this role.\n\nI would welcome the opportunity to discuss this further at your convenience.\n\nBest regards`
@@ -398,7 +344,7 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
       <div className="mx-4 w-full max-w-2xl rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
           <h3 className="font-semibold">
-            Send Email to Company — {job.title}
+            Send Email to Company \u2014 {job.title}
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X className="h-5 w-5" />
@@ -435,10 +381,10 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
                 onChange={(e) => handleCandidateChange(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                <option value="">— None —</option>
+                <option value="">\u2014 None \u2014</option>
                 {candidates?.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name} — {c.current_title || "N/A"}{c.job_id === job.id ? ` (${Math.round(c.match_score * 100)}% match)` : ""}
+                    {c.name} \u2014 {c.current_title || "N/A"} ({Math.round(c.match_score * 100)}% match)
                   </option>
                 ))}
               </select>
