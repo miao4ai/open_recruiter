@@ -1,6 +1,21 @@
-# Open Recruiter
+# <img src="images/small_logo.png" height="36" /> Open Recruiter — Personal Talent Discovery Assistant
 
-AI-powered recruitment platform that automates candidate sourcing, matching, and outreach.
+---
+
+<p align="center">
+  <img src="images/large_logo.png" width="360" />
+</p>
+
+<p align="center"><b>AI-Powered Recruitment Platform</b></p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/BUILD-PASSING-brightgreen" />
+  <img src="https://img.shields.io/badge/RELEASE-V2026.2.13-blue" />
+  <img src="https://img.shields.io/badge/PYTHON-3.11+-yellow" />
+  <img src="https://img.shields.io/badge/LICENSE-MIT-purple" />
+</p>
+
+---
 
 ## Features
 
