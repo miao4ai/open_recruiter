@@ -142,6 +142,23 @@ def _run_stages(
                     "updated_at": datetime.now().isoformat(),
                 })
                 log.info("Updated existing candidate %s (dedup by email)", c["id"])
+                # Re-index and re-match existing candidate
+                try:
+                    updated = db.get_candidate(c["id"])
+                    embed_text = vectorstore.build_candidate_embed_text(updated)
+                    vectorstore.index_candidate(
+                        candidate_id=c["id"],
+                        text=embed_text,
+                        metadata={
+                            "name": updated.get("name", ""),
+                            "job_id": updated.get("job_id", ""),
+                            "current_title": updated.get("current_title", ""),
+                        },
+                    )
+                    from app.routes.candidates import _auto_match_all_jobs
+                    _auto_match_all_jobs(c["id"], candidate_text=embed_text)
+                except Exception as e:
+                    log.warning("Re-index/match failed for dedup candidate %s: %s", c["id"], e)
                 return db.get_candidate(c["id"])  # type: ignore[return-value]
 
     # ── Build Candidate and store ─────────────────────────────────────────
@@ -161,8 +178,8 @@ def _run_stages(
     db.insert_candidate(candidate.model_dump())
 
     # ── Index in vector store ─────────────────────────────────────────────
+    embed_text = vectorstore.build_candidate_embed_text(candidate)
     try:
-        embed_text = vectorstore.build_candidate_embed_text(candidate)
         vectorstore.index_candidate(
             candidate_id=candidate.id,
             text=embed_text,
@@ -175,7 +192,15 @@ def _run_stages(
     except Exception as e:
         log.warning("Failed to index candidate in vector store: %s", e)
 
-    return candidate.model_dump()
+    # ── Auto-match against all jobs ────────────────────────────────────────
+    try:
+        from app.routes.candidates import _auto_match_all_jobs
+        _auto_match_all_jobs(candidate.id, candidate_text=embed_text)
+    except Exception as e:
+        log.warning("Auto-match-all failed for new candidate %s: %s", candidate.id, e)
+
+    # Return fresh data (auto-match may have updated fields)
+    return db.get_candidate(candidate.id) or candidate.model_dump()
 
 
 def _guess_name(filename: str) -> str:
