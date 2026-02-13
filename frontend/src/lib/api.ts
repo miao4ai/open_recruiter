@@ -162,6 +162,19 @@ export const deleteEmail = (id: string) =>
 export const pendingEmails = () =>
   api.get<Email[]>("/emails/pending").then((r) => r.data);
 
+// ── Search ───────────────────────────────────────────────────────────────
+export const searchByText = (
+  query: string,
+  collection: "jobs" | "candidates",
+  n_results: number = 20,
+) =>
+  api
+    .post<{ record: Job | Candidate; similarity_score: number }[]>(
+      "/search/text",
+      { query, collection, n_results },
+    )
+    .then((r) => r.data);
+
 // ── Settings ──────────────────────────────────────────────────────────────
 export const getSettings = () =>
   api.get<Settings>("/settings").then((r) => r.data);

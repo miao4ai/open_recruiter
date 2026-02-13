@@ -11,6 +11,7 @@ import {
   sendEmail,
 } from "../lib/api";
 import type { Job, Candidate } from "../types";
+import SemanticSearchBar, { type SearchResult } from "../components/SemanticSearchBar";
 
 export default function Jobs() {
   const { data: jobs, refresh } = useApi(useCallback(() => listJobs(), []));
@@ -22,6 +23,16 @@ export default function Jobs() {
   const [rawText, setRawText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [emailJob, setEmailJob] = useState<Job | null>(null);
+  const [searchResults, setSearchResults] = useState<SearchResult<Job>[] | null>(null);
+
+  const handleSearchResults = useCallback((results: SearchResult<Job>[] | null) => {
+    setSearchResults(results);
+  }, []);
+
+  // If searching, show search results; otherwise show all jobs
+  const displayJobs = searchResults
+    ? searchResults.map((r) => ({ ...r.record, _score: r.similarity_score }))
+    : jobs;
 
   const resetForm = () => {
     setTitle("");
@@ -102,6 +113,13 @@ export default function Jobs() {
           </button>
         )}
       </div>
+
+      {/* Semantic search */}
+      <SemanticSearchBar<Job>
+        collection="jobs"
+        placeholder="Search jobs — try 'senior React developer' or 'machine learning startup'..."
+        onResults={handleSearchResults}
+      />
 
       {/* Create / Edit form */}
       {isFormOpen && (
@@ -199,73 +217,89 @@ export default function Jobs() {
 
       {/* Job list */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {jobs?.map((job) => (
-          <div
-            key={job.id}
-            className="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="font-semibold text-gray-900">
-                  {job.title || "Untitled"}
-                </h3>
-                {job.company && (
-                  <p className="mt-0.5 text-sm text-gray-500">{job.company}</p>
-                )}
-                {job.posted_date && (
-                  <p className="mt-0.5 text-xs text-gray-400">Posted: {job.posted_date}</p>
-                )}
-              </div>
-              <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                <button
-                  onClick={() => setEmailJob(job)}
-                  className="text-gray-300 hover:text-green-500"
-                  title="Send Email to Company"
-                >
-                  <Mail className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => startEdit(job)}
-                  className="text-gray-300 hover:text-blue-500"
-                  title="Edit"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(job.id)}
-                  className="text-gray-300 hover:text-red-500"
-                  title="Delete"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-            {job.required_skills.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1">
-                {job.required_skills.slice(0, 4).map((s) => (
-                  <span
-                    key={s}
-                    className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700"
+        {displayJobs?.map((job) => {
+          const score = (job as any)._score as number | undefined;
+          return (
+            <div
+              key={job.id}
+              className={`group rounded-xl border bg-white p-5 shadow-sm transition-all hover:shadow-md ${
+                score != null
+                  ? "border-blue-200 ring-1 ring-blue-100"
+                  : "border-gray-200"
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="truncate font-semibold text-gray-900">
+                      {job.title || "Untitled"}
+                    </h3>
+                    {score != null && (
+                      <span className="flex-shrink-0 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                        {Math.round(score * 100)}% match
+                      </span>
+                    )}
+                  </div>
+                  {job.company && (
+                    <p className="mt-0.5 text-sm text-gray-500">{job.company}</p>
+                  )}
+                  {job.posted_date && (
+                    <p className="mt-0.5 text-xs text-gray-400">Posted: {job.posted_date}</p>
+                  )}
+                </div>
+                <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button
+                    onClick={() => setEmailJob(job)}
+                    className="text-gray-300 hover:text-green-500"
+                    title="Send Email to Company"
                   >
-                    {s}
-                  </span>
-                ))}
+                    <Mail className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => startEdit(job)}
+                    className="text-gray-300 hover:text-blue-500"
+                    title="Edit"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(job.id)}
+                    className="text-gray-300 hover:text-red-500"
+                    title="Delete"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-            )}
-            <div className="mt-3 flex items-center gap-1 text-xs text-gray-400">
-              <Users className="h-3.5 w-3.5" />
-              {job.candidate_count} matched candidate
-              {job.candidate_count !== 1 ? "s" : ""}
+              {job.required_skills.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1">
+                  {job.required_skills.slice(0, 4).map((s) => (
+                    <span
+                      key={s}
+                      className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700"
+                    >
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="mt-3 flex items-center gap-1 text-xs text-gray-400">
+                <Users className="h-3.5 w-3.5" />
+                {job.candidate_count} matched candidate
+                {job.candidate_count !== 1 ? "s" : ""}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {(!jobs || jobs.length === 0) && !showForm && (
+      {(!displayJobs || displayJobs.length === 0) && !showForm && (
         <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
           <BriefcaseIcon className="mx-auto h-10 w-10 text-gray-300" />
           <p className="mt-3 text-sm text-gray-500">
-            No jobs yet. Click <strong>New Job</strong> to add one.
+            {searchResults
+              ? "No jobs match your search."
+              : <>No jobs yet. Click <strong>New Job</strong> to add one.</>}
           </p>
         </div>
       )}

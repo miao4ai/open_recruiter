@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { Upload, Users } from "lucide-react";
 import { useApi } from "../hooks/useApi";
 import { listCandidates, listJobs, uploadResume } from "../lib/api";
-import type { CandidateStatus } from "../types";
+import type { Candidate, CandidateStatus } from "../types";
+import SemanticSearchBar, { type SearchResult } from "../components/SemanticSearchBar";
 
 const STATUS_COLORS: Record<CandidateStatus, string> = {
   new: "bg-gray-100 text-gray-700",
@@ -27,6 +28,19 @@ export default function Candidates() {
   const [uploading, setUploading] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState("");
   const [uploadError, setUploadError] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult<Candidate>[] | null>(null);
+
+  const handleSearchResults = useCallback((results: SearchResult<Candidate>[] | null) => {
+    setSearchResults(results);
+  }, []);
+
+  // Build a score map from search results for display
+  const scoreMap = searchResults
+    ? new Map(searchResults.map((r) => [r.record.id, r.similarity_score]))
+    : null;
+  const displayCandidates = searchResults
+    ? searchResults.map((r) => r.record)
+    : candidates;
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -95,12 +109,20 @@ export default function Candidates() {
         </div>
       )}
 
+      {/* Semantic search */}
+      <SemanticSearchBar<Candidate>
+        collection="candidates"
+        placeholder="Search candidates — try 'Python backend with 5 years experience' or 'React developer'..."
+        onResults={handleSearchResults}
+      />
+
       {/* Table */}
-      {candidates && candidates.length > 0 ? (
+      {displayCandidates && displayCandidates.length > 0 ? (
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50 text-xs uppercase text-gray-500">
+                {scoreMap && <th className="px-4 py-3 font-medium">Relevance</th>}
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Title</th>
@@ -111,13 +133,25 @@ export default function Candidates() {
               </tr>
             </thead>
             <tbody>
-              {candidates.map((c) => {
+              {displayCandidates.map((c) => {
                 const linkedJob = jobs?.find((j) => j.id === c.job_id);
+                const relevance = scoreMap?.get(c.id);
                 return (
                   <tr
                     key={c.id}
-                    className="border-b border-gray-50 transition-colors hover:bg-gray-50"
+                    className={`border-b border-gray-50 transition-colors hover:bg-gray-50 ${
+                      relevance != null ? "bg-blue-50/30" : ""
+                    }`}
                   >
+                    {scoreMap && (
+                      <td className="px-4 py-3">
+                        {relevance != null && (
+                          <span className="inline-flex items-center rounded-full bg-gradient-to-r from-blue-500 to-purple-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                            {Math.round(relevance * 100)}%
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <Link
                         to={`/candidates/${c.id}`}
@@ -174,7 +208,9 @@ export default function Candidates() {
         <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
           <Users className="mx-auto h-10 w-10 text-gray-300" />
           <p className="mt-3 text-sm text-gray-500">
-            No candidates yet. Click <strong>Import Resume</strong> to add one.
+            {searchResults
+              ? "No candidates match your search."
+              : <>No candidates yet. Click <strong>Import Resume</strong> to add one.</>}
           </p>
         </div>
       )}
