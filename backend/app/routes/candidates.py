@@ -102,8 +102,8 @@ async def upload_resume(file: UploadFile = File(...), job_id: str = Form(""), _u
     )
     db.insert_candidate(candidate.model_dump())
 
+    embed_text = vectorstore.build_candidate_embed_text(candidate)
     try:
-        embed_text = vectorstore.build_candidate_embed_text(candidate)
         vectorstore.index_candidate(
             candidate_id=candidate.id,
             text=embed_text,
@@ -116,9 +116,9 @@ async def upload_resume(file: UploadFile = File(...), job_id: str = Form(""), _u
     except Exception as e:
         log.warning("Failed to index candidate in vector store: %s", e)
 
-    # Auto-match against all jobs (find best fit + generate analysis)
+    # Auto-match against all jobs (pass embed_text directly to avoid ChromaDB round-trip)
     try:
-        _auto_match_all_jobs(candidate.id)
+        _auto_match_all_jobs(candidate.id, candidate_text=embed_text)
     except Exception as e:
         log.warning("Auto-match-all failed for new candidate %s: %s", candidate.id, e)
 
@@ -178,7 +178,7 @@ async def update_candidate_route(candidate_id: str, update: CandidateUpdate, _us
 
     # Re-run auto-match against all jobs
     try:
-        _auto_match_all_jobs(candidate_id)
+        _auto_match_all_jobs(candidate_id, candidate_text=embed_text)
     except Exception as e:
         log.warning("Auto-match-all failed for candidate %s: %s", candidate_id, e)
 
@@ -219,7 +219,7 @@ async def match_candidates(req: MatchRequest, _user: dict = Depends(get_current_
     return results
 
 
-def _auto_match_all_jobs(candidate_id: str) -> None:
+def _auto_match_all_jobs(candidate_id: str, candidate_text: str | None = None) -> None:
     """Match a candidate against all jobs: vector scoring + optional LLM analysis.
 
     Updates the candidate record with:
@@ -228,7 +228,9 @@ def _auto_match_all_jobs(candidate_id: str) -> None:
     - match_reasoning = LLM multi-job analysis (or vector-only summary)
     - strengths / gaps = for best matching job
     """
-    top_jobs = vectorstore.search_jobs_for_candidate(candidate_id, n_results=5)
+    top_jobs = vectorstore.search_jobs_for_candidate(
+        candidate_id, n_results=5, candidate_text=candidate_text,
+    )
     if not top_jobs:
         return
 

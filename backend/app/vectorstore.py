@@ -138,15 +138,23 @@ def search_candidates_for_job(
 def search_jobs_for_candidate(
     candidate_id: str,
     n_results: int = 5,
+    candidate_text: str | None = None,
 ) -> list[dict]:
-    """Find jobs semantically similar to a candidate's profile."""
-    candidates_col = _get_collection(CANDIDATES_COLLECTION)
+    """Find jobs semantically similar to a candidate's profile.
+
+    If *candidate_text* is supplied it is used directly for the query,
+    avoiding a round-trip ``get`` to ChromaDB (important right after
+    indexing when the document may not yet be readable).
+    """
     jobs_col = _get_collection(JOBS_COLLECTION)
 
-    result = candidates_col.get(ids=[candidate_id], include=["documents"])
-    if not result["documents"]:
-        return []
-    candidate_text = result["documents"][0]
+    if not candidate_text:
+        candidates_col = _get_collection(CANDIDATES_COLLECTION)
+        result = candidates_col.get(ids=[candidate_id], include=["documents"])
+        if not result["documents"] or not result["documents"][0]:
+            log.warning("search_jobs_for_candidate: no document found for %s", candidate_id)
+            return []
+        candidate_text = result["documents"][0]
 
     results = jobs_col.query(
         query_texts=[candidate_text],
