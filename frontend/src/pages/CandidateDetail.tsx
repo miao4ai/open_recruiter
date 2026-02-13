@@ -9,6 +9,7 @@ import {
   X,
   Sparkles,
   Loader2,
+  Briefcase,
 } from "lucide-react";
 import { useApi } from "../hooks/useApi";
 import {
@@ -20,7 +21,7 @@ import {
   matchCandidates,
   composeEmail,
 } from "../lib/api";
-import type { Candidate } from "../types";
+import type { Candidate, TopJob } from "../types";
 
 export default function CandidateDetail() {
   const { id } = useParams<{ id: string }>();
@@ -40,7 +41,6 @@ export default function CandidateDetail() {
 
   // Match analysis state
   const [analyzing, setAnalyzing] = useState(false);
-  const [analyzeJobId, setAnalyzeJobId] = useState("");
   const [typewriterText, setTypewriterText] = useState("");
   const [typewriterDone, setTypewriterDone] = useState(true);
 
@@ -51,8 +51,8 @@ export default function CandidateDetail() {
     return <p className="text-sm text-red-500">Candidate not found.</p>;
   }
 
-  const scorePct = Math.round(candidate.match_score * 100);
   const hasAnalysis = !!(candidate.match_reasoning);
+  const topJobs: TopJob[] = candidate.top_jobs ?? [];
 
   const startEdit = () => {
     setForm({
@@ -65,7 +65,6 @@ export default function CandidateDetail() {
       experience_years: candidate.experience_years,
       location: candidate.location,
       notes: candidate.notes,
-      job_id: candidate.job_id,
     });
     setEditing(true);
   };
@@ -100,13 +99,12 @@ export default function CandidateDetail() {
   };
 
   const handleAnalyze = async () => {
-    const jobId = candidate.job_id || analyzeJobId;
-    if (!jobId) return;
     setAnalyzing(true);
     setTypewriterText("");
     setTypewriterDone(false);
     try {
-      const results = await matchCandidates(jobId, [candidate.id]);
+      // matchCandidates now triggers _auto_match_all_jobs on the backend
+      const results = await matchCandidates(candidate.job_id || "", [candidate.id]);
       const result = results[0];
       if (result?.reasoning) {
         setTypewriterText(result.reasoning);
@@ -213,23 +211,6 @@ export default function CandidateDetail() {
               />
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-500">
-                  Linked Job
-                </label>
-                <select
-                  value={form.job_id ?? ""}
-                  onChange={(e) => updateField("job_id", e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="">— None —</option>
-                  {jobs?.map((j) => (
-                    <option key={j.id} value={j.id}>
-                      {j.title} — {j.company}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">
                   Skills (comma separated)
                 </label>
                 <input
@@ -296,18 +277,6 @@ export default function CandidateDetail() {
                 )}
               </div>
 
-              {/* Linked Job */}
-              {candidate.job_id && (
-                <div className="mt-4">
-                  <h3 className="mb-1 text-xs font-medium uppercase text-gray-500">
-                    Linked Job
-                  </h3>
-                  <p className="text-sm text-gray-600">
-                    {jobs?.find((j) => j.id === candidate.job_id)?.title ?? candidate.job_id}
-                  </p>
-                </div>
-              )}
-
               {/* Skills */}
               {candidate.skills.length > 0 && (
                 <div className="mt-4">
@@ -346,22 +315,81 @@ export default function CandidateDetail() {
             <h3 className="font-semibold">Match Analysis</h3>
           </div>
 
-          {/* Score ring + reasoning */}
+          {/* Candidate Summary */}
+          {candidate.resume_summary && (
+            <div className="mb-4">
+              <h4 className="mb-1 text-xs font-medium uppercase text-gray-500">
+                Summary
+              </h4>
+              <p className="text-sm leading-relaxed text-gray-600">
+                {candidate.resume_summary}
+              </p>
+            </div>
+          )}
+
+          {/* Top Matching Jobs */}
+          <div className="mb-4">
+            <h4 className="mb-2 text-xs font-medium uppercase text-gray-500">
+              Top Matching Jobs
+            </h4>
+            {topJobs.length > 0 ? (
+              <div className="space-y-2">
+                {topJobs.map((tj, i) => {
+                  const pct = Math.round(tj.score * 100);
+                  const isTop = i === 0;
+                  return (
+                    <div
+                      key={tj.job_id}
+                      className={`flex items-center gap-3 rounded-lg border p-3 ${
+                        isTop
+                          ? "border-blue-200 bg-blue-50/50"
+                          : "border-gray-100 bg-gray-50/50"
+                      }`}
+                    >
+                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-500">
+                        #{i + 1}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={`truncate text-sm font-medium ${isTop ? "text-blue-700" : "text-gray-700"}`}>
+                          {tj.title}
+                        </p>
+                        {tj.company && (
+                          <p className="truncate text-xs text-gray-500">
+                            {tj.company}
+                          </p>
+                        )}
+                      </div>
+                      <div
+                        className={`flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          pct >= 70
+                            ? "bg-emerald-100 text-emerald-700"
+                            : pct >= 40
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-red-100 text-red-600"
+                        }`}
+                      >
+                        {pct}%
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 rounded-lg border border-dashed border-gray-200 p-4 text-sm text-gray-400">
+                <Briefcase className="h-4 w-4" />
+                No jobs in the system yet.
+              </div>
+            )}
+          </div>
+
+          {/* AI Analysis (reasoning, strengths, gaps) */}
           {(hasAnalysis || analyzing || showTypewriter) ? (
             <>
-              <div className="mb-4 flex items-center gap-4">
-                <div
-                  className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 text-lg font-bold ${
-                    scorePct >= 70
-                      ? "border-emerald-500 text-emerald-600"
-                      : scorePct >= 40
-                        ? "border-amber-500 text-amber-600"
-                        : "border-red-400 text-red-500"
-                  }`}
-                >
-                  {scorePct}%
-                </div>
-                <p className="text-sm text-gray-500">
+              <div className="mb-3">
+                <h4 className="mb-1 text-xs font-medium uppercase text-gray-500">
+                  AI Analysis
+                </h4>
+                <p className="whitespace-pre-line text-sm text-gray-600">
                   {showTypewriter ? (
                     <TypewriterText
                       text={typewriterText}
@@ -369,7 +397,7 @@ export default function CandidateDetail() {
                       onComplete={() => setTypewriterDone(true)}
                     />
                   ) : (
-                    candidate.match_reasoning || "No match analysis yet."
+                    reasoningText || "No analysis yet."
                   )}
                 </p>
               </div>
@@ -404,61 +432,32 @@ export default function CandidateDetail() {
             </>
           ) : (
             <p className="mb-4 text-sm text-gray-400">
-              Click the button below to generate a match analysis using AI.
+              {topJobs.length > 0
+                ? "Click below to generate a detailed AI analysis."
+                : "Add jobs to the system to see match analysis."}
             </p>
           )}
 
-          {/* Candidate Summary */}
-          {candidate.resume_summary && (
-            <div className="mb-4">
-              <h4 className="mb-1 text-xs font-medium uppercase text-gray-500">
-                Candidate Summary
-              </h4>
-              <p className="text-sm leading-relaxed text-gray-600">
-                {candidate.resume_summary}
-              </p>
-            </div>
+          {/* Re-analyze button */}
+          {topJobs.length > 0 && (
+            <button
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-violet-700 hover:to-blue-700 disabled:opacity-50"
+            >
+              {analyzing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  {hasAnalysis ? "Re-analyze" : "Generate Analysis"}
+                </>
+              )}
+            </button>
           )}
-
-          {/* Job selector (if no linked job) */}
-          {!candidate.job_id && (
-            <div className="mb-3">
-              <label className="mb-1 block text-xs font-medium text-gray-500">
-                Select a job to match against
-              </label>
-              <select
-                value={analyzeJobId}
-                onChange={(e) => setAnalyzeJobId(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">— Select Job —</option>
-                {jobs?.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {j.title} — {j.company}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Generate button */}
-          <button
-            onClick={handleAnalyze}
-            disabled={analyzing || (!candidate.job_id && !analyzeJobId)}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-violet-700 hover:to-blue-700 disabled:opacity-50"
-          >
-            {analyzing ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Analyzing...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" />
-                {hasAnalysis ? "Re-generate Analysis" : "Generate Analysis"}
-              </>
-            )}
-          </button>
         </div>
 
         {/* Right: communication timeline */}
@@ -504,7 +503,7 @@ export default function CandidateDetail() {
   );
 }
 
-/* ── Typewriter Effect ─────────────────────────────────────────────────── */
+/* -- Typewriter Effect --------------------------------------------------- */
 
 function TypewriterText({
   text,
@@ -545,7 +544,7 @@ function TypewriterText({
   );
 }
 
-/* ── Edit Field ────────────────────────────────────────────────────────── */
+/* -- Edit Field ---------------------------------------------------------- */
 
 function EditField({
   label,

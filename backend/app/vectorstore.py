@@ -135,6 +135,37 @@ def search_candidates_for_job(
     return output
 
 
+def search_jobs_for_candidate(
+    candidate_id: str,
+    n_results: int = 5,
+) -> list[dict]:
+    """Find jobs semantically similar to a candidate's profile."""
+    candidates_col = _get_collection(CANDIDATES_COLLECTION)
+    jobs_col = _get_collection(JOBS_COLLECTION)
+
+    result = candidates_col.get(ids=[candidate_id], include=["documents"])
+    if not result["documents"]:
+        return []
+    candidate_text = result["documents"][0]
+
+    results = jobs_col.query(
+        query_texts=[candidate_text],
+        n_results=n_results,
+        include=["distances", "metadatas"],
+    )
+
+    output = []
+    for i, jid in enumerate(results["ids"][0]):
+        dist = results["distances"][0][i]
+        output.append({
+            "job_id": jid,
+            "distance": dist,
+            "score": round(1.0 - dist, 4),
+            "metadata": results["metadatas"][0][i],
+        })
+    return output
+
+
 def search_similar_candidates(
     candidate_id: str,
     n_results: int = 10,

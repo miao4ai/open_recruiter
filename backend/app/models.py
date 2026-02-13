@@ -97,7 +97,7 @@ class JobUpdate(BaseModel):
     raw_text: str | None = None
 
 class MatchRequest(BaseModel):
-    job_id: str
+    job_id: str = ""
     candidate_ids: list[str]
 
 class Candidate(BaseModel):

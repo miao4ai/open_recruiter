@@ -116,22 +116,14 @@ async def upload_resume(file: UploadFile = File(...), job_id: str = Form(""), _u
     except Exception as e:
         log.warning("Failed to index candidate in vector store: %s", e)
 
-    # Auto-match against linked job (if any)
-    if candidate.job_id:
-        try:
-            rankings = vectorstore.search_candidates_for_job(
-                job_id=candidate.job_id, n_results=200,
-            )
-            score_map = {r["candidate_id"]: r["score"] for r in rankings}
-            score = score_map.get(candidate.id, 0.0)
-            db.update_candidate(candidate.id, {
-                "match_score": score,
-                "updated_at": datetime.now().isoformat(),
-            })
-        except Exception as e:
-            log.warning("Auto-match failed for new candidate %s: %s", candidate.id, e)
+    # Auto-match against all jobs (find best fit + generate analysis)
+    try:
+        _auto_match_all_jobs(candidate.id)
+    except Exception as e:
+        log.warning("Auto-match-all failed for new candidate %s: %s", candidate.id, e)
 
-    return candidate.model_dump()
+    # Return fresh data (auto-match may have updated fields)
+    return db.get_candidate(candidate.id) or candidate.model_dump()
 
 
 @router.get("/{candidate_id}")
@@ -139,6 +131,24 @@ async def get_candidate_route(candidate_id: str, _user: dict = Depends(get_curre
     c = db.get_candidate(candidate_id)
     if not c:
         raise HTTPException(status_code=404, detail="Candidate not found")
+
+    # Enrich with dynamic top matching jobs via vector search
+    try:
+        top_job_results = vectorstore.search_jobs_for_candidate(candidate_id, n_results=5)
+        top_jobs = []
+        for r in top_job_results:
+            job = db.get_job(r["job_id"])
+            if job:
+                top_jobs.append({
+                    "job_id": r["job_id"],
+                    "title": job.get("title", ""),
+                    "company": job.get("company", ""),
+                    "score": r["score"],
+                })
+        c["top_jobs"] = top_jobs
+    except Exception:
+        c["top_jobs"] = []
+
     return c
 
 
@@ -166,13 +176,13 @@ async def update_candidate_route(candidate_id: str, update: CandidateUpdate, _us
     except Exception as e:
         log.warning("Failed to reindex candidate in vector store: %s", e)
 
-    # Auto-match against linked job
+    # Re-run auto-match against all jobs
     try:
-        _auto_match_candidate(updated)
+        _auto_match_all_jobs(candidate_id)
     except Exception as e:
-        log.warning("Auto-match failed for candidate %s: %s", candidate_id, e)
+        log.warning("Auto-match-all failed for candidate %s: %s", candidate_id, e)
 
-    return updated
+    return db.get_candidate(candidate_id) or updated
 
 
 @router.delete("/{candidate_id}")
@@ -190,85 +200,148 @@ async def delete_candidate_route(candidate_id: str, _user: dict = Depends(get_cu
 
 @router.post("/match")
 async def match_candidates(req: MatchRequest, _user: dict = Depends(get_current_user)):
-    """Match selected candidates against a job using vector similarity + LLM."""
-    from app.agents.matching import match_candidate_to_job, rank_candidates_for_job
+    """Re-run multi-job match analysis for candidates."""
+    results = []
+    for cid in req.candidate_ids:
+        c = db.get_candidate(cid)
+        if not c:
+            continue
+        _auto_match_all_jobs(cid)
+        updated = db.get_candidate(cid)
+        results.append({
+            "candidate_id": cid,
+            "candidate_name": updated["name"],
+            "score": updated["match_score"],
+            "strengths": updated["strengths"],
+            "gaps": updated["gaps"],
+            "reasoning": updated["match_reasoning"],
+        })
+    return results
+
+
+def _auto_match_all_jobs(candidate_id: str) -> None:
+    """Match a candidate against all jobs: vector scoring + optional LLM analysis.
+
+    Updates the candidate record with:
+    - job_id = best matching job
+    - match_score = best job's vector score
+    - match_reasoning = LLM multi-job analysis (or vector-only summary)
+    - strengths / gaps = for best matching job
+    """
+    top_jobs = vectorstore.search_jobs_for_candidate(candidate_id, n_results=5)
+    if not top_jobs:
+        return
+
+    # Enrich with job details
+    enriched_jobs = []
+    for r in top_jobs:
+        job = db.get_job(r["job_id"])
+        if job:
+            enriched_jobs.append({**r, "title": job.get("title", ""), "company": job.get("company", ""), "raw_text": job.get("raw_text", "")})
+
+    if not enriched_jobs:
+        return
+
+    best = enriched_jobs[0]
+
+    # Try LLM-based multi-job analysis
     from app.routes.settings import get_config
-
-    job = db.get_job(req.job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    # Stage 1: vector similarity ranking
-    rankings = rank_candidates_for_job(
-        job_id=req.job_id,
-        candidate_ids=req.candidate_ids,
-    )
-
-    # Build a lookup for vector scores
-    vector_scores = {r["candidate_id"]: r["score"] for r in rankings}
-
-    # Stage 2: LLM evaluation (optional)
     cfg = get_config()
     has_key = (
         (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
         or (cfg.llm_provider == "openai" and cfg.openai_api_key)
     )
 
-    results = []
-    for cid in req.candidate_ids:
-        c = db.get_candidate(cid)
-        if not c:
-            continue
+    if has_key:
+        try:
+            analysis = _llm_multi_job_match(cfg, candidate_id, enriched_jobs)
+            rankings = analysis.get("rankings", [])
+            if rankings:
+                # Use LLM's best pick
+                best_rank = rankings[0]
+                best_job_id = best_rank.get("job_id", best["job_id"])
+                db.update_candidate(candidate_id, {
+                    "job_id": best_job_id,
+                    "match_score": float(best_rank.get("score", best["score"])),
+                    "match_reasoning": _format_multi_job_reasoning(analysis),
+                    "strengths": best_rank.get("strengths", []),
+                    "gaps": best_rank.get("gaps", []),
+                    "updated_at": datetime.now().isoformat(),
+                })
+                return
+        except Exception as e:
+            log.warning("LLM multi-job match failed, falling back to vector: %s", e)
 
-        vscore = vector_scores.get(cid, 0.0)
+    # Fallback: vector-only scoring
+    reasoning_lines = []
+    for i, j in enumerate(enriched_jobs, 1):
+        pct = round(j["score"] * 100)
+        reasoning_lines.append(f"{i}. {j['title']} at {j['company']} — {pct}% match")
+    reasoning = "Top matching jobs (by semantic similarity):\n" + "\n".join(reasoning_lines)
 
-        if has_key:
-            match_data = match_candidate_to_job(cfg, req.job_id, cid)
-        else:
-            match_data = {
-                "score": vscore,
-                "strengths": [],
-                "gaps": [],
-                "reasoning": f"Vector similarity: {vscore:.2f} (configure LLM key for detailed evaluation)",
-            }
-
-        # Persist match results to SQLite
-        db.update_candidate(cid, {
-            "match_score": match_data["score"],
-            "match_reasoning": match_data["reasoning"],
-            "strengths": match_data["strengths"],
-            "gaps": match_data["gaps"],
-            "updated_at": datetime.now().isoformat(),
-        })
-
-        results.append({
-            "candidate_id": cid,
-            "candidate_name": c["name"],
-            "vector_score": vscore,
-            "score": match_data["score"],
-            "strengths": match_data["strengths"],
-            "gaps": match_data["gaps"],
-            "reasoning": match_data["reasoning"],
-        })
-    return results
-
-
-def _auto_match_candidate(candidate: dict) -> None:
-    """Re-run vector-based matching for a single candidate against their linked job."""
-    job_id = candidate.get("job_id", "")
-    if not job_id:
-        return
-
-    rankings = vectorstore.search_candidates_for_job(
-        job_id=job_id, n_results=200,
-    )
-    score_map = {r["candidate_id"]: r["score"] for r in rankings}
-    score = score_map.get(candidate["id"], 0.0)
-
-    db.update_candidate(candidate["id"], {
-        "match_score": score,
+    db.update_candidate(candidate_id, {
+        "job_id": best["job_id"],
+        "match_score": best["score"],
+        "match_reasoning": reasoning,
+        "strengths": [],
+        "gaps": [],
         "updated_at": datetime.now().isoformat(),
     })
+
+
+def _llm_multi_job_match(cfg, candidate_id: str, jobs: list[dict]) -> dict:
+    """Run LLM multi-job matching for a candidate."""
+    from app.llm import chat_json
+    from app.prompts import MULTI_JOB_MATCHING
+
+    candidate = db.get_candidate(candidate_id)
+    if not candidate:
+        return {}
+
+    skills = candidate.get("skills", [])
+    skills_str = ", ".join(skills) if isinstance(skills, list) else str(skills)
+
+    jobs_text = ""
+    for j in jobs:
+        jobs_text += (
+            f"\n### Job ID: {j['job_id']}\n"
+            f"Title: {j['title']}\nCompany: {j['company']}\n"
+            f"Description:\n{j['raw_text'][:800]}\n"
+        )
+
+    user_msg = (
+        f"## Candidate Profile\n"
+        f"Name: {candidate['name']}\n"
+        f"Title: {candidate.get('current_title', '')}\n"
+        f"Skills: {skills_str}\n"
+        f"Experience: {candidate.get('experience_years', 'N/A')} years\n"
+        f"Summary: {candidate.get('resume_summary', '')}\n\n"
+        f"## Jobs to evaluate against\n{jobs_text}"
+    )
+
+    return chat_json(cfg, system=MULTI_JOB_MATCHING, messages=[{"role": "user", "content": user_msg}])
+
+
+def _format_multi_job_reasoning(analysis: dict) -> str:
+    """Format LLM multi-job analysis into readable text for storage."""
+    lines = []
+    summary = analysis.get("summary", "")
+    if summary:
+        lines.append(summary)
+        lines.append("")
+
+    rankings = analysis.get("rankings", [])
+    for i, r in enumerate(rankings, 1):
+        score_pct = round(float(r.get("score", 0)) * 100)
+        title = r.get("title", "Unknown")
+        company = r.get("company", "")
+        one_liner = r.get("one_liner", "")
+        label = f"{title} at {company}" if company else title
+        lines.append(f"{i}. {label} — {score_pct}%")
+        if one_liner:
+            lines.append(f"   {one_liner}")
+
+    return "\n".join(lines)
 
 
 def _guess_name(filename: str) -> str:

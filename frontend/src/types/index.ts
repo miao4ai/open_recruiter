@@ -40,6 +40,13 @@ export interface Job {
   created_at: string;
 }
 
+export interface TopJob {
+  job_id: string;
+  title: string;
+  company: string;
+  score: number;
+}
+
 export interface Candidate {
   id: string;
   name: string;
@@ -59,6 +66,7 @@ export interface Candidate {
   gaps: string[];
   notes: string;
   job_id: string;
+  top_jobs?: TopJob[];
   created_at: string;
   updated_at: string;
 }

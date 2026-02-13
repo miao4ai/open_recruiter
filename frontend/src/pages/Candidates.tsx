@@ -26,7 +26,6 @@ export default function Candidates() {
   const { data: jobs } = useApi(useCallback(() => listJobs(), []));
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [selectedJobId, setSelectedJobId] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult<Candidate>[] | null>(null);
 
@@ -48,7 +47,7 @@ export default function Candidates() {
     setUploading(true);
     setUploadError("");
     try {
-      await uploadResume(file, selectedJobId);
+      await uploadResume(file);
       refresh();
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
@@ -74,19 +73,6 @@ export default function Candidates() {
           </span>
         </h2>
         <div className="flex items-center gap-2">
-          {/* Job selector for upload */}
-          <select
-            value={selectedJobId}
-            onChange={(e) => setSelectedJobId(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            <option value="">Link to Job (optional)</option>
-            {jobs?.map((j) => (
-              <option key={j.id} value={j.id}>
-                {j.title} — {j.company}
-              </option>
-            ))}
-          </select>
           <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
             <Upload className="h-4 w-4" />
             {uploading ? "Uploading..." : "Import Resume"}
@@ -126,15 +112,14 @@ export default function Candidates() {
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Title</th>
-                <th className="px-4 py-3 font-medium">Job</th>
-                <th className="px-4 py-3 font-medium">Score</th>
+                <th className="px-4 py-3 font-medium">Top Priority Job</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Skills</th>
               </tr>
             </thead>
             <tbody>
               {displayCandidates.map((c) => {
-                const linkedJob = jobs?.find((j) => j.id === c.job_id);
+                const bestJob = jobs?.find((j) => j.id === c.job_id);
                 const relevance = scoreMap?.get(c.id);
                 return (
                   <tr
@@ -166,11 +151,12 @@ export default function Candidates() {
                     <td className="px-4 py-3 text-gray-600">
                       {c.current_title || "\u2014"}
                     </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">
-                      {linkedJob ? linkedJob.title : "\u2014"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <ScoreBar score={c.match_score} />
+                    <td className="px-4 py-3 text-xs">
+                      {bestJob ? (
+                        <span className="text-gray-700">{bestJob.title}</span>
+                      ) : (
+                        <span className="text-gray-400">{"\u2014"}</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -218,18 +204,3 @@ export default function Candidates() {
   );
 }
 
-function ScoreBar({ score }: { score: number }) {
-  const pct = Math.round(score * 100);
-  const color = pct >= 70 ? "bg-emerald-500" : pct >= 40 ? "bg-amber-500" : "bg-red-400";
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-2 w-16 rounded-full bg-gray-200">
-        <div
-          className={`h-2 rounded-full ${color}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span className="text-xs text-gray-500">{pct}%</span>
-    </div>
-  );
-}

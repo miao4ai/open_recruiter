@@ -41,6 +41,22 @@ Return a JSON object with:
 Be fair and objective. Only output valid JSON.
 """
 
+MULTI_JOB_MATCHING = """\
+You are a candidate-job matching agent. Given a candidate profile and multiple job descriptions, \
+evaluate how well the candidate fits EACH role.
+Return a JSON object with:
+- "rankings": array of objects, one per job, sorted by fit (best first), each containing:
+  - "job_id": the job ID provided
+  - "score": float from 0.0 to 1.0 indicating fit
+  - "title": job title
+  - "company": company name
+  - "strengths": list of 1-3 key strengths for this specific role
+  - "gaps": list of 0-2 areas where the candidate falls short for this role
+  - "one_liner": one sentence explaining the fit
+- "summary": 2-3 sentence overall assessment of this candidate's market positioning
+Be fair and objective. Only output valid JSON.
+"""
+
 DRAFT_EMAIL = """\
 You are a recruitment communication agent. Draft a professional, warm, and personalized email.
 Return a JSON object with:
