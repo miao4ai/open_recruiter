@@ -344,7 +344,7 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
       <div className="mx-4 w-full max-w-2xl rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
           <h3 className="font-semibold">
-            Send Email to Company \u2014 {job.title}
+            Send Email to Company — {job.title}
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X className="h-5 w-5" />
@@ -381,10 +381,10 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
                 onChange={(e) => handleCandidateChange(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                <option value="">\u2014 None \u2014</option>
+                <option value="">— None —</option>
                 {candidates?.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name} \u2014 {c.current_title || "N/A"} ({Math.round(c.match_score * 100)}% match)
+                    {c.name} — {c.current_title || "N/A"} ({Math.round(c.match_score * 100)}% match)
                   </option>
                 ))}
               </select>
