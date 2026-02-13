@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Plus, Trash2, Users, Pencil, X, Save, Mail, Send, Paperclip } from "lucide-react";
+import { Plus, Trash2, Users, Pencil, X, Save, Mail, Send, Paperclip, Upload } from "lucide-react";
 import { useApi } from "../hooks/useApi";
 import {
   listJobs,
@@ -7,6 +7,7 @@ import {
   updateJob,
   deleteJob,
   listCandidates,
+  uploadResume,
   composeEmailWithAttachment,
   sendEmail,
 } from "../lib/api";
@@ -22,6 +23,28 @@ export default function Jobs() {
   const [rawText, setRawText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [emailJob, setEmailJob] = useState<Job | null>(null);
+  const [uploadingJobId, setUploadingJobId] = useState<string | null>(null);
+  const jobFileRef = useRef<HTMLInputElement>(null);
+  const uploadJobIdRef = useRef<string>("");
+
+  const handleJobUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const jobId = uploadJobIdRef.current;
+    setUploadingJobId(jobId);
+    try {
+      await uploadResume(file, jobId);
+      refresh();
+    } finally {
+      setUploadingJobId(null);
+      if (jobFileRef.current) jobFileRef.current.value = "";
+    }
+  };
+
+  const triggerJobUpload = (jobId: string) => {
+    uploadJobIdRef.current = jobId;
+    jobFileRef.current?.click();
+  };
 
   const resetForm = () => {
     setTitle("");
@@ -197,6 +220,15 @@ export default function Jobs() {
         </div>
       )}
 
+      {/* Hidden file input for per-job resume upload */}
+      <input
+        ref={jobFileRef}
+        type="file"
+        accept=".pdf,.docx,.doc,.txt"
+        className="hidden"
+        onChange={handleJobUpload}
+      />
+
       {/* Job list */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {jobs?.map((job) => (
@@ -252,10 +284,21 @@ export default function Jobs() {
                 ))}
               </div>
             )}
-            <div className="mt-3 flex items-center gap-1 text-xs text-gray-400">
-              <Users className="h-3.5 w-3.5" />
-              {job.candidate_count} candidate
-              {job.candidate_count !== 1 ? "s" : ""}
+            <div className="mt-3 flex items-center justify-between">
+              <div className="flex items-center gap-1 text-xs text-gray-400">
+                <Users className="h-3.5 w-3.5" />
+                {job.candidate_count} candidate
+                {job.candidate_count !== 1 ? "s" : ""}
+              </div>
+              <button
+                onClick={() => triggerJobUpload(job.id)}
+                disabled={uploadingJobId === job.id}
+                className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50"
+                title="Import resume for this job"
+              >
+                <Upload className="h-3 w-3" />
+                {uploadingJobId === job.id ? "Uploading..." : "Import Resume"}
+              </button>
             </div>
           </div>
         ))}
