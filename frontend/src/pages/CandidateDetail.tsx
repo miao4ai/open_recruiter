@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -7,6 +7,8 @@ import {
   Pencil,
   Save,
   X,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import { useApi } from "../hooks/useApi";
 import {
@@ -15,6 +17,7 @@ import {
   listJobs,
   updateCandidate,
   deleteCandidate,
+  matchCandidates,
   composeEmail,
 } from "../lib/api";
 import type { Candidate } from "../types";
@@ -35,6 +38,12 @@ export default function CandidateDetail() {
   const [form, setForm] = useState<Partial<Candidate>>({});
   const [saving, setSaving] = useState(false);
 
+  // Match analysis state
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeJobId, setAnalyzeJobId] = useState("");
+  const [typewriterText, setTypewriterText] = useState("");
+  const [typewriterDone, setTypewriterDone] = useState(true);
+
   if (loading) {
     return <p className="text-sm text-gray-400">Loading...</p>;
   }
@@ -43,6 +52,7 @@ export default function CandidateDetail() {
   }
 
   const scorePct = Math.round(candidate.match_score * 100);
+  const hasAnalysis = !!(candidate.match_reasoning);
 
   const startEdit = () => {
     setForm({
@@ -89,9 +99,31 @@ export default function CandidateDetail() {
     navigate("/candidates");
   };
 
+  const handleAnalyze = async () => {
+    const jobId = candidate.job_id || analyzeJobId;
+    if (!jobId) return;
+    setAnalyzing(true);
+    setTypewriterText("");
+    setTypewriterDone(false);
+    try {
+      const results = await matchCandidates(jobId, [candidate.id]);
+      const result = results[0];
+      if (result?.reasoning) {
+        setTypewriterText(result.reasoning);
+      }
+      refresh();
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   const updateField = (key: string, value: string | string[] | number | null) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
+
+  // Determine which reasoning text to show
+  const showTypewriter = !typewriterDone && typewriterText;
+  const reasoningText = showTypewriter ? typewriterText : candidate.match_reasoning;
 
   return (
     <div className="space-y-6">
@@ -310,25 +342,71 @@ export default function CandidateDetail() {
 
         {/* Middle: match analysis */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <h3 className="mb-4 font-semibold">Match Analysis</h3>
-
-          {/* Score ring */}
-          <div className="mb-4 flex items-center gap-4">
-            <div
-              className={`flex h-16 w-16 items-center justify-center rounded-full border-4 text-lg font-bold ${
-                scorePct >= 70
-                  ? "border-emerald-500 text-emerald-600"
-                  : scorePct >= 40
-                    ? "border-amber-500 text-amber-600"
-                    : "border-red-400 text-red-500"
-              }`}
-            >
-              {scorePct}%
-            </div>
-            <p className="text-sm text-gray-500">
-              {candidate.match_reasoning || "No match analysis yet."}
-            </p>
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="font-semibold">Match Analysis</h3>
           </div>
+
+          {/* Score ring + reasoning */}
+          {(hasAnalysis || analyzing || showTypewriter) ? (
+            <>
+              <div className="mb-4 flex items-center gap-4">
+                <div
+                  className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 text-lg font-bold ${
+                    scorePct >= 70
+                      ? "border-emerald-500 text-emerald-600"
+                      : scorePct >= 40
+                        ? "border-amber-500 text-amber-600"
+                        : "border-red-400 text-red-500"
+                  }`}
+                >
+                  {scorePct}%
+                </div>
+                <p className="text-sm text-gray-500">
+                  {showTypewriter ? (
+                    <TypewriterText
+                      text={typewriterText}
+                      speed={18}
+                      onComplete={() => setTypewriterDone(true)}
+                    />
+                  ) : (
+                    candidate.match_reasoning || "No match analysis yet."
+                  )}
+                </p>
+              </div>
+
+              {/* Strengths */}
+              {candidate.strengths.length > 0 && (
+                <div className="mb-3">
+                  <h4 className="mb-1 text-xs font-medium uppercase text-gray-500">
+                    Strengths
+                  </h4>
+                  <ul className="list-inside list-disc space-y-1 text-sm text-emerald-700">
+                    {candidate.strengths.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Gaps */}
+              {candidate.gaps.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="mb-1 text-xs font-medium uppercase text-gray-500">
+                    Gaps
+                  </h4>
+                  <ul className="list-inside list-disc space-y-1 text-sm text-red-600">
+                    {candidate.gaps.map((g, i) => (
+                      <li key={i}>{g}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="mb-4 text-sm text-gray-400">
+              Click the button below to generate a match analysis using AI.
+            </p>
+          )}
 
           {/* Candidate Summary */}
           {candidate.resume_summary && (
@@ -342,33 +420,45 @@ export default function CandidateDetail() {
             </div>
           )}
 
-          {/* Strengths */}
-          {candidate.strengths.length > 0 && (
+          {/* Job selector (if no linked job) */}
+          {!candidate.job_id && (
             <div className="mb-3">
-              <h4 className="mb-1 text-xs font-medium uppercase text-gray-500">
-                Strengths
-              </h4>
-              <ul className="list-inside list-disc space-y-1 text-sm text-emerald-700">
-                {candidate.strengths.map((s, i) => (
-                  <li key={i}>{s}</li>
+              <label className="mb-1 block text-xs font-medium text-gray-500">
+                Select a job to match against
+              </label>
+              <select
+                value={analyzeJobId}
+                onChange={(e) => setAnalyzeJobId(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">— Select Job —</option>
+                {jobs?.map((j) => (
+                  <option key={j.id} value={j.id}>
+                    {j.title} — {j.company}
+                  </option>
                 ))}
-              </ul>
+              </select>
             </div>
           )}
 
-          {/* Gaps */}
-          {candidate.gaps.length > 0 && (
-            <div>
-              <h4 className="mb-1 text-xs font-medium uppercase text-gray-500">
-                Gaps
-              </h4>
-              <ul className="list-inside list-disc space-y-1 text-sm text-red-600">
-                {candidate.gaps.map((g, i) => (
-                  <li key={i}>{g}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {/* Generate button */}
+          <button
+            onClick={handleAnalyze}
+            disabled={analyzing || (!candidate.job_id && !analyzeJobId)}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-violet-700 hover:to-blue-700 disabled:opacity-50"
+          >
+            {analyzing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                {hasAnalysis ? "Re-generate Analysis" : "Generate Analysis"}
+              </>
+            )}
+          </button>
         </div>
 
         {/* Right: communication timeline */}
@@ -413,6 +503,49 @@ export default function CandidateDetail() {
     </div>
   );
 }
+
+/* ── Typewriter Effect ─────────────────────────────────────────────────── */
+
+function TypewriterText({
+  text,
+  speed = 18,
+  onComplete,
+}: {
+  text: string;
+  speed?: number;
+  onComplete?: () => void;
+}) {
+  const [displayed, setDisplayed] = useState("");
+  const indexRef = useRef(0);
+
+  useEffect(() => {
+    if (!text) return;
+    setDisplayed("");
+    indexRef.current = 0;
+
+    const timer = setInterval(() => {
+      indexRef.current += 1;
+      setDisplayed(text.slice(0, indexRef.current));
+      if (indexRef.current >= text.length) {
+        clearInterval(timer);
+        onComplete?.();
+      }
+    }, speed);
+
+    return () => clearInterval(timer);
+  }, [text, speed]);
+
+  return (
+    <span>
+      {displayed}
+      {displayed.length < text.length && (
+        <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-gray-400" />
+      )}
+    </span>
+  );
+}
+
+/* ── Edit Field ────────────────────────────────────────────────────────── */
 
 function EditField({
   label,
