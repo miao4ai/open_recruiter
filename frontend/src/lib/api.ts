@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { Candidate, ChatMessage, Email, Job, Settings, User } from "../types";
+import type { Candidate, ChatMessage, ChatResponse, Email, Job, Settings, User } from "../types";
 
 const api = axios.create({ baseURL: "/api" });
 
@@ -191,7 +191,7 @@ export const runAgent = (instruction: string) =>
 
 // ── Chat ─────────────────────────────────────────────────────────────────
 export const sendChatMessage = (message: string) =>
-  api.post<{ reply: string }>("/agent/chat", { message }).then((r) => r.data);
+  api.post<ChatResponse>("/agent/chat", { message }).then((r) => r.data);
 export const getChatHistory = () =>
   api.get<ChatMessage[]>("/agent/chat/history").then((r) => r.data);
 export const clearChatHistory = () =>

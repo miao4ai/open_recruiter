@@ -109,12 +109,26 @@ export interface Settings {
   recruiter_company: string;
 }
 
+export interface ChatEmailAction {
+  type: "compose_email";
+  email: Email;
+}
+
+export type ChatAction = ChatEmailAction;
+
+export interface ChatResponse {
+  reply: string;
+  action?: ChatAction;
+}
+
 export interface ChatMessage {
   id: string;
   user_id: string;
   role: "user" | "assistant";
   content: string;
   created_at: string;
+  action?: ChatAction;
+  actionStatus?: "pending" | "sent" | "cancelled";
 }
 
 // Pipeline columns for Kanban board

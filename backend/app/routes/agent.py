@@ -75,10 +75,15 @@ async def run_agent(req: AgentRequest, _user: dict = Depends(get_current_user)):
 
 @router.post("/chat")
 async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_current_user)):
-    """Synchronous chat with the AI recruiting assistant."""
+    """Synchronous chat with the AI recruiting assistant.
+
+    Returns ``{reply, action?}`` where *action* is present when the AI
+    detects an actionable intent (e.g. drafting an email).
+    """
     from app.routes.settings import get_config
-    from app.llm import chat
-    from app.prompts import CHAT_SYSTEM
+    from app.llm import chat_json, chat
+    from app.prompts import CHAT_SYSTEM_WITH_ACTIONS
+    from app.models import Email
 
     user_id = current_user["id"]
     cfg = get_config()
@@ -92,7 +97,7 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
 
     # Build context from database
     context = _build_chat_context()
-    system_prompt = CHAT_SYSTEM.format(context=context)
+    system_prompt = CHAT_SYSTEM_WITH_ACTIONS.format(context=context)
 
     # Load conversation history
     history = db.list_chat_messages(user_id, limit=20)
@@ -110,23 +115,52 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
     messages = [{"role": m["role"], "content": m["content"]} for m in history]
     messages.append({"role": "user", "content": req.message})
 
-    # Call LLM
+    # Call LLM with structured JSON output
+    reply_text = ""
+    action_data = None
     try:
-        reply = chat(cfg, system=system_prompt, messages=messages)
-    except Exception as e:
-        log.error("Chat LLM call failed: %s", e)
-        reply = f"I encountered an error: {e!s}. Please check your LLM configuration in Settings."
+        result = chat_json(cfg, system=system_prompt, messages=messages)
+        reply_text = result.get("message", "") if isinstance(result, dict) else str(result)
+        action_data = result.get("action") if isinstance(result, dict) else None
+    except Exception:
+        # Fallback to plain text chat if JSON parsing fails
+        log.warning("chat_json failed, falling back to plain text chat")
+        try:
+            reply_text = chat(cfg, system=system_prompt, messages=messages)
+        except Exception as e:
+            log.error("Chat LLM call failed: %s", e)
+            reply_text = f"I encountered an error: {e!s}. Please check your LLM configuration in Settings."
 
-    # Save assistant reply
+    # If there's a compose_email action, create a draft in the DB
+    response: dict = {"reply": reply_text}
+    if action_data and isinstance(action_data, dict) and action_data.get("type") == "compose_email":
+        try:
+            email = Email(
+                candidate_id=action_data.get("candidate_id", ""),
+                candidate_name=action_data.get("candidate_name", ""),
+                to_email=action_data.get("to_email", ""),
+                subject=action_data.get("subject", ""),
+                body=action_data.get("body", ""),
+                email_type=action_data.get("email_type", "outreach"),
+            )
+            db.insert_email(email.model_dump())
+            response["action"] = {
+                "type": "compose_email",
+                "email": email.model_dump(),
+            }
+        except Exception as e:
+            log.error("Failed to create email draft from chat action: %s", e)
+
+    # Save assistant reply (text only — action is transient)
     db.insert_chat_message({
         "id": uuid.uuid4().hex[:8],
         "user_id": user_id,
         "role": "assistant",
-        "content": reply,
+        "content": reply_text,
         "created_at": datetime.now().isoformat(),
     })
 
-    return {"reply": reply}
+    return response
 
 
 @router.get("/chat/history")
@@ -165,8 +199,8 @@ def _build_chat_context() -> str:
         for c in candidates[:20]:
             parts.append(
                 f"- {c['name']} — {c.get('current_title', 'N/A')} "
-                f"(status: {c['status']}, score: {c.get('match_score', 0):.0%}, "
-                f"email: {c.get('email', 'N/A')}, skills: {', '.join(c.get('skills', [])[:5])})"
+                f"(ID: {c['id']}, status: {c['status']}, score: {c.get('match_score', 0):.0%}, "
+                f"email: {c.get('email') or 'N/A'}, skills: {', '.join(c.get('skills', [])[:5])})"
             )
     else:
         parts.append("\n## Candidates: None")
