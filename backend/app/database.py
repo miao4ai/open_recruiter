@@ -107,6 +107,21 @@ def init_db() -> None:
             content TEXT NOT NULL,
             created_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS events (
+            id TEXT PRIMARY KEY,
+            title TEXT,
+            start_time TEXT,
+            end_time TEXT,
+            event_type TEXT DEFAULT 'other',
+            candidate_id TEXT,
+            candidate_name TEXT,
+            job_id TEXT,
+            job_title TEXT,
+            notes TEXT,
+            created_at TEXT,
+            updated_at TEXT
+        );
     """)
     conn.commit()
 
@@ -515,3 +530,76 @@ def clear_chat_messages(user_id: str) -> None:
     conn.execute("DELETE FROM chat_messages WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
+
+
+# ── Calendar Events ───────────────────────────────────────────────────
+
+def insert_event(e: dict) -> None:
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO events
+           (id, title, start_time, end_time, event_type, candidate_id,
+            candidate_name, job_id, job_title, notes, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            e["id"], e.get("title", ""), e.get("start_time", ""),
+            e.get("end_time", ""), e.get("event_type", "other"),
+            e.get("candidate_id", ""), e.get("candidate_name", ""),
+            e.get("job_id", ""), e.get("job_title", ""),
+            e.get("notes", ""), e["created_at"], e["updated_at"],
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_events(month: str | None = None, candidate_id: str | None = None, job_id: str | None = None) -> list[dict]:
+    conn = get_conn()
+    query = "SELECT * FROM events WHERE 1=1"
+    params: list = []
+    if month:
+        # month format: "2026-02" — match start_time starting with it
+        query += " AND start_time LIKE ?"
+        params.append(f"{month}%")
+    if candidate_id:
+        query += " AND candidate_id = ?"
+        params.append(candidate_id)
+    if job_id:
+        query += " AND job_id = ?"
+        params.append(job_id)
+    query += " ORDER BY start_time ASC"
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_event(eid: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_event(eid: str, updates: dict) -> bool:
+    conn = get_conn()
+    sets = []
+    params = []
+    for k, v in updates.items():
+        sets.append(f"{k} = ?")
+        params.append(v)
+    if not sets:
+        conn.close()
+        return False
+    params.append(eid)
+    conn.execute(f"UPDATE events SET {', '.join(sets)} WHERE id = ?", params)
+    conn.commit()
+    conn.close()
+    return True
+
+
+def delete_event(eid: str) -> bool:
+    conn = get_conn()
+    cur = conn.execute("DELETE FROM events WHERE id = ?", (eid,))
+    conn.commit()
+    conn.close()
+    return cur.rowcount > 0

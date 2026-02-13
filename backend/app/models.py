@@ -182,6 +182,52 @@ class SlackAuditLog(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
+# ── Calendar Event ─────────────────────────────────────────────────────
+
+class EventType(str, Enum):
+    INTERVIEW = "interview"
+    FOLLOW_UP = "follow_up"
+    OFFER = "offer"
+    SCREENING = "screening"
+    OTHER = "other"
+
+class CalendarEvent(BaseModel):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
+    title: str = ""
+    start_time: str = ""          # ISO datetime
+    end_time: str = ""            # ISO datetime
+    event_type: EventType = EventType.OTHER
+    candidate_id: str = ""
+    candidate_name: str = ""
+    job_id: str = ""
+    job_title: str = ""
+    notes: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+class CalendarEventCreate(BaseModel):
+    title: str
+    start_time: str
+    end_time: str = ""
+    event_type: EventType = EventType.OTHER
+    candidate_id: str = ""
+    candidate_name: str = ""
+    job_id: str = ""
+    job_title: str = ""
+    notes: str = ""
+
+class CalendarEventUpdate(BaseModel):
+    title: str | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    event_type: EventType | None = None
+    candidate_id: str | None = None
+    candidate_name: str | None = None
+    job_id: str | None = None
+    job_title: str | None = None
+    notes: str | None = None
+
+
 # ── Settings ───────────────────────────────────────────────────────────────
 
 class Settings(BaseModel):

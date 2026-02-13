@@ -131,6 +131,23 @@ export interface ChatMessage {
   actionStatus?: "pending" | "sent" | "cancelled";
 }
 
+export type EventType = "interview" | "follow_up" | "offer" | "screening" | "other";
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  start_time: string;
+  end_time: string;
+  event_type: EventType;
+  candidate_id: string;
+  candidate_name: string;
+  job_id: string;
+  job_title: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // Pipeline columns for Kanban board
 export const PIPELINE_COLUMNS: { key: CandidateStatus; label: string }[] = [
   { key: "new", label: "New" },

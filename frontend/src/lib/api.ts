@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { Candidate, ChatMessage, ChatResponse, Email, Job, Settings, User } from "../types";
+import type { CalendarEvent, Candidate, ChatMessage, ChatResponse, Email, Job, Settings, User } from "../types";
 
 const api = axios.create({ baseURL: "/api" });
 
@@ -196,3 +196,24 @@ export const getChatHistory = () =>
   api.get<ChatMessage[]>("/agent/chat/history").then((r) => r.data);
 export const clearChatHistory = () =>
   api.delete("/agent/chat/history").then((r) => r.data);
+
+// ── Calendar ─────────────────────────────────────────────────────────
+export const listEvents = (params?: { month?: string; candidate_id?: string; job_id?: string }) =>
+  api.get<CalendarEvent[]>("/calendar", { params }).then((r) => r.data);
+export const createEvent = (data: {
+  title: string;
+  start_time: string;
+  end_time?: string;
+  event_type?: string;
+  candidate_id?: string;
+  candidate_name?: string;
+  job_id?: string;
+  job_title?: string;
+  notes?: string;
+}) => api.post<CalendarEvent>("/calendar", data).then((r) => r.data);
+export const getEvent = (id: string) =>
+  api.get<CalendarEvent>(`/calendar/${id}`).then((r) => r.data);
+export const updateEvent = (id: string, data: Partial<CalendarEvent>) =>
+  api.put<CalendarEvent>(`/calendar/${id}`, data).then((r) => r.data);
+export const deleteEvent = (id: string) =>
+  api.delete(`/calendar/${id}`).then((r) => r.data);

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
-from app.routes import agent, auth, candidates, emails, jobs, search, settings
+from app.routes import agent, auth, calendar, candidates, emails, jobs, search, settings
 from app.slack import routes as slack_routes
 from app.slack.bot import init_slack_app
 from app.vectorstore import init_vectorstore
@@ -42,6 +42,7 @@ app.include_router(emails.router, prefix="/api/emails", tags=["emails"])
 app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
 app.include_router(search.router, prefix="/api/search", tags=["search"])
+app.include_router(calendar.router, prefix="/api/calendar", tags=["calendar"])
 app.include_router(slack_routes.router, prefix="/slack", tags=["slack"])
 
 
