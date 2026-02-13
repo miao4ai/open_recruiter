@@ -17,6 +17,10 @@
 
 ---
 
+## Introduction
+
+Open Recruiter is a self-hosted, AI-powered recruitment assistant designed for independent recruiters and small hiring teams. It streamlines the entire talent discovery workflow — from uploading and parsing resumes, to semantically matching candidates against job descriptions, to composing outreach emails with one click. Powered by local vector embeddings and configurable LLMs (Claude / GPT), it delivers intelligent candidate-job matching without sending your data to third-party platforms. Everything runs locally with zero infrastructure: SQLite for data, ChromaDB for semantic search, and an optional Slack integration for receiving resumes directly from your team's channels.
+
 ## Features
 
 - **Job Management** — Create and manage job postings with full descriptions
