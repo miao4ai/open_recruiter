@@ -156,6 +156,7 @@ export default function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [started, setStarted] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const didAutoSelect = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Load sessions list
@@ -163,14 +164,18 @@ export default function Chat() {
     useCallback(() => listChatSessions(), [])
   );
 
-  // When sessions load, auto-select the most recent one
+  // On initial load only, auto-select the most recent session
   useEffect(() => {
-    if (sessions && sessions.length > 0 && !activeSessionId) {
+    if (didAutoSelect.current) return;
+    if (sessions && sessions.length > 0) {
+      didAutoSelect.current = true;
       const latest = sessions[0]; // sorted by updated_at DESC
       setActiveSessionId(latest.id);
       setStarted(true);
+    } else if (sessions) {
+      didAutoSelect.current = true;
     }
-  }, [sessions, activeSessionId]);
+  }, [sessions]);
 
   // Load messages when active session changes
   useEffect(() => {
