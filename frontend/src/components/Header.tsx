@@ -3,10 +3,12 @@ import { LogOut } from "lucide-react";
 import type { User } from "../types";
 
 const PAGE_TITLES: Record<string, string> = {
-  "/": "Dashboard",
+  "/": "Erika Chan",
+  "/dashboard": "Dashboard",
   "/jobs": "Jobs",
   "/candidates": "Candidates",
   "/outreach": "Outreach",
+  "/calendar": "Calendar",
   "/settings": "Settings",
 };
 

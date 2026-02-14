@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Send, Trash2, Bot, Loader2, Mail, Check, X } from "lucide-react";
+import { Send, Trash2, Bot, Loader2, Mail, Check, X, Sparkles } from "lucide-react";
 import { useApi } from "../hooks/useApi";
 import {
   sendChatMessage,
@@ -10,6 +10,26 @@ import {
   updateEmailDraft,
 } from "../lib/api";
 import type { ChatMessage, Email } from "../types";
+
+/* ── Helper: format today's date for Erika's greeting ──────────────────── */
+
+function formatGreetingDate(): string {
+  return new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function makeGreetingMessage(): ChatMessage {
+  return {
+    id: "greeting-" + Date.now(),
+    user_id: "",
+    role: "assistant",
+    content: `Hi! Today is ${formatGreetingDate()}. Welcome to Open Recruiter — I'm Erika, your recruiting assistant.`,
+    created_at: new Date().toISOString(),
+  };
+}
 
 /* ── Inline Email Compose Card ─────────────────────────────────────────── */
 
@@ -132,10 +152,14 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [started, setStarted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (history) setMessages(history);
+    if (history && history.length > 0) {
+      setMessages(history);
+      setStarted(true);
+    }
   }, [history]);
 
   useEffect(() => {
@@ -289,6 +313,7 @@ export default function Chat() {
   const handleClear = async () => {
     await clearChatHistory();
     setMessages([]);
+    setStarted(false);
     refresh();
   };
 
@@ -299,13 +324,48 @@ export default function Chat() {
     }
   };
 
+  const handleStart = () => {
+    setStarted(true);
+    setMessages([makeGreetingMessage()]);
+  };
+
+  /* ── Start screen ────────────────────────────────────────────────────── */
+
+  if (!started) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center">
+        <div className="flex flex-col items-center gap-6">
+          <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
+            <Sparkles className="h-12 w-12 text-white" />
+          </div>
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-800">Open Recruiter</h1>
+            <p className="mt-2 text-gray-500">
+              Your AI recruiting assistant Erika is ready
+            </p>
+          </div>
+          <button
+            onClick={handleStart}
+            className="rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-10 py-3.5 text-lg font-semibold text-white shadow-lg transition-all hover:scale-105 hover:shadow-xl active:scale-100"
+          >
+            Start Chat
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Chat interface ──────────────────────────────────────────────────── */
+
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between pb-4">
         <div className="flex items-center gap-2">
-          <Bot className="h-5 w-5 text-blue-500" />
-          <h2 className="text-lg font-semibold">Recruiting Assistant</h2>
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
+            <Sparkles className="h-4 w-4 text-white" />
+          </div>
+          <h2 className="text-lg font-semibold">Erika Chan</h2>
         </div>
         {messages.length > 0 && (
           <button
@@ -319,38 +379,14 @@ export default function Chat() {
 
       {/* Messages */}
       <div className="flex-1 space-y-4 overflow-y-auto rounded-xl border border-gray-200 bg-white p-4">
-        {messages.length === 0 && !sending && (
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <Bot className="h-12 w-12 text-gray-200" />
-            <p className="mt-3 text-sm text-gray-400">
-              Ask me about your candidates, jobs, or recruiting strategy.
-            </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
-              {[
-                "Which candidates have the highest match scores?",
-                "Draft an email to [candidate name]",
-                "Summarize my current pipeline",
-              ].map((q) => (
-                <button
-                  key={q}
-                  onClick={() => setInput(q)}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50"
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {messages.map((msg) => (
           <div
             key={msg.id}
             className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
           >
             {msg.role === "assistant" && (
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100">
-                <Bot className="h-4 w-4 text-blue-600" />
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
+                <Sparkles className="h-3.5 w-3.5 text-white" />
               </div>
             )}
             <div className="max-w-[80%]">
@@ -381,8 +417,8 @@ export default function Chat() {
 
         {sending && (
           <div className="flex gap-3">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100">
-              <Bot className="h-4 w-4 text-blue-600" />
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
+              <Sparkles className="h-3.5 w-3.5 text-white" />
             </div>
             <div className="rounded-xl bg-gray-50 px-4 py-3">
               <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
@@ -400,7 +436,7 @@ export default function Chat() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about candidates, jobs, or say 'send email to [name]'..."
+            placeholder="Ask Erika anything..."
             rows={2}
             className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />

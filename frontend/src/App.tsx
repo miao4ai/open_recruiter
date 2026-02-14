@@ -54,12 +54,12 @@ export default function App() {
         <Header user={user} onLogout={handleLogout} />
         <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Chat />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/candidates" element={<Candidates />} />
             <Route path="/candidates/:id" element={<CandidateDetail />} />
             <Route path="/outreach" element={<Outreach />} />
-            <Route path="/chat" element={<Chat />} />
             <Route path="/calendar" element={<Calendar />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

@@ -12,11 +12,11 @@ import {
 import clsx from "clsx";
 
 const NAV_ITEMS = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/", icon: MessageSquare, label: "Erika Chan" },
+  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/jobs", icon: Briefcase, label: "Jobs" },
   { to: "/candidates", icon: Users, label: "Candidates" },
   { to: "/outreach", icon: Mail, label: "Outreach" },
-  { to: "/chat", icon: MessageSquare, label: "Chat" },
   { to: "/calendar", icon: CalendarDays, label: "Calendar" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
