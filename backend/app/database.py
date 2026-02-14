@@ -100,9 +100,18 @@ def init_db() -> None:
             created_at TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS chat_sessions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            title TEXT NOT NULL DEFAULT 'New Chat',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS chat_messages (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
+            session_id TEXT NOT NULL DEFAULT '',
             role TEXT NOT NULL,
             content TEXT NOT NULL,
             created_at TEXT NOT NULL
@@ -150,6 +159,13 @@ def init_db() -> None:
             conn.commit()
         except sqlite3.OperationalError:
             pass
+
+    # Migration: add session_id to chat_messages
+    try:
+        conn.execute("ALTER TABLE chat_messages ADD COLUMN session_id TEXT NOT NULL DEFAULT ''")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
 
     conn.close()
 
@@ -527,24 +543,76 @@ def list_audit_logs(
     return [dict(r) for r in rows]
 
 
-# ── Chat Messages ─────────────────────────────────────────────────────────
+# ── Chat Sessions ─────────────────────────────────────────────────────────
 
-def insert_chat_message(msg: dict) -> None:
+def insert_chat_session(session: dict) -> None:
     conn = get_conn()
     conn.execute(
-        "INSERT INTO chat_messages (id, user_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
-        (msg["id"], msg["user_id"], msg["role"], msg["content"], msg["created_at"]),
+        "INSERT INTO chat_sessions (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        (session["id"], session["user_id"], session["title"], session["created_at"], session["updated_at"]),
     )
     conn.commit()
     conn.close()
 
 
-def list_chat_messages(user_id: str, limit: int = 50) -> list[dict]:
+def list_chat_sessions(user_id: str) -> list[dict]:
     conn = get_conn()
     rows = conn.execute(
-        "SELECT * FROM chat_messages WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
-        (user_id, limit),
+        "SELECT * FROM chat_sessions WHERE user_id = ? ORDER BY updated_at DESC",
+        (user_id,),
     ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_chat_session(session_id: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM chat_sessions WHERE id = ?", (session_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_chat_session(session_id: str, updates: dict) -> None:
+    conn = get_conn()
+    sets = ", ".join(f"{k} = ?" for k in updates)
+    vals = list(updates.values()) + [session_id]
+    conn.execute(f"UPDATE chat_sessions SET {sets} WHERE id = ?", vals)
+    conn.commit()
+    conn.close()
+
+
+def delete_chat_session(session_id: str) -> None:
+    conn = get_conn()
+    conn.execute("DELETE FROM chat_messages WHERE session_id = ?", (session_id,))
+    conn.execute("DELETE FROM chat_sessions WHERE id = ?", (session_id,))
+    conn.commit()
+    conn.close()
+
+
+# ── Chat Messages ─────────────────────────────────────────────────────────
+
+def insert_chat_message(msg: dict) -> None:
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO chat_messages (id, user_id, session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (msg["id"], msg["user_id"], msg.get("session_id", ""), msg["role"], msg["content"], msg["created_at"]),
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_chat_messages(user_id: str, limit: int = 50, session_id: str | None = None) -> list[dict]:
+    conn = get_conn()
+    if session_id:
+        rows = conn.execute(
+            "SELECT * FROM chat_messages WHERE user_id = ? AND session_id = ? ORDER BY created_at DESC LIMIT ?",
+            (user_id, session_id, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM chat_messages WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
     conn.close()
     return [dict(r) for r in reversed(rows)]
 
@@ -552,6 +620,7 @@ def list_chat_messages(user_id: str, limit: int = 50) -> list[dict]:
 def clear_chat_messages(user_id: str) -> None:
     conn = get_conn()
     conn.execute("DELETE FROM chat_messages WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM chat_sessions WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
 

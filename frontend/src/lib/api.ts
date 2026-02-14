@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { CalendarEvent, Candidate, ChatMessage, ChatResponse, Email, Job, Settings, User } from "../types";
+import type { CalendarEvent, Candidate, ChatMessage, ChatResponse, ChatSession, Email, Job, Settings, User } from "../types";
 
 const api = axios.create({ baseURL: "/api" });
 
@@ -194,12 +194,22 @@ export const runAgent = (instruction: string) =>
   api.post("/agent/run", { instruction }).then((r) => r.data);
 
 // ── Chat ─────────────────────────────────────────────────────────────────
-export const sendChatMessage = (message: string) =>
-  api.post<ChatResponse>("/agent/chat", { message }).then((r) => r.data);
-export const getChatHistory = () =>
-  api.get<ChatMessage[]>("/agent/chat/history").then((r) => r.data);
+export const sendChatMessage = (message: string, session_id?: string) =>
+  api.post<ChatResponse>("/agent/chat", { message, session_id }).then((r) => r.data);
+export const getChatHistory = (session_id?: string) =>
+  api.get<ChatMessage[]>("/agent/chat/history", { params: session_id ? { session_id } : {} }).then((r) => r.data);
 export const clearChatHistory = () =>
   api.delete("/agent/chat/history").then((r) => r.data);
+
+// ── Chat Sessions ────────────────────────────────────────────────────────
+export const listChatSessions = () =>
+  api.get<ChatSession[]>("/agent/chat/sessions").then((r) => r.data);
+export const createChatSession = () =>
+  api.post<ChatSession>("/agent/chat/sessions").then((r) => r.data);
+export const deleteChatSession = (id: string) =>
+  api.delete(`/agent/chat/sessions/${id}`).then((r) => r.data);
+export const renameChatSession = (id: string, title: string) =>
+  api.put<ChatSession>(`/agent/chat/sessions/${id}`, { title }).then((r) => r.data);
 
 // ── Calendar ─────────────────────────────────────────────────────────
 export const listEvents = (params?: { month?: string; candidate_id?: string; job_id?: string }) =>

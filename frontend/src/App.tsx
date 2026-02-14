@@ -6,7 +6,6 @@ import Dashboard from "./pages/Dashboard";
 import Jobs from "./pages/Jobs";
 import Candidates from "./pages/Candidates";
 import CandidateDetail from "./pages/CandidateDetail";
-import Outreach from "./pages/Outreach";
 import Chat from "./pages/Chat";
 import Calendar from "./pages/Calendar";
 import Settings from "./pages/Settings";
@@ -59,7 +58,6 @@ export default function App() {
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/candidates" element={<Candidates />} />
             <Route path="/candidates/:id" element={<CandidateDetail />} />
-            <Route path="/outreach" element={<Outreach />} />
             <Route path="/calendar" element={<Calendar />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

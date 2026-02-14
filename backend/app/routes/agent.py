@@ -77,8 +77,8 @@ async def run_agent(req: AgentRequest, _user: dict = Depends(get_current_user)):
 async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """Synchronous chat with the AI recruiting assistant.
 
-    Returns ``{reply, action?}`` where *action* is present when the AI
-    detects an actionable intent (e.g. drafting an email).
+    Returns ``{reply, action?, session_id}`` where *action* is present when
+    the AI detects an actionable intent (e.g. drafting an email).
     """
     from app.routes.settings import get_config
     from app.llm import chat_json, chat
@@ -95,17 +95,35 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
     if not has_key:
         return {"reply": "Please configure an LLM API key in Settings before using the chat assistant."}
 
+    # Ensure a session exists
+    session_id = req.session_id
+    if not session_id:
+        # Create a new session automatically
+        session_id = uuid.uuid4().hex[:8]
+        now = datetime.now().isoformat()
+        db.insert_chat_session({
+            "id": session_id,
+            "user_id": user_id,
+            "title": req.message[:50] or "New Chat",
+            "created_at": now,
+            "updated_at": now,
+        })
+    else:
+        # Update session timestamp
+        db.update_chat_session(session_id, {"updated_at": datetime.now().isoformat()})
+
     # Build context from database
     context = _build_chat_context()
     system_prompt = CHAT_SYSTEM_WITH_ACTIONS.format(context=context)
 
-    # Load conversation history
-    history = db.list_chat_messages(user_id, limit=20)
+    # Load conversation history for this session
+    history = db.list_chat_messages(user_id, limit=20, session_id=session_id)
 
     # Save user message
     db.insert_chat_message({
         "id": uuid.uuid4().hex[:8],
         "user_id": user_id,
+        "session_id": session_id,
         "role": "user",
         "content": req.message,
         "created_at": datetime.now().isoformat(),
@@ -132,7 +150,7 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
             reply_text = f"I encountered an error: {e!s}. Please check your LLM configuration in Settings."
 
     # If there's a compose_email action, create a draft in the DB
-    response: dict = {"reply": reply_text}
+    response: dict = {"reply": reply_text, "session_id": session_id}
     if action_data and isinstance(action_data, dict) and action_data.get("type") == "compose_email":
         try:
             email = Email(
@@ -155,23 +173,84 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
     db.insert_chat_message({
         "id": uuid.uuid4().hex[:8],
         "user_id": user_id,
+        "session_id": session_id,
         "role": "assistant",
         "content": reply_text,
         "created_at": datetime.now().isoformat(),
     })
 
+    # Auto-title: update session title from first user message
+    session = db.get_chat_session(session_id)
+    if session and session["title"] == req.message[:50]:
+        # Keep it — it's already set from the first message
+        pass
+
     return response
 
 
+# ── Chat Sessions ─────────────────────────────────────────────────────────
+
+
+@router.get("/chat/sessions")
+async def list_sessions(current_user: dict = Depends(get_current_user)):
+    """List all chat sessions for the current user."""
+    return db.list_chat_sessions(current_user["id"])
+
+
+@router.post("/chat/sessions")
+async def create_session(current_user: dict = Depends(get_current_user)):
+    """Create a new empty chat session."""
+    now = datetime.now().isoformat()
+    session = {
+        "id": uuid.uuid4().hex[:8],
+        "user_id": current_user["id"],
+        "title": "New Chat",
+        "created_at": now,
+        "updated_at": now,
+    }
+    db.insert_chat_session(session)
+    return session
+
+
+@router.delete("/chat/sessions/{session_id}")
+async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a chat session and its messages."""
+    session = db.get_chat_session(session_id)
+    if not session:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Session not found")
+    db.delete_chat_session(session_id)
+    return {"status": "deleted"}
+
+
+@router.put("/chat/sessions/{session_id}")
+async def rename_session(session_id: str, req: dict, current_user: dict = Depends(get_current_user)):
+    """Rename a chat session."""
+    session = db.get_chat_session(session_id)
+    if not session:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Session not found")
+    title = req.get("title", "").strip()
+    if title:
+        db.update_chat_session(session_id, {"title": title})
+    return db.get_chat_session(session_id)
+
+
+# ── Chat History ──────────────────────────────────────────────────────────
+
+
 @router.get("/chat/history")
-async def chat_history(current_user: dict = Depends(get_current_user)):
-    """Retrieve chat history for the current user."""
-    return db.list_chat_messages(current_user["id"], limit=50)
+async def chat_history(
+    session_id: str | None = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Retrieve chat history for a session (or all if no session_id)."""
+    return db.list_chat_messages(current_user["id"], limit=50, session_id=session_id)
 
 
 @router.delete("/chat/history")
 async def clear_chat_history(current_user: dict = Depends(get_current_user)):
-    """Clear chat history for the current user."""
+    """Clear all chat history and sessions for the current user."""
     db.clear_chat_messages(current_user["id"])
     return {"status": "cleared"}
 

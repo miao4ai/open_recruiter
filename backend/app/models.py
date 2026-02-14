@@ -168,6 +168,7 @@ class AgentEvent(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: str = ""
 
 
 # ── Slack Audit Log ────────────────────────────────────────────────────────

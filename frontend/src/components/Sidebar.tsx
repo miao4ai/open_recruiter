@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   Briefcase,
   Users,
-  Mail,
   MessageSquare,
   CalendarDays,
   Settings,
@@ -16,7 +15,6 @@ const NAV_ITEMS = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/jobs", icon: Briefcase, label: "Jobs" },
   { to: "/candidates", icon: Users, label: "Candidates" },
-  { to: "/outreach", icon: Mail, label: "Outreach" },
   { to: "/calendar", icon: CalendarDays, label: "Calendar" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
