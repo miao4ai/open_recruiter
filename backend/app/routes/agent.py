@@ -207,6 +207,68 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
         except Exception as e:
             log.error("Failed to create email draft from chat action: %s", e)
 
+    # If there's a match_candidate action, run the planning agent
+    if action_data and isinstance(action_data, dict) and action_data.get("type") == "match_candidate":
+        try:
+            from app.agents.planning import match_candidate_to_jobs
+
+            candidate_id = action_data.get("candidate_id", "")
+            candidate_name = action_data.get("candidate_name", "")
+
+            result = match_candidate_to_jobs(cfg, candidate_id)
+
+            if result.get("error") and not result.get("rankings"):
+                response["reply"] = f"Sorry, I couldn't run the matching: {result['error']}"
+            else:
+                # Format results into a readable reply
+                rankings = result.get("rankings", [])
+                summary = result.get("summary", "")
+                parts = [f"Here are the job matching results for **{candidate_name}**:\n"]
+
+                for i, r in enumerate(rankings[:5], 1):
+                    score_pct = int(r.get("score", 0) * 100)
+                    title = r.get("title", "Unknown")
+                    company = r.get("company", "")
+                    one_liner = r.get("one_liner", "")
+                    strengths = r.get("strengths", [])
+                    gaps = r.get("gaps", [])
+
+                    parts.append(f"**{i}. {title} at {company} — {score_pct}% match**")
+                    if one_liner:
+                        parts.append(f"   {one_liner}")
+                    if strengths:
+                        parts.append(f"   Strengths: {', '.join(strengths)}")
+                    if gaps:
+                        parts.append(f"   Gaps: {', '.join(gaps)}")
+                    parts.append("")
+
+                if summary:
+                    parts.append(f"**Summary:** {summary}")
+
+                if rankings:
+                    top = rankings[0]
+                    parts.append(f"\nWould you like me to draft an outreach email to {candidate_name} for the **{top.get('title', '')}** role?")
+
+                response["reply"] = "\n".join(parts)
+
+                # Log activity
+                db.insert_activity({
+                    "id": uuid.uuid4().hex[:8],
+                    "user_id": user_id,
+                    "activity_type": "candidate_matched",
+                    "description": f"Matched {candidate_name} against {len(rankings)} jobs",
+                    "metadata_json": json.dumps({
+                        "candidate_id": candidate_id,
+                        "candidate_name": candidate_name,
+                        "top_job": rankings[0].get("title", "") if rankings else "",
+                        "top_score": rankings[0].get("score", 0) if rankings else 0,
+                    }),
+                    "created_at": datetime.now().isoformat(),
+                })
+        except Exception as e:
+            log.error("Failed to run candidate matching: %s", e)
+            response["reply"] = f"Sorry, I encountered an error while matching: {e}"
+
     # If there's an upload_resume action, pass it through to the frontend
     if action_data and isinstance(action_data, dict) and action_data.get("type") == "upload_resume":
         response["action"] = {

@@ -193,5 +193,22 @@ When the user asks to upload a resume, add a candidate, or submit a CV \
   }}
 }}
 
+When the user asks what jobs suit a candidate, or asks to match/evaluate a candidate \
+(e.g. "What jobs match XXX?", "XXX适合什么工作?", "evaluate XXX", \
+"XXX符合哪个职位?", "which role fits XXX?", "帮我看看XXX匹配什么"), you MUST:
+1. Look up the candidate by name in the context above
+2. If found, return:
+
+{{
+  "message": "Let me analyze which jobs are the best fit for [name]. One moment...",
+  "action": {{
+    "type": "match_candidate",
+    "candidate_id": "the candidate ID from context",
+    "candidate_name": "the candidate name"
+  }}
+}}
+
+If the candidate is NOT found, return action as null with a helpful message.
+
 For ALL other conversations, set action to null. Always respond with valid JSON only.
 """
