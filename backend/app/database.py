@@ -139,6 +139,18 @@ def init_db() -> None:
     except sqlite3.OperationalError:
         pass
 
+    # Migration: add reply tracking fields to emails
+    for col, default in [
+        ("message_id", "''"),
+        ("reply_body", "''"),
+        ("replied_at", "NULL"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE emails ADD COLUMN {col} TEXT DEFAULT {default}")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
     conn.close()
 
 
@@ -383,14 +395,16 @@ def insert_email(e: dict) -> None:
     conn.execute(
         """INSERT INTO emails
            (id, candidate_id, candidate_name, to_email, subject, body,
-            email_type, approved, sent, sent_at, reply_received, attachment_path, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            email_type, approved, sent, sent_at, reply_received, attachment_path,
+            message_id, reply_body, replied_at, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             e["id"], e.get("candidate_id", ""), e.get("candidate_name", ""),
             e.get("to_email", ""), e.get("subject", ""), e.get("body", ""),
             e.get("email_type", "outreach"), int(e.get("approved", False)),
             int(e.get("sent", False)), e.get("sent_at"),
             int(e.get("reply_received", False)), e.get("attachment_path", ""),
+            e.get("message_id", ""), e.get("reply_body", ""), e.get("replied_at"),
             e["created_at"],
         ),
     )
@@ -434,6 +448,16 @@ def update_email(eid: str, updates: dict) -> bool:
     conn.commit()
     conn.close()
     return True
+
+
+def list_sent_unreplied_emails() -> list[dict]:
+    """Return sent emails that haven't received a reply yet."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM emails WHERE sent = 1 AND reply_received = 0 ORDER BY sent_at DESC"
+    ).fetchall()
+    conn.close()
+    return [_row_to_email(r) for r in rows]
 
 
 def _row_to_email(row) -> dict:

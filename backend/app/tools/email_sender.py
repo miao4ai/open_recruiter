@@ -28,17 +28,20 @@ def send_email(
     Returns {"status": "ok"} on success or {"status": "error", "message": ...}.
     """
     if backend == "console":
+        import uuid as _uuid
+        fake_mid = f"<{_uuid.uuid4().hex}@open-recruiter.local>"
         print(f"\n{'='*60}")
         print(f"  EMAIL (console mode — not actually sent)")
         print(f"  From: {from_email}")
         print(f"  To:   {to_email}")
         print(f"  Subject: {subject}")
+        print(f"  Message-ID: {fake_mid}")
         if attachment_path:
             print(f"  Attachment: {attachment_path}")
         print(f"{'='*60}")
         print(body)
         print(f"{'='*60}\n")
-        return {"status": "ok", "message": "Printed to console (dev mode)"}
+        return {"status": "ok", "message": "Printed to console (dev mode)", "message_id": fake_mid}
 
     if backend in ("smtp", "gmail"):
         # Auto-fill Gmail SMTP settings
@@ -80,7 +83,9 @@ def send_email(
                 server.login(smtp_username or from_email, smtp_password)
                 server.sendmail(from_email, [to_email], msg.as_string())
 
-            return {"status": "ok", "message": "Email sent via SMTP"}
+            # Capture Message-ID for reply matching
+            message_id = msg["Message-ID"] or ""
+            return {"status": "ok", "message": "Email sent via SMTP", "message_id": message_id}
         except smtplib.SMTPAuthenticationError:
             return {"status": "error", "message": "SMTP authentication failed. For Gmail, use an App Password (not your regular password)."}
         except Exception as e:

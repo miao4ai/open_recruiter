@@ -1,5 +1,8 @@
 import { useCallback, useState } from "react";
-import { Mail, Send, Check, Plus, X, Trash2, Pencil } from "lucide-react";
+import {
+  Mail, Send, Check, Plus, X, Trash2, Pencil,
+  RefreshCw, MessageSquareText, ChevronDown, ChevronUp,
+} from "lucide-react";
 import { useApi } from "../hooks/useApi";
 import {
   listEmails,
@@ -8,6 +11,8 @@ import {
   composeEmail,
   updateEmailDraft,
   deleteEmail,
+  markEmailReplied,
+  checkReplies,
 } from "../lib/api";
 import type { Email, EmailType } from "../types";
 
@@ -311,6 +316,45 @@ export default function Outreach() {
     refresh();
   };
 
+  const handleMarkReplied = async (id: string) => {
+    await markEmailReplied(id);
+    refresh();
+  };
+
+  const [checking, setChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState<string | null>(null);
+  const handleCheckReplies = async () => {
+    setChecking(true);
+    setCheckResult(null);
+    try {
+      const res = await checkReplies();
+      setCheckResult(
+        res.replies_found > 0
+          ? `Found ${res.replies_found} new ${res.replies_found === 1 ? "reply" : "replies"}!`
+          : "No new replies found."
+      );
+      refresh();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail || "Failed to check replies";
+      setCheckResult(msg);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  // Track which sent emails are expanded
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Compose / Edit modal */}
@@ -424,39 +468,113 @@ export default function Outreach() {
 
       {/* Sent emails */}
       <div>
-        <h2 className="mb-3 text-lg font-semibold">
-          Sent{" "}
-          <span className="text-sm font-normal text-gray-400">
-            ({sent.length})
-          </span>
-        </h2>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">
+            Sent{" "}
+            <span className="text-sm font-normal text-gray-400">
+              ({sent.length})
+            </span>
+          </h2>
+          <div className="flex items-center gap-2">
+            {checkResult && (
+              <span className="text-xs text-gray-500">{checkResult}</span>
+            )}
+            <button
+              onClick={handleCheckReplies}
+              disabled={checking}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${checking ? "animate-spin" : ""}`} />
+              {checking ? "Checking..." : "Check for Replies"}
+            </button>
+          </div>
+        </div>
         {sent.length > 0 ? (
           <div className="space-y-2">
-            {sent.map((e) => (
-              <div
-                key={e.id}
-                className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm"
-              >
-                <div>
-                  <span className="font-medium">{e.subject}</span>
-                  <span className="ml-2 text-gray-400">
-                    to {e.to_email || e.candidate_name}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 text-xs text-gray-400">
-                  <span>
-                    {e.sent_at
-                      ? new Date(e.sent_at).toLocaleDateString()
-                      : ""}
-                  </span>
-                  {e.reply_received && (
-                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">
-                      Replied
-                    </span>
+            {sent.map((e) => {
+              const isExpanded = expandedIds.has(e.id);
+              return (
+                <div
+                  key={e.id}
+                  className="rounded-lg border border-gray-200 bg-white text-sm"
+                >
+                  {/* Sent email row */}
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <button
+                      onClick={() => toggleExpand(e.id)}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    >
+                      {isExpanded ? (
+                        <ChevronUp className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                      )}
+                      <span className="truncate font-medium">{e.subject}</span>
+                      <span className="text-gray-400">
+                        to {e.to_email || e.candidate_name}
+                      </span>
+                    </button>
+                    <div className="ml-4 flex items-center gap-2 text-xs text-gray-400">
+                      <span>
+                        {e.sent_at
+                          ? new Date(e.sent_at).toLocaleDateString()
+                          : ""}
+                      </span>
+                      {e.reply_received ? (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-700">
+                          Replied
+                        </span>
+                      ) : (
+                        <button
+                          onClick={(ev) => { ev.stopPropagation(); handleMarkReplied(e.id); }}
+                          className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                          title="Mark as replied"
+                        >
+                          <MessageSquareText className="h-3 w-3" />
+                          Mark Replied
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Expanded: email body + reply */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 px-4 py-3 space-y-3">
+                      <div className="whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-sm text-gray-700">
+                        {e.body}
+                      </div>
+                      {e.reply_received && e.reply_body && (
+                        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                          <div className="mb-1 flex items-center gap-1 text-xs font-medium text-emerald-700">
+                            <MessageSquareText className="h-3.5 w-3.5" />
+                            Reply received
+                            {e.replied_at && (
+                              <span className="ml-1 font-normal text-emerald-600">
+                                — {new Date(e.replied_at).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                          <div className="whitespace-pre-wrap text-sm text-gray-700">
+                            {e.reply_body}
+                          </div>
+                        </div>
+                      )}
+                      {e.reply_received && !e.reply_body && (
+                        <div className="flex items-center gap-1 text-xs text-emerald-600">
+                          <MessageSquareText className="h-3.5 w-3.5" />
+                          Reply received (manually marked)
+                          {e.replied_at && (
+                            <span className="text-emerald-500">
+                              — {new Date(e.replied_at).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-gray-400">No sent emails yet.</p>

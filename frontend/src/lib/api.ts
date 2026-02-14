@@ -161,6 +161,10 @@ export const deleteEmail = (id: string) =>
   api.delete(`/emails/${id}`).then((r) => r.data);
 export const pendingEmails = () =>
   api.get<Email[]>("/emails/pending").then((r) => r.data);
+export const markEmailReplied = (id: string) =>
+  api.post(`/emails/${id}/mark-replied`).then((r) => r.data);
+export const checkReplies = () =>
+  api.post<{ status: string; replies_found: number }>("/emails/check-replies").then((r) => r.data);
 
 // ── Search ───────────────────────────────────────────────────────────────
 export const searchByText = (

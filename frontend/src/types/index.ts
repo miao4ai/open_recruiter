@@ -84,6 +84,9 @@ export interface Email {
   sent_at: string | null;
   reply_received: boolean;
   attachment_path: string;
+  message_id: string;
+  reply_body: string;
+  replied_at: string | null;
   created_at: string;
 }
 
@@ -104,6 +107,10 @@ export interface Settings {
   smtp_port: number;
   smtp_username: string;
   smtp_password: string;
+  imap_host: string;
+  imap_port: number;
+  imap_username: string;
+  imap_password: string;
   recruiter_name: string;
   recruiter_email: string;
   recruiter_company: string;

@@ -23,6 +23,10 @@ export default function Settings() {
     smtp_port: 587,
     smtp_username: "",
     smtp_password: "",
+    imap_host: "",
+    imap_port: 993,
+    imap_username: "",
+    imap_password: "",
     recruiter_name: "",
     recruiter_email: "",
     recruiter_company: "",
@@ -218,6 +222,80 @@ export default function Settings() {
           <FlaskConical className="h-4 w-4" /> Test Email
         </button>
       </Section>
+
+      {/* IMAP Config (for reply detection) */}
+      {(form.email_backend === "gmail" || form.email_backend === "smtp") && (
+        <Section title="IMAP Configuration (Reply Detection)">
+          <p className="text-xs text-gray-500 -mt-2 mb-2">
+            Configure IMAP to auto-detect when candidates reply to your emails.
+          </p>
+          {form.email_backend === "gmail" ? (
+            <>
+              <Field label="IMAP Host">
+                <input
+                  name="imap_host"
+                  value={form.imap_host || "imap.gmail.com"}
+                  onChange={handleChange}
+                  placeholder="imap.gmail.com"
+                  className="input"
+                />
+              </Field>
+              <Field label="IMAP Password">
+                <input
+                  name="imap_password"
+                  type="password"
+                  value={form.imap_password}
+                  onChange={handleChange}
+                  placeholder="Same as Gmail App Password"
+                  className="input"
+                />
+                <p className="mt-1 text-xs text-gray-400">Use the same App Password as above</p>
+              </Field>
+            </>
+          ) : (
+            <>
+              <Field label="IMAP Host">
+                <input
+                  name="imap_host"
+                  value={form.imap_host}
+                  onChange={handleChange}
+                  placeholder="imap.example.com"
+                  className="input"
+                />
+              </Field>
+              <Field label="IMAP Port">
+                <input
+                  name="imap_port"
+                  type="number"
+                  value={form.imap_port}
+                  onChange={handleChange}
+                  placeholder="993"
+                  className="input"
+                />
+              </Field>
+              <Field label="IMAP Username">
+                <input
+                  name="imap_username"
+                  value={form.imap_username}
+                  onChange={handleChange}
+                  placeholder="your-email@example.com"
+                  className="input"
+                />
+              </Field>
+              <Field label="IMAP Password">
+                <input
+                  name="imap_password"
+                  type="password"
+                  value={form.imap_password}
+                  onChange={handleChange}
+                  placeholder="password"
+                  className="input"
+                />
+              </Field>
+            </>
+          )}
+        </Section>
+      )}
 
       {/* Personal Info */}
       <Section title="Recruiter Profile">

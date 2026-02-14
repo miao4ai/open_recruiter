@@ -29,6 +29,12 @@ class Config:
     recruiter_email: str = ""
     recruiter_company: str = ""
 
+    # IMAP (reply detection)
+    imap_host: str = ""
+    imap_port: int = 993
+    imap_username: str = ""
+    imap_password: str = ""
+
     # Slack integration
     slack_bot_token: str = ""
     slack_app_token: str = ""
@@ -57,6 +63,10 @@ def load_config_from_env() -> Config:
         smtp_port=int(os.getenv("SMTP_PORT", "587")),
         smtp_username=os.getenv("SMTP_USERNAME", ""),
         smtp_password=os.getenv("SMTP_PASSWORD", ""),
+        imap_host=os.getenv("IMAP_HOST", ""),
+        imap_port=int(os.getenv("IMAP_PORT", "993")),
+        imap_username=os.getenv("IMAP_USERNAME", ""),
+        imap_password=os.getenv("IMAP_PASSWORD", ""),
         slack_bot_token=os.getenv("SLACK_BOT_TOKEN", ""),
         slack_app_token=os.getenv("SLACK_APP_TOKEN", ""),
         slack_signing_secret=os.getenv("SLACK_SIGNING_SECRET", ""),

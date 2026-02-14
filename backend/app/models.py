@@ -151,6 +151,9 @@ class Email(BaseModel):
     sent_at: str | None = None
     reply_received: bool = False
     attachment_path: str = ""
+    message_id: str = ""
+    reply_body: str = ""
+    replied_at: str | None = None
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
@@ -245,6 +248,10 @@ class Settings(BaseModel):
     recruiter_name: str = ""
     recruiter_email: str = ""
     recruiter_company: str = ""
+    imap_host: str = ""
+    imap_port: int = 993
+    imap_username: str = ""
+    imap_password: str = ""
     slack_bot_token: str = ""
     slack_app_token: str = ""
     slack_signing_secret: str = ""
