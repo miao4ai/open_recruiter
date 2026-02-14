@@ -114,6 +114,8 @@ def init_db() -> None:
             session_id TEXT NOT NULL DEFAULT '',
             role TEXT NOT NULL,
             content TEXT NOT NULL,
+            action_json TEXT DEFAULT '',
+            action_status TEXT DEFAULT '',
             created_at TEXT NOT NULL
         );
 
@@ -175,6 +177,14 @@ def init_db() -> None:
         conn.commit()
     except sqlite3.OperationalError:
         pass
+
+    # Migration: add action_json and action_status to chat_messages
+    for col, default in [("action_json", "''"), ("action_status", "''")]:
+        try:
+            conn.execute(f"ALTER TABLE chat_messages ADD COLUMN {col} TEXT DEFAULT {default}")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
 
     conn.close()
 
@@ -603,11 +613,29 @@ def delete_chat_session(session_id: str) -> None:
 def insert_chat_message(msg: dict) -> None:
     conn = get_conn()
     conn.execute(
-        "INSERT INTO chat_messages (id, user_id, session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (msg["id"], msg["user_id"], msg.get("session_id", ""), msg["role"], msg["content"], msg["created_at"]),
+        "INSERT INTO chat_messages (id, user_id, session_id, role, content, action_json, action_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (msg["id"], msg["user_id"], msg.get("session_id", ""), msg["role"], msg["content"],
+         msg.get("action_json", ""), msg.get("action_status", ""), msg["created_at"]),
     )
     conn.commit()
     conn.close()
+
+
+def update_chat_message(msg_id: str, updates: dict) -> bool:
+    conn = get_conn()
+    sets = []
+    params = []
+    for k, v in updates.items():
+        sets.append(f"{k} = ?")
+        params.append(v)
+    if not sets:
+        conn.close()
+        return False
+    params.append(msg_id)
+    conn.execute(f"UPDATE chat_messages SET {', '.join(sets)} WHERE id = ?", params)
+    conn.commit()
+    conn.close()
+    return True
 
 
 def list_chat_messages(user_id: str, limit: int = 50, session_id: str | None = None) -> list[dict]:
@@ -623,7 +651,21 @@ def list_chat_messages(user_id: str, limit: int = 50, session_id: str | None = N
             (user_id, limit),
         ).fetchall()
     conn.close()
-    return [dict(r) for r in reversed(rows)]
+    results = []
+    for r in reversed(rows):
+        d = dict(r)
+        # Parse action_json back to dict if present
+        if d.get("action_json"):
+            try:
+                d["action"] = json.loads(d["action_json"])
+            except (json.JSONDecodeError, TypeError):
+                d["action"] = None
+        else:
+            d["action"] = None
+        d["actionStatus"] = d.pop("action_status", "") or None
+        del d["action_json"]
+        results.append(d)
+    return results
 
 
 def clear_chat_messages(user_id: str) -> None:

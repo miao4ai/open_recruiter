@@ -200,6 +200,10 @@ export const getChatHistory = (session_id?: string) =>
   api.get<ChatMessage[]>("/agent/chat/history", { params: session_id ? { session_id } : {} }).then((r) => r.data);
 export const clearChatHistory = () =>
   api.delete("/agent/chat/history").then((r) => r.data);
+export const updateChatMessageStatus = (messageId: string, actionStatus: string) =>
+  api.patch(`/agent/chat/messages/${messageId}`, { action_status: actionStatus }).then((r) => r.data);
+export const saveChatMessage = (sessionId: string, content: string, role = "assistant") =>
+  api.post("/agent/chat/messages", { session_id: sessionId, content, role }).then((r) => r.data);
 
 // ── Chat Sessions ────────────────────────────────────────────────────────
 export const listChatSessions = () =>

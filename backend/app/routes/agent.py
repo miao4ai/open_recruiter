@@ -277,15 +277,24 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
             "job_title": action_data.get("job_title", ""),
         }
 
-    # Save assistant reply (text only — action is transient)
+    # Save assistant reply with action data for persistence
+    assistant_msg_id = uuid.uuid4().hex[:8]
+    action_json_str = ""
+    action_status_str = ""
+    if response.get("action"):
+        action_json_str = json.dumps(response["action"])
+        action_status_str = "pending"
     db.insert_chat_message({
-        "id": uuid.uuid4().hex[:8],
+        "id": assistant_msg_id,
         "user_id": user_id,
         "session_id": session_id,
         "role": "assistant",
         "content": response["reply"],
+        "action_json": action_json_str,
+        "action_status": action_status_str,
         "created_at": datetime.now().isoformat(),
     })
+    response["message_id"] = assistant_msg_id
 
     # Auto-title: update session title from first user message
     session = db.get_chat_session(session_id)
@@ -354,6 +363,33 @@ async def chat_history(
 ):
     """Retrieve chat history for a session (or all if no session_id)."""
     return db.list_chat_messages(current_user["id"], limit=50, session_id=session_id)
+
+
+@router.patch("/chat/messages/{message_id}")
+async def update_chat_message(message_id: str, req: dict, _user: dict = Depends(get_current_user)):
+    """Update a chat message's action_status."""
+    updates = {}
+    if "action_status" in req:
+        updates["action_status"] = req["action_status"]
+    if not updates:
+        return {"status": "no_changes"}
+    db.update_chat_message(message_id, updates)
+    return {"status": "updated"}
+
+
+@router.post("/chat/messages")
+async def save_chat_message(req: dict, current_user: dict = Depends(get_current_user)):
+    """Save a follow-up message (e.g. congratulatory message after email send)."""
+    msg_id = uuid.uuid4().hex[:8]
+    db.insert_chat_message({
+        "id": msg_id,
+        "user_id": current_user["id"],
+        "session_id": req.get("session_id", ""),
+        "role": req.get("role", "assistant"),
+        "content": req.get("content", ""),
+        "created_at": datetime.now().isoformat(),
+    })
+    return {"id": msg_id, "status": "saved"}
 
 
 @router.delete("/chat/history")

@@ -15,6 +15,8 @@ import {
   listChatSessions,
   deleteChatSession,
   listJobs,
+  updateChatMessageStatus,
+  saveChatMessage,
 } from "../lib/api";
 import type { Candidate, ChatMessage, ChatSession, Email, Job } from "../types";
 
@@ -372,7 +374,7 @@ export default function Chat() {
       }
 
       const tempAssistantMsg: ChatMessage = {
-        id: "temp-" + Date.now() + "-reply",
+        id: response.message_id || "temp-" + Date.now() + "-reply",
         user_id: "",
         role: "assistant",
         content: response.reply,
@@ -418,6 +420,11 @@ export default function Chat() {
       }
       await sendEmail(emailId);
 
+      // Persist action status to backend
+      if (msg) {
+        updateChatMessageStatus(msg.id, "sent").catch(() => {});
+      }
+
       setMessages((prev) =>
         prev.map((m) =>
           m.action?.type === "compose_email" && m.action.email.id === emailId
@@ -427,24 +434,37 @@ export default function Chat() {
       );
 
       const name = email?.candidate_name || "the candidate";
+      const congratsContent = `Great news! Your email to ${name} has been sent successfully and their status has been updated to "contacted". Is there anything else you'd like me to help with? For example, I can draft emails to other candidates, schedule interviews, or review your pipeline.`;
+
+      // Save congratulatory message to backend
+      if (activeSessionId) {
+        saveChatMessage(activeSessionId, congratsContent).catch(() => {});
+      }
+
       setMessages((prev) => [
         ...prev,
         {
           id: "congrats-" + Date.now(),
           user_id: "",
           role: "assistant",
-          content: `Great news! Your email to ${name} has been sent successfully and their status has been updated to "contacted". Is there anything else you'd like me to help with? For example, I can draft emails to other candidates, schedule interviews, or review your pipeline.`,
+          content: congratsContent,
           created_at: new Date().toISOString(),
         },
       ]);
     } catch {
+      const errorContent = "Failed to send the email. Please check your email configuration in Settings and try again.";
+
+      if (activeSessionId) {
+        saveChatMessage(activeSessionId, errorContent).catch(() => {});
+      }
+
       setMessages((prev) => [
         ...prev,
         {
           id: "error-" + Date.now(),
           user_id: "",
           role: "assistant",
-          content: "Failed to send the email. Please check your email configuration in Settings and try again.",
+          content: errorContent,
           created_at: new Date().toISOString(),
         },
       ]);
@@ -456,6 +476,13 @@ export default function Chat() {
       await deleteEmail(emailId);
     } catch {
       // Ignore — draft may already be gone
+    }
+    // Find the message and persist cancel status
+    const msg = messages.find(
+      (m) => m.action?.type === "compose_email" && m.action.email.id === emailId
+    );
+    if (msg) {
+      updateChatMessageStatus(msg.id, "cancelled").catch(() => {});
     }
     setMessages((prev) =>
       prev.map((m) =>
@@ -496,6 +523,9 @@ export default function Chat() {
     try {
       const candidate: Candidate = await uploadResume(file, jobId);
 
+      // Persist action status to backend
+      updateChatMessageStatus(msgId, "uploaded").catch(() => {});
+
       // Update the message with uploaded status + candidate data
       setMessages((prev) =>
         prev.map((m) =>
@@ -507,13 +537,20 @@ export default function Chat() {
 
       // Append congratulatory message
       const skills = candidate.skills?.slice(0, 3).join(", ") || "N/A";
+      const congratsContent = `${candidate.name}'s resume has been uploaded and processed! Here's a quick summary:\n\n- Title: ${candidate.current_title || "N/A"}\n- Skills: ${skills}\n- Experience: ${candidate.experience_years ?? "N/A"} years\n\nWould you like me to draft an outreach email, match them to a job, or upload another resume?`;
+
+      // Save to backend
+      if (activeSessionId) {
+        saveChatMessage(activeSessionId, congratsContent).catch(() => {});
+      }
+
       setMessages((prev) => [
         ...prev,
         {
           id: "resume-success-" + Date.now(),
           user_id: "",
           role: "assistant",
-          content: `${candidate.name}'s resume has been uploaded and processed! Here's a quick summary:\n\n- Title: ${candidate.current_title || "N/A"}\n- Skills: ${skills}\n- Experience: ${candidate.experience_years ?? "N/A"} years\n\nWould you like me to draft an outreach email, match them to a job, or upload another resume?`,
+          content: congratsContent,
           created_at: new Date().toISOString(),
         },
       ]);
@@ -523,6 +560,7 @@ export default function Chat() {
   };
 
   const handleResumeCancel = (msgId: string) => {
+    updateChatMessageStatus(msgId, "cancelled").catch(() => {});
     setMessages((prev) =>
       prev.map((m) =>
         m.id === msgId

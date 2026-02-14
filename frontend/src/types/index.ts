@@ -133,6 +133,7 @@ export interface ChatResponse {
   reply: string;
   action?: ChatAction;
   session_id?: string;
+  message_id?: string;
 }
 
 export interface ChatMessage {
