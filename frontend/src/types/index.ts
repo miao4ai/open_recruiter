@@ -121,7 +121,13 @@ export interface ChatEmailAction {
   email: Email;
 }
 
-export type ChatAction = ChatEmailAction;
+export interface ChatResumeUploadAction {
+  type: "upload_resume";
+  job_id?: string;
+  job_title?: string;
+}
+
+export type ChatAction = ChatEmailAction | ChatResumeUploadAction;
 
 export interface ChatResponse {
   reply: string;
@@ -137,7 +143,7 @@ export interface ChatMessage {
   content: string;
   created_at: string;
   action?: ChatAction;
-  actionStatus?: "pending" | "sent" | "cancelled";
+  actionStatus?: "pending" | "sent" | "uploaded" | "cancelled";
 }
 
 export interface ChatSession {

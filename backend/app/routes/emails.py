@@ -145,7 +145,8 @@ async def send_email(email_id: str, current_user: dict = Depends(get_current_use
         raise HTTPException(status_code=500, detail=result.get("message", "Failed to send email"))
 
     # Mark as sent + store message_id for reply tracking
-    sent_updates: dict = {"sent": True, "sent_at": datetime.now().isoformat()}
+    now = datetime.now().isoformat()
+    sent_updates: dict = {"sent": True, "sent_at": now}
     if result.get("message_id"):
         sent_updates["message_id"] = result["message_id"]
     db.update_email(email_id, sent_updates)
@@ -153,8 +154,28 @@ async def send_email(email_id: str, current_user: dict = Depends(get_current_use
     if email["candidate_id"]:
         db.update_candidate(email["candidate_id"], {
             "status": "contacted",
-            "updated_at": datetime.now().isoformat(),
+            "updated_at": now,
         })
+
+    # Log activity
+    import json
+    import uuid
+    db.insert_activity({
+        "id": uuid.uuid4().hex[:8],
+        "user_id": current_user["id"],
+        "activity_type": "email_sent",
+        "description": f"Sent {email.get('email_type', 'outreach')} email to {email.get('candidate_name', email['to_email'])}",
+        "metadata_json": json.dumps({
+            "email_id": email_id,
+            "candidate_id": email.get("candidate_id", ""),
+            "candidate_name": email.get("candidate_name", ""),
+            "to_email": email["to_email"],
+            "subject": email["subject"],
+            "email_type": email.get("email_type", "outreach"),
+        }),
+        "created_at": now,
+    })
+
     return {"status": "sent", "message": result.get("message", "")}
 
 

@@ -171,6 +171,17 @@ class ChatRequest(BaseModel):
     session_id: str = ""
 
 
+# ── Activity Log ──────────────────────────────────────────────────────────
+
+class Activity(BaseModel):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
+    user_id: str = ""
+    activity_type: str = ""          # e.g. "email_drafted", "email_sent"
+    description: str = ""
+    metadata_json: str = ""          # JSON-encoded extra data
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
 # ── Slack Audit Log ────────────────────────────────────────────────────────
 
 class SlackAuditLog(BaseModel):

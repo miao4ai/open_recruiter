@@ -149,19 +149,57 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
             log.error("Chat LLM call failed: %s", e)
             reply_text = f"I encountered an error: {e!s}. Please check your LLM configuration in Settings."
 
-    # If there's a compose_email action, create a draft in the DB
+    # If there's a compose_email action, delegate to communication agent for rich drafting
     response: dict = {"reply": reply_text, "session_id": session_id}
     if action_data and isinstance(action_data, dict) and action_data.get("type") == "compose_email":
         try:
+            from app.agents.communication import draft_email as agent_draft
+
+            candidate_id = action_data.get("candidate_id", "")
+            candidate_name = action_data.get("candidate_name", "")
+            to_email = action_data.get("to_email", "")
+            email_type = action_data.get("email_type", "outreach")
+            job_id = action_data.get("job_id", "")
+            instructions = action_data.get("instructions", "")
+
+            # Phase 2: Communication agent generates the email with rich context
+            draft = agent_draft(
+                cfg,
+                candidate_id=candidate_id,
+                job_id=job_id,
+                email_type=email_type,
+                instructions=instructions,
+            )
+
+            if draft.get("error"):
+                log.warning("Communication agent error: %s", draft["error"])
+
             email = Email(
-                candidate_id=action_data.get("candidate_id", ""),
-                candidate_name=action_data.get("candidate_name", ""),
-                to_email=action_data.get("to_email", ""),
-                subject=action_data.get("subject", ""),
-                body=action_data.get("body", ""),
-                email_type=action_data.get("email_type", "outreach"),
+                candidate_id=candidate_id,
+                candidate_name=candidate_name,
+                to_email=to_email,
+                subject=draft.get("subject", ""),
+                body=draft.get("body", ""),
+                email_type=email_type,
             )
             db.insert_email(email.model_dump())
+
+            # Log activity
+            db.insert_activity({
+                "id": uuid.uuid4().hex[:8],
+                "user_id": user_id,
+                "activity_type": "email_drafted",
+                "description": f"Drafted {email_type} email to {candidate_name}",
+                "metadata_json": json.dumps({
+                    "email_id": email.id,
+                    "candidate_id": candidate_id,
+                    "candidate_name": candidate_name,
+                    "email_type": email_type,
+                }),
+                "created_at": datetime.now().isoformat(),
+            })
+
+            response["reply"] = f"I've drafted a personalized {email_type} email for {candidate_name}. Review it below and send when ready!"
             response["action"] = {
                 "type": "compose_email",
                 "email": email.model_dump(),
@@ -169,13 +207,21 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
         except Exception as e:
             log.error("Failed to create email draft from chat action: %s", e)
 
+    # If there's an upload_resume action, pass it through to the frontend
+    if action_data and isinstance(action_data, dict) and action_data.get("type") == "upload_resume":
+        response["action"] = {
+            "type": "upload_resume",
+            "job_id": action_data.get("job_id", ""),
+            "job_title": action_data.get("job_title", ""),
+        }
+
     # Save assistant reply (text only — action is transient)
     db.insert_chat_message({
         "id": uuid.uuid4().hex[:8],
         "user_id": user_id,
         "session_id": session_id,
         "role": "assistant",
-        "content": reply_text,
+        "content": response["reply"],
         "created_at": datetime.now().isoformat(),
     })
 

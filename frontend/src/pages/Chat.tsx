@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Send, Trash2, Loader2, Mail, Check, X, Sparkles,
-  Plus, MessageSquare,
+  Plus, MessageSquare, Upload, FileText,
 } from "lucide-react";
 import { useApi } from "../hooks/useApi";
 import {
@@ -11,10 +11,12 @@ import {
   sendEmail,
   deleteEmail,
   updateEmailDraft,
+  uploadResume,
   listChatSessions,
   deleteChatSession,
+  listJobs,
 } from "../lib/api";
-import type { ChatMessage, ChatSession, Email } from "../types";
+import type { Candidate, ChatMessage, ChatSession, Email, Job } from "../types";
 
 /* ── Helper: format today's date for Erika's greeting ──────────────────── */
 
@@ -142,6 +144,157 @@ function EmailComposeCard({
             <Send className="h-3.5 w-3.5" />
           )}
           {sending ? "Sending..." : "Send Email"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Inline Resume Upload Card ────────────────────────────────────────── */
+
+function ResumeUploadCard({
+  status,
+  defaultJobId,
+  uploadedCandidate,
+  onUpload,
+  onCancel,
+}: {
+  status: "pending" | "uploaded" | "cancelled";
+  defaultJobId?: string;
+  uploadedCandidate?: Candidate;
+  onUpload: (file: File, jobId: string) => void;
+  onCancel: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [jobId, setJobId] = useState(defaultJobId || "");
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const { data: jobs } = useApi(useCallback(() => listJobs(), []));
+
+  if (status === "uploaded" && uploadedCandidate) {
+    return (
+      <div className="mt-2 rounded-xl border border-green-200 bg-green-50 p-4">
+        <div className="flex items-center gap-2 text-green-700">
+          <Check className="h-5 w-5" />
+          <span className="font-medium">Resume uploaded successfully!</span>
+        </div>
+        <div className="mt-2 space-y-1 text-sm text-green-700">
+          <p><span className="font-medium">Name:</span> {uploadedCandidate.name}</p>
+          {uploadedCandidate.current_title && (
+            <p><span className="font-medium">Title:</span> {uploadedCandidate.current_title}</p>
+          )}
+          {uploadedCandidate.skills.length > 0 && (
+            <p><span className="font-medium">Skills:</span> {uploadedCandidate.skills.slice(0, 5).join(", ")}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "cancelled") {
+    return (
+      <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
+        <p className="text-sm italic text-gray-500">Resume upload cancelled.</p>
+      </div>
+    );
+  }
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      await onUpload(file, jobId);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Upload failed";
+      if (typeof err === "object" && err !== null && "response" in err) {
+        const axiosErr = err as { response?: { status?: number } };
+        if (axiosErr.response?.status === 409) {
+          setError("A candidate with this name and email already exists.");
+        } else {
+          setError(msg);
+        }
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 space-y-3 rounded-xl border border-purple-200 bg-purple-50/50 p-4">
+      <div className="flex items-center gap-2 text-sm font-medium text-purple-700">
+        <Upload className="h-4 w-4" />
+        Resume Upload
+      </div>
+
+      {/* File picker */}
+      <div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".pdf,.docx,.doc,.txt"
+          onChange={(e) => {
+            setFile(e.target.files?.[0] || null);
+            setError("");
+          }}
+          className="hidden"
+        />
+        <button
+          onClick={() => fileRef.current?.click()}
+          className="flex w-full items-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white px-4 py-3 text-sm text-gray-500 hover:border-purple-400 hover:text-purple-600"
+        >
+          <FileText className="h-4 w-4" />
+          {file ? file.name : "Click to select a resume (PDF, DOCX, TXT)"}
+        </button>
+      </div>
+
+      {/* Job selector */}
+      {jobs && jobs.length > 0 && (
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Associate with job (optional)</label>
+          <select
+            value={jobId}
+            onChange={(e) => setJobId(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+          >
+            <option value="">No specific job</option>
+            {jobs.map((j: Job) => (
+              <option key={j.id} value={j.id}>
+                {j.title} — {j.company}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {error && (
+        <p className="text-sm text-red-600">{error}</p>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={onCancel}
+          disabled={uploading}
+          className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          <X className="h-3.5 w-3.5" /> Cancel
+        </button>
+        <button
+          onClick={handleUpload}
+          disabled={uploading || !file}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+        >
+          {uploading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Upload className="h-3.5 w-3.5" />
+          )}
+          {uploading ? "Uploading..." : "Upload Resume"}
         </button>
       </div>
     </div>
@@ -280,7 +433,7 @@ export default function Chat() {
           id: "congrats-" + Date.now(),
           user_id: "",
           role: "assistant",
-          content: `Congrats! Your email to ${name} has been sent successfully. Their status has been updated to "contacted".`,
+          content: `Great news! Your email to ${name} has been sent successfully and their status has been updated to "contacted". Is there anything else you'd like me to help with? For example, I can draft emails to other candidates, schedule interviews, or review your pipeline.`,
           created_at: new Date().toISOString(),
         },
       ]);
@@ -334,6 +487,48 @@ export default function Chat() {
         }
         return m;
       })
+    );
+  };
+
+  /* ── Resume upload handlers ──────────────────────────────────────────── */
+
+  const handleResumeUpload = async (msgId: string, file: File, jobId: string) => {
+    try {
+      const candidate: Candidate = await uploadResume(file, jobId);
+
+      // Update the message with uploaded status + candidate data
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msgId
+            ? { ...m, actionStatus: "uploaded" as const, uploadedCandidate: candidate }
+            : m
+        )
+      );
+
+      // Append congratulatory message
+      const skills = candidate.skills?.slice(0, 3).join(", ") || "N/A";
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: "resume-success-" + Date.now(),
+          user_id: "",
+          role: "assistant",
+          content: `${candidate.name}'s resume has been uploaded and processed! Here's a quick summary:\n\n- Title: ${candidate.current_title || "N/A"}\n- Skills: ${skills}\n- Experience: ${candidate.experience_years ?? "N/A"} years\n\nWould you like me to draft an outreach email, match them to a job, or upload another resume?`,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    } catch (err) {
+      throw err; // Let ResumeUploadCard handle the error display
+    }
+  };
+
+  const handleResumeCancel = (msgId: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId
+          ? { ...m, actionStatus: "cancelled" as const }
+          : m
+      )
     );
   };
 
@@ -483,10 +678,20 @@ export default function Chat() {
                 {msg.action?.type === "compose_email" && (
                   <EmailComposeCard
                     email={msg.action.email}
-                    status={msg.actionStatus ?? "pending"}
+                    status={(msg.actionStatus ?? "pending") as "pending" | "sent" | "cancelled"}
                     onSend={handleEmailSend}
                     onCancel={handleEmailCancel}
                     onUpdateField={handleEmailFieldUpdate}
+                  />
+                )}
+
+                {msg.action?.type === "upload_resume" && (
+                  <ResumeUploadCard
+                    status={(msg.actionStatus === "uploaded" ? "uploaded" : msg.actionStatus === "cancelled" ? "cancelled" : "pending") as "pending" | "uploaded" | "cancelled"}
+                    defaultJobId={msg.action.job_id}
+                    uploadedCandidate={(msg as ChatMessage & { uploadedCandidate?: Candidate }).uploadedCandidate}
+                    onUpload={(file, jobId) => handleResumeUpload(msg.id, file, jobId)}
+                    onCancel={() => handleResumeCancel(msg.id)}
                   />
                 )}
               </div>

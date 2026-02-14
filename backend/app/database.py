@@ -117,6 +117,15 @@ def init_db() -> None:
             created_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS activities (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            activity_type TEXT NOT NULL,
+            description TEXT,
+            metadata_json TEXT DEFAULT '{}',
+            created_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS events (
             id TEXT PRIMARY KEY,
             title TEXT,
@@ -623,6 +632,28 @@ def clear_chat_messages(user_id: str) -> None:
     conn.execute("DELETE FROM chat_sessions WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
+
+
+# ── Activities ─────────────────────────────────────────────────────────
+
+def insert_activity(a: dict) -> None:
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO activities (id, user_id, activity_type, description, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (a["id"], a["user_id"], a["activity_type"], a.get("description", ""), a.get("metadata_json", "{}"), a["created_at"]),
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_activities(user_id: str, limit: int = 50) -> list[dict]:
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM activities WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+        (user_id, limit),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 # ── Calendar Events ───────────────────────────────────────────────────
