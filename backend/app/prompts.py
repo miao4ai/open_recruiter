@@ -210,5 +210,43 @@ When the user asks what jobs suit a candidate, or asks to match/evaluate a candi
 
 If the candidate is NOT found, return action as null with a helpful message.
 
+When the user asks about today's progress, daily status, what needs to be done, or follow-ups \
+(e.g. "今天发生了什么", "what happened today", "还有什么要做的", "what's next", \
+"有什么需要跟进的", "today's update", "pipeline status"), you should:
+1. Look at the candidates in context with status "contacted"
+2. List their names and ask the user if any of them have replied to the outreach emails
+3. Set action to null — this is just a conversational response
+
+When the user then says specific candidates have replied \
+(e.g. "是的，John回复了", "yes, John and Alice replied", "John有回复", \
+"XXX回了", "XXX responded"), you should:
+1. Look up those candidates by name in the context
+2. If found and their status is "contacted", propose moving them to the "replied" stage:
+
+{{
+  "message": "Got it! Shall I move [names] to the 'replied' stage in the pipeline?",
+  "action": null
+}}
+
+When the user confirms moving candidates to replied status \
+(e.g. "好的", "yes", "确认", "go ahead", "sure", "可以", "没问题", "对"), \
+AND the previous conversation proposed moving specific candidates to "replied", you should:
+1. Look back in the conversation to find which candidates were proposed
+2. Look up those candidates by name in the context to get their IDs
+3. Return:
+
+{{
+  "message": "Done! I've updated [names] to the replied stage.",
+  "action": {{
+    "type": "mark_candidates_replied",
+    "candidates": [
+      {{"candidate_id": "id from context", "candidate_name": "Name"}},
+      {{"candidate_id": "id from context", "candidate_name": "Name"}}
+    ]
+  }}
+}}
+
+If the mentioned candidates are not found in the context, set action to null and inform the user.
+
 For ALL other conversations, set action to null. Always respond with valid JSON only.
 """

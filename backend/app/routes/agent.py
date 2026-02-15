@@ -269,6 +269,47 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
             log.error("Failed to run candidate matching: %s", e)
             response["reply"] = f"Sorry, I encountered an error while matching: {e}"
 
+    # If there's a mark_candidates_replied action, update candidate statuses
+    if action_data and isinstance(action_data, dict) and action_data.get("type") == "mark_candidates_replied":
+        try:
+            candidates_to_update = action_data.get("candidates", [])
+            updated_names = []
+            now = datetime.now().isoformat()
+
+            for c in candidates_to_update:
+                cid = c.get("candidate_id", "")
+                cname = c.get("candidate_name", "")
+                if cid:
+                    db.update_candidate(cid, {
+                        "status": "replied",
+                        "updated_at": now,
+                    })
+                    updated_names.append(cname)
+
+            if updated_names:
+                names_str = "、".join(updated_names)
+                response["reply"] = f"Done! I've updated **{names_str}** to the **replied** stage in the pipeline."
+                response["action"] = {
+                    "type": "mark_candidates_replied",
+                    "updated": updated_names,
+                }
+
+                db.insert_activity({
+                    "id": uuid.uuid4().hex[:8],
+                    "user_id": user_id,
+                    "activity_type": "candidates_marked_replied",
+                    "description": f"Marked {names_str} as replied",
+                    "metadata_json": json.dumps({
+                        "candidates": candidates_to_update,
+                    }),
+                    "created_at": now,
+                })
+            else:
+                response["reply"] = "I couldn't find the candidates to update. Please check the names and try again."
+        except Exception as e:
+            log.error("Failed to mark candidates as replied: %s", e)
+            response["reply"] = f"Sorry, I encountered an error while updating: {e}"
+
     # If there's an upload_resume action, pass it through to the frontend
     if action_data and isinstance(action_data, dict) and action_data.get("type") == "upload_resume":
         response["action"] = {
@@ -427,6 +468,15 @@ def _build_chat_context() -> str:
             )
     else:
         parts.append("\n## Candidates: None")
+
+    # Contacted candidates (awaiting reply)
+    contacted = [c for c in (candidates or []) if c.get("status") == "contacted"]
+    if contacted:
+        parts.append(f"\n## Contacted Candidates Awaiting Reply ({len(contacted)})")
+        for c in contacted:
+            parts.append(
+                f"- {c['name']} (ID: {c['id']}, email: {c.get('email') or 'N/A'})"
+            )
 
     # Recent emails
     emails = db.list_emails()
