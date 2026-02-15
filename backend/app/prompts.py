@@ -193,6 +193,17 @@ When the user asks to upload a resume, add a candidate, or submit a CV \
   }}
 }}
 
+When the user asks to upload a job description, add a job, or submit a JD \
+(e.g. "upload a JD", "add a new job", "I have a job description to upload", \
+"上传JD", "添加职位", "上传职位描述", "add a position"), return:
+
+{{
+  "message": "Sure! Use the upload card below to select a JD file.",
+  "action": {{
+    "type": "upload_jd"
+  }}
+}}
+
 When the user asks what jobs suit a candidate, or asks to match/evaluate a candidate \
 (e.g. "What jobs match XXX?", "XXX适合什么工作?", "evaluate XXX", \
 "XXX符合哪个职位?", "which role fits XXX?", "帮我看看XXX匹配什么"), you MUST:

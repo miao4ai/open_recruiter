@@ -2,8 +2,9 @@
 
 import logging
 from datetime import datetime
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 
 from app import database as db
 from app import vectorstore
@@ -15,6 +16,9 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 MATCH_THRESHOLD = 0.30  # minimum cosine similarity to count as a match
+
+JD_UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads" / "jds"
+JD_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @router.get("")
@@ -60,6 +64,91 @@ async def create_job(req: JobCreate, _user: dict = Depends(get_current_user)):
         log.warning("Failed to index job in vector store: %s", e)
 
     return job.model_dump()
+
+
+@router.post("/upload")
+async def upload_jd(
+    file: UploadFile = File(...),
+    _user: dict = Depends(get_current_user),
+):
+    """Upload a JD file (PDF / DOCX / TXT).
+
+    Pipeline:
+      1. Save file to disk
+      2. Extract raw text (PyMuPDF / python-docx)
+      3. LLM parses text into structured fields
+      4. Store Job in SQLite + index in ChromaDB
+    """
+    from app.tools.resume_parser import extract_text
+
+    file_bytes = await file.read()
+    filename = file.filename or "jd"
+
+    # 1. Save file
+    save_path = JD_UPLOAD_DIR / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}"
+    save_path.write_bytes(file_bytes)
+
+    # 2. Extract text
+    try:
+        raw_text = extract_text(file_bytes, filename)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # 3. LLM structured parsing
+    parsed: dict = {}
+    try:
+        from app.routes.settings import get_config
+
+        cfg = get_config()
+        has_key = (
+            (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
+            or (cfg.llm_provider == "openai" and cfg.openai_api_key)
+        )
+        if has_key:
+            from app.agents.jd import parse_jd_text
+
+            parsed = parse_jd_text(cfg, raw_text)
+        else:
+            log.warning("No LLM API key configured — skipping JD parsing.")
+    except Exception as e:
+        log.error("LLM JD parsing failed: %s", e)
+
+    # 4. Build Job and store
+    job = Job(
+        title=parsed.get("title", "") or _guess_title(filename),
+        company=parsed.get("company", ""),
+        posted_date=datetime.now().strftime("%Y-%m-%d"),
+        required_skills=parsed.get("required_skills", []),
+        preferred_skills=parsed.get("preferred_skills", []),
+        experience_years=parsed.get("experience_years"),
+        location=parsed.get("location", ""),
+        remote=parsed.get("remote", False),
+        salary_range=parsed.get("salary_range", ""),
+        summary=parsed.get("summary", ""),
+        raw_text=raw_text,
+    )
+    db.insert_job(job.model_dump())
+
+    # 5. Index in ChromaDB
+    try:
+        vectorstore.index_job(
+            job_id=job.id,
+            text=job.raw_text,
+            metadata={"title": job.title, "company": job.company},
+        )
+    except Exception as e:
+        log.warning("Failed to index job in vector store: %s", e)
+
+    return job.model_dump()
+
+
+def _guess_title(filename: str) -> str:
+    """Best-effort title from filename."""
+    stem = Path(filename).stem
+    for word in ("jd", "JD", "job_description", "Job_Description"):
+        stem = stem.replace(word, "")
+    name = stem.replace("_", " ").replace("-", " ").strip()
+    return name if name else "Untitled Position"
 
 
 @router.get("/{job_id}")

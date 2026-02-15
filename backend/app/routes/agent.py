@@ -318,6 +318,12 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
             "job_title": action_data.get("job_title", ""),
         }
 
+    # If there's an upload_jd action, pass it through to the frontend
+    if action_data and isinstance(action_data, dict) and action_data.get("type") == "upload_jd":
+        response["action"] = {
+            "type": "upload_jd",
+        }
+
     # Save assistant reply with action data for persistence
     assistant_msg_id = uuid.uuid4().hex[:8]
     action_json_str = ""

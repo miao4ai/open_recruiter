@@ -127,7 +127,11 @@ export interface ChatResumeUploadAction {
   job_title?: string;
 }
 
-export type ChatAction = ChatEmailAction | ChatResumeUploadAction;
+export interface ChatJdUploadAction {
+  type: "upload_jd";
+}
+
+export type ChatAction = ChatEmailAction | ChatResumeUploadAction | ChatJdUploadAction;
 
 export interface ChatResponse {
   reply: string;

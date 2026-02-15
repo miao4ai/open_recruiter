@@ -74,6 +74,11 @@ export const uploadResume = (file: File, job_id: string = "") => {
   if (job_id) form.append("job_id", job_id);
   return api.post<Candidate>("/candidates/upload", form).then((r) => r.data);
 };
+export const uploadJd = (file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return api.post<Job>("/jobs/upload", form).then((r) => r.data);
+};
 export const updateCandidate = (
   id: string,
   data: {

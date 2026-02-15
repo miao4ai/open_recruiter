@@ -12,6 +12,7 @@ import {
   deleteEmail,
   updateEmailDraft,
   uploadResume,
+  uploadJd,
   listChatSessions,
   deleteChatSession,
   listJobs,
@@ -303,6 +304,125 @@ function ResumeUploadCard({
   );
 }
 
+/* ── Inline JD Upload Card ───────────────────────────────────────────── */
+
+function JdUploadCard({
+  status,
+  uploadedJob,
+  onUpload,
+  onCancel,
+}: {
+  status: "pending" | "uploaded" | "cancelled";
+  uploadedJob?: Job;
+  onUpload: (file: File) => void;
+  onCancel: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  if (status === "uploaded" && uploadedJob) {
+    return (
+      <div className="mt-2 rounded-xl border border-green-200 bg-green-50 p-4">
+        <div className="flex items-center gap-2 text-green-700">
+          <Check className="h-5 w-5" />
+          <span className="font-medium">JD uploaded successfully!</span>
+        </div>
+        <div className="mt-2 space-y-1 text-sm text-green-700">
+          <p><span className="font-medium">Title:</span> {uploadedJob.title}</p>
+          {uploadedJob.company && (
+            <p><span className="font-medium">Company:</span> {uploadedJob.company}</p>
+          )}
+          {uploadedJob.required_skills && uploadedJob.required_skills.length > 0 && (
+            <p><span className="font-medium">Required Skills:</span> {uploadedJob.required_skills.slice(0, 5).join(", ")}</p>
+          )}
+          {uploadedJob.location && (
+            <p><span className="font-medium">Location:</span> {uploadedJob.location}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "cancelled") {
+    return (
+      <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
+        <p className="text-sm italic text-gray-500">JD upload cancelled.</p>
+      </div>
+    );
+  }
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      await onUpload(file);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Upload failed";
+      setError(msg);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 space-y-3 rounded-xl border border-orange-200 bg-orange-50/50 p-4">
+      <div className="flex items-center gap-2 text-sm font-medium text-orange-700">
+        <FileText className="h-4 w-4" />
+        Job Description Upload
+      </div>
+
+      {/* File picker */}
+      <div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".pdf,.docx,.doc,.txt"
+          onChange={(e) => {
+            setFile(e.target.files?.[0] || null);
+            setError("");
+          }}
+          className="hidden"
+        />
+        <button
+          onClick={() => fileRef.current?.click()}
+          className="flex w-full items-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white px-4 py-3 text-sm text-gray-500 hover:border-orange-400 hover:text-orange-600"
+        >
+          <FileText className="h-4 w-4" />
+          {file ? file.name : "Click to select a JD file (PDF, DOCX, TXT)"}
+        </button>
+      </div>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {/* Action buttons */}
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={onCancel}
+          disabled={uploading}
+          className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          <X className="h-3.5 w-3.5" /> Cancel
+        </button>
+        <button
+          onClick={handleUpload}
+          disabled={uploading || !file}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+        >
+          {uploading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Upload className="h-3.5 w-3.5" />
+          )}
+          {uploading ? "Uploading..." : "Upload JD"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ── Chat Page ─────────────────────────────────────────────────────────── */
 
 export default function Chat() {
@@ -570,6 +690,55 @@ export default function Chat() {
     );
   };
 
+  /* ── JD upload handlers ──────────────────────────────────────────────── */
+
+  const handleJdUpload = async (msgId: string, file: File) => {
+    try {
+      const job: Job = await uploadJd(file);
+
+      updateChatMessageStatus(msgId, "uploaded").catch(() => {});
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msgId
+            ? { ...m, actionStatus: "uploaded" as const, uploadedJob: job }
+            : m
+        )
+      );
+
+      const skills = job.required_skills?.slice(0, 3).join(", ") || "N/A";
+      const congratsContent = `The job description for **${job.title}**${job.company ? ` at ${job.company}` : ""} has been uploaded and processed! Here's a quick summary:\n\n- Required Skills: ${skills}\n- Experience: ${job.experience_years ?? "N/A"} years\n- Location: ${job.location || "N/A"}${job.remote ? " (Remote)" : ""}\n\nWould you like me to match candidates to this job, or upload another JD?`;
+
+      if (activeSessionId) {
+        saveChatMessage(activeSessionId, congratsContent).catch(() => {});
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: "jd-success-" + Date.now(),
+          user_id: "",
+          role: "assistant",
+          content: congratsContent,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const handleJdCancel = (msgId: string) => {
+    updateChatMessageStatus(msgId, "cancelled").catch(() => {});
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId
+          ? { ...m, actionStatus: "cancelled" as const }
+          : m
+      )
+    );
+  };
+
   /* ── Session handlers ───────────────────────────────────────────────── */
 
   const handleNewChat = () => {
@@ -730,6 +899,15 @@ export default function Chat() {
                     uploadedCandidate={(msg as ChatMessage & { uploadedCandidate?: Candidate }).uploadedCandidate}
                     onUpload={(file, jobId) => handleResumeUpload(msg.id, file, jobId)}
                     onCancel={() => handleResumeCancel(msg.id)}
+                  />
+                )}
+
+                {msg.action?.type === "upload_jd" && (
+                  <JdUploadCard
+                    status={(msg.actionStatus === "uploaded" ? "uploaded" : msg.actionStatus === "cancelled" ? "cancelled" : "pending") as "pending" | "uploaded" | "cancelled"}
+                    uploadedJob={(msg as ChatMessage & { uploadedJob?: Job }).uploadedJob}
+                    onUpload={(file) => handleJdUpload(msg.id, file)}
+                    onCancel={() => handleJdCancel(msg.id)}
                   />
                 )}
               </div>
