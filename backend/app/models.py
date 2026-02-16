@@ -12,10 +12,15 @@ from pydantic import BaseModel, Field
 
 # ── User / Auth ───────────────────────────────────────────────────────────
 
+class UserRole(str, Enum):
+    RECRUITER = "recruiter"
+    JOB_SEEKER = "job_seeker"
+
 class UserRegister(BaseModel):
     email: str
     password: str
     name: str = ""
+    role: UserRole = UserRole.RECRUITER
 
 class UserLogin(BaseModel):
     email: str
@@ -25,6 +30,7 @@ class User(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
     email: str
     name: str = ""
+    role: str = "recruiter"
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 

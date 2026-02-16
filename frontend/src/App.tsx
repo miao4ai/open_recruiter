@@ -10,6 +10,7 @@ import Chat from "./pages/Chat";
 import Calendar from "./pages/Calendar";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
+import JobSeekerHome from "./pages/JobSeekerHome";
 import { clearToken, getMe, getToken } from "./lib/api";
 import type { User } from "./types";
 
@@ -46,6 +47,19 @@ export default function App() {
     return <Login onLogin={(u) => setUser(u)} />;
   }
 
+  // Job seeker layout — placeholder page with logout header
+  if (user.role === "job_seeker") {
+    return (
+      <div className="flex h-screen flex-col overflow-hidden">
+        <Header user={user} onLogout={handleLogout} />
+        <main className="flex-1 overflow-y-auto">
+          <JobSeekerHome />
+        </main>
+      </div>
+    );
+  }
+
+  // Recruiter layout — full app
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />

@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { CalendarEvent, Candidate, ChatMessage, ChatResponse, ChatSession, Email, Job, Settings, User } from "../types";
+import type { CalendarEvent, Candidate, ChatMessage, ChatResponse, ChatSession, Email, Job, Settings, User, UserRole } from "../types";
 
 const api = axios.create({ baseURL: "/api" });
 
@@ -31,9 +31,9 @@ api.interceptors.response.use(
 );
 
 // ── Auth ─────────────────────────────────────────────────────────────────
-export const register = (email: string, password: string, name: string) =>
+export const register = (email: string, password: string, name: string, role: UserRole = "recruiter") =>
   api
-    .post<{ token: string; user: User }>("/auth/register", { email, password, name })
+    .post<{ token: string; user: User }>("/auth/register", { email, password, name, role })
     .then((r) => r.data);
 export const login = (email: string, password: string) =>
   api

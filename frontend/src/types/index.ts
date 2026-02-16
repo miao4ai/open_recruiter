@@ -1,7 +1,10 @@
+export type UserRole = "recruiter" | "job_seeker";
+
 export interface User {
   id: string;
   email: string;
   name: string;
+  role: UserRole;
   created_at: string;
 }
 

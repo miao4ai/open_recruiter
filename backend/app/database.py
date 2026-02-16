@@ -186,6 +186,13 @@ def init_db() -> None:
         except sqlite3.OperationalError:
             pass
 
+    # Migration: add role column to users
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'recruiter'")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
     conn.close()
 
 
@@ -213,8 +220,8 @@ def put_settings(data: dict[str, str]) -> None:
 def insert_user(user: dict) -> None:
     conn = get_conn()
     conn.execute(
-        "INSERT INTO users (id, email, password_hash, name, created_at) VALUES (?, ?, ?, ?, ?)",
-        (user["id"], user["email"], user["password_hash"], user.get("name", ""), user["created_at"]),
+        "INSERT INTO users (id, email, password_hash, name, role, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (user["id"], user["email"], user["password_hash"], user.get("name", ""), user.get("role", "recruiter"), user["created_at"]),
     )
     conn.commit()
     conn.close()

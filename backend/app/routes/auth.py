@@ -16,7 +16,7 @@ async def register(req: UserRegister):
     if db.get_user_by_email(req.email):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
-    user = User(email=req.email, name=req.name)
+    user = User(email=req.email, name=req.name, role=req.role.value)
     user_dict = user.model_dump()
     user_dict["password_hash"] = hash_password(req.password)
 
@@ -35,7 +35,7 @@ async def login(req: UserLogin):
     if not row or not verify_password(req.password, row["password_hash"]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
-    user = User(id=row["id"], email=row["email"], name=row["name"], created_at=row["created_at"])
+    user = User(id=row["id"], email=row["email"], name=row["name"], role=row.get("role", "recruiter"), created_at=row["created_at"])
     token = create_token(user.id, user.email)
     return {"token": token, "user": user.model_dump()}
 
@@ -46,5 +46,6 @@ async def me(current_user: dict = Depends(get_current_user)):
         "id": current_user["id"],
         "email": current_user["email"],
         "name": current_user["name"],
+        "role": current_user.get("role", "recruiter"),
         "created_at": current_user["created_at"],
     }
