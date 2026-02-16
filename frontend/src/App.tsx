@@ -13,6 +13,7 @@ import Login from "./pages/Login";
 import JobSeekerHome from "./pages/JobSeekerHome";
 import JobSeekerSidebar from "./components/JobSeekerSidebar";
 import JobSeekerProfile from "./pages/JobSeekerProfile";
+import JobSeekerJobs from "./pages/JobSeekerJobs";
 import { clearToken, getMe, getToken } from "./lib/api";
 import type { User } from "./types";
 
@@ -59,6 +60,7 @@ export default function App() {
           <main className="flex-1 overflow-y-auto bg-gray-50">
             <Routes>
               <Route path="/" element={<div className="h-full overflow-hidden"><JobSeekerHome /></div>} />
+              <Route path="/jobs" element={<JobSeekerJobs />} />
               <Route path="/profile" element={<JobSeekerProfile />} />
             </Routes>
           </main>

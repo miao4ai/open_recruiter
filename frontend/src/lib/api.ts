@@ -241,6 +241,12 @@ export const updateEvent = (id: string, data: Partial<CalendarEvent>) =>
 export const deleteEvent = (id: string) =>
   api.delete(`/calendar/${id}`).then((r) => r.data);
 
+// ── Job Seeker — Browse Jobs ─────────────────────────────────────────────
+export const seekerListJobs = (q = "") =>
+  api.get<Job[]>("/seeker/jobs", { params: q ? { q } : {} }).then((r) => r.data);
+export const seekerGetJob = (id: string) =>
+  api.get<Job>(`/seeker/jobs/${id}`).then((r) => r.data);
+
 // ── Job Seeker Profile ──────────────────────────────────────────────────
 export const getMyProfile = () =>
   api.get<JobSeekerProfile>("/profile").then((r) => r.data);

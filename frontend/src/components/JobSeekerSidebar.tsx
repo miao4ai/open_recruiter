@@ -1,9 +1,10 @@
 import { NavLink } from "react-router-dom";
-import { MessageSquare, UserCircle, Heart } from "lucide-react";
+import { MessageSquare, UserCircle, Heart, Search } from "lucide-react";
 import clsx from "clsx";
 
 const NAV_ITEMS = [
   { to: "/", icon: MessageSquare, label: "Ai Chan" },
+  { to: "/jobs", icon: Search, label: "Job Search" },
   { to: "/profile", icon: UserCircle, label: "My Profile" },
 ];
 
