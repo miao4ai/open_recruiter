@@ -81,10 +81,12 @@ def init_db() -> None:
 
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
-            email TEXT UNIQUE NOT NULL,
+            email TEXT NOT NULL,
             password_hash TEXT NOT NULL,
             name TEXT,
-            created_at TEXT
+            role TEXT DEFAULT 'recruiter',
+            created_at TEXT,
+            UNIQUE(email, role)
         );
 
         CREATE TABLE IF NOT EXISTS emails (
@@ -213,6 +215,18 @@ def init_db() -> None:
     except sqlite3.OperationalError:
         pass
 
+    # Migration: change unique constraint from email to (email, role)
+    try:
+        conn.execute("DROP INDEX IF EXISTS sqlite_autoindex_users_1")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_role ON users(email, role)")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
     conn.close()
 
 
@@ -250,6 +264,15 @@ def insert_user(user: dict) -> None:
 def get_user_by_email(email: str) -> dict | None:
     conn = get_conn()
     row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_user_by_email_and_role(email: str, role: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT * FROM users WHERE email = ? AND role = ?", (email, role)
+    ).fetchone()
     conn.close()
     return dict(row) if row else None
 

@@ -13,8 +13,8 @@ router = APIRouter()
 
 @router.post("/register")
 async def register(req: UserRegister):
-    if db.get_user_by_email(req.email):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+    if db.get_user_by_email_and_role(req.email, req.role.value):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered for this role")
 
     user = User(email=req.email, name=req.name, role=req.role.value)
     user_dict = user.model_dump()
@@ -23,7 +23,7 @@ async def register(req: UserRegister):
     try:
         db.insert_user(user_dict)
     except sqlite3.IntegrityError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered for this role")
 
     token = create_token(user.id, user.email)
     return {"token": token, "user": user.model_dump()}
@@ -31,7 +31,7 @@ async def register(req: UserRegister):
 
 @router.post("/login")
 async def login(req: UserLogin):
-    row = db.get_user_by_email(req.email)
+    row = db.get_user_by_email_and_role(req.email, req.role.value)
     if not row or not verify_password(req.password, row["password_hash"]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 

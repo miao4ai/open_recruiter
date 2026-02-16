@@ -35,9 +35,9 @@ export const register = (email: string, password: string, name: string, role: Us
   api
     .post<{ token: string; user: User }>("/auth/register", { email, password, name, role })
     .then((r) => r.data);
-export const login = (email: string, password: string) =>
+export const login = (email: string, password: string, role: UserRole = "recruiter") =>
   api
-    .post<{ token: string; user: User }>("/auth/login", { email, password })
+    .post<{ token: string; user: User }>("/auth/login", { email, password, role })
     .then((r) => r.data);
 export const getMe = () =>
   api.get<User>("/auth/me").then((r) => r.data);

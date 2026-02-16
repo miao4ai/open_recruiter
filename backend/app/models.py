@@ -25,6 +25,7 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
+    role: UserRole = UserRole.RECRUITER
 
 class User(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
