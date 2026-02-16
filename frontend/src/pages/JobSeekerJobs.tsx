@@ -1,18 +1,21 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
-  Search, Loader2, MapPin, Building2, DollarSign, Clock, Briefcase, ChevronDown, ChevronUp, X,
+  Search, Loader2, MapPin, Building2, DollarSign, Clock, Briefcase,
+  ChevronDown, ChevronUp, X, Upload, Trash2,
 } from "lucide-react";
 import { useApi } from "../hooks/useApi";
-import { seekerListJobs } from "../lib/api";
+import { seekerListJobs, seekerUploadJd, seekerDeleteJob } from "../lib/api";
 import type { Job } from "../types";
 
 export default function JobSeekerJobs() {
   const [query, setQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const { data: jobs, loading } = useApi(
+  const { data: jobs, loading, refresh } = useApi(
     useCallback(() => seekerListJobs(searchTerm), [searchTerm]),
   );
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const handleSearch = () => {
     setSearchTerm(query.trim());
@@ -27,14 +30,57 @@ export default function JobSeekerJobs() {
     if (e.key === "Enter") handleSearch();
   };
 
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      await seekerUploadJd(file);
+      refresh();
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await seekerDeleteJob(id);
+    refresh();
+  };
+
   return (
     <div className="mx-auto max-w-4xl space-y-5 p-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">Job Search</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Browse open positions from recruiters
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">My Jobs</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Upload job descriptions to track positions you're interested in
+          </p>
+        </div>
+        <div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,.docx,.doc,.txt"
+            onChange={handleUpload}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-pink-500 px-4 py-2
+              text-sm font-medium text-white hover:bg-pink-600 disabled:opacity-50"
+          >
+            {uploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+            {uploading ? "Parsing..." : "Upload JD"}
+          </button>
+        </div>
       </div>
 
       {/* Search bar */}
@@ -77,8 +123,8 @@ export default function JobSeekerJobs() {
       {/* Results count */}
       {!loading && jobs && (
         <p className="text-sm text-gray-500">
-          {jobs.length} job{jobs.length !== 1 ? "s" : ""} found
-          {searchTerm ? ` for "${searchTerm}"` : ""}
+          {jobs.length} job{jobs.length !== 1 ? "s" : ""} saved
+          {searchTerm ? ` matching "${searchTerm}"` : ""}
         </p>
       )}
 
@@ -93,6 +139,7 @@ export default function JobSeekerJobs() {
               onToggle={() =>
                 setExpandedId(expandedId === job.id ? null : job.id)
               }
+              onDelete={handleDelete}
             />
           ))}
         </div>
@@ -105,7 +152,7 @@ export default function JobSeekerJobs() {
           <p className="mt-3 text-sm text-gray-500">
             {searchTerm
               ? "No jobs match your search. Try different keywords."
-              : "No jobs posted yet. Check back later!"}
+              : "No jobs yet. Upload a JD to get started!"}
           </p>
         </div>
       )}
@@ -119,13 +166,15 @@ function JobCard({
   job,
   expanded,
   onToggle,
+  onDelete,
 }: {
   job: Job;
   expanded: boolean;
   onToggle: () => void;
+  onDelete: (id: string, e: React.MouseEvent) => void;
 }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+    <div className="group rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
       {/* Main row */}
       <button
         onClick={onToggle}
@@ -196,12 +245,20 @@ function JobCard({
           )}
         </div>
 
-        {/* Expand icon */}
-        <div className="shrink-0 pt-1 text-gray-400">
+        {/* Actions */}
+        <div className="flex shrink-0 items-center gap-2 pt-1">
+          <span
+            role="button"
+            onClick={(e) => onDelete(job.id, e)}
+            className="text-gray-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+            title="Delete"
+          >
+            <Trash2 className="h-4 w-4" />
+          </span>
           {expanded ? (
-            <ChevronUp className="h-5 w-5" />
+            <ChevronUp className="h-5 w-5 text-gray-400" />
           ) : (
-            <ChevronDown className="h-5 w-5" />
+            <ChevronDown className="h-5 w-5 text-gray-400" />
           )}
         </div>
       </button>
@@ -245,7 +302,6 @@ function JobCard({
             </div>
           )}
 
-          {/* Full description if available via raw_text (we stripped it in list, but detail could have it) */}
           {job.raw_text && (
             <div>
               <h4 className="mb-1 text-sm font-semibold text-gray-700">

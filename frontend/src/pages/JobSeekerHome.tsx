@@ -144,10 +144,13 @@ export default function JobSeekerHome() {
     }
   }, [sessions]);
 
-  // Load messages when session changes
+  // Load messages when session changes — always prepend greeting
   useEffect(() => {
     if (!activeSessionId) return;
-    getChatHistory(activeSessionId).then((msgs) => setMessages(msgs));
+    getChatHistory(activeSessionId).then((msgs) => {
+      const greeting = makeGreeting();
+      setMessages([greeting, ...msgs]);
+    });
   }, [activeSessionId]);
 
   useEffect(() => {

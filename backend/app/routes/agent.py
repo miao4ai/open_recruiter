@@ -112,9 +112,15 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
         # Update session timestamp
         db.update_chat_session(session_id, {"updated_at": datetime.now().isoformat()})
 
-    # Build context from database
-    context = _build_chat_context()
-    system_prompt = CHAT_SYSTEM_WITH_ACTIONS.format(context=context)
+    # Build context and system prompt based on user role
+    user_role = current_user.get("role", "recruiter")
+    if user_role == "job_seeker":
+        from app.prompts import CHAT_SYSTEM_JOB_SEEKER
+        context = _build_job_seeker_context(user_id)
+        system_prompt = CHAT_SYSTEM_JOB_SEEKER.format(context=context)
+    else:
+        context = _build_chat_context()
+        system_prompt = CHAT_SYSTEM_WITH_ACTIONS.format(context=context)
 
     # Load conversation history for this session
     history = db.list_chat_messages(user_id, limit=20, session_id=session_id)
@@ -497,5 +503,52 @@ def _build_chat_context() -> str:
             )
     else:
         parts.append("\n## Emails: None")
+
+    return "\n".join(parts)
+
+
+def _build_job_seeker_context(user_id: str) -> str:
+    """Build context from the job seeker's profile and saved jobs."""
+    parts = []
+
+    # Profile / resume
+    profile = db.get_job_seeker_profile_by_user(user_id)
+    if profile and profile.get("name"):
+        parts.append("## Your Profile")
+        parts.append(f"- Name: {profile['name']}")
+        if profile.get("email"):
+            parts.append(f"- Email: {profile['email']}")
+        if profile.get("current_title"):
+            parts.append(f"- Current Title: {profile['current_title']}")
+        if profile.get("current_company"):
+            parts.append(f"- Current Company: {profile['current_company']}")
+        if profile.get("experience_years"):
+            parts.append(f"- Experience: {profile['experience_years']} years")
+        if profile.get("location"):
+            parts.append(f"- Location: {profile['location']}")
+        skills = profile.get("skills", [])
+        if skills:
+            parts.append(f"- Skills: {', '.join(skills)}")
+        if profile.get("resume_summary"):
+            parts.append(f"\n## Resume Summary\n{profile['resume_summary']}")
+        if profile.get("raw_resume_text"):
+            # Include first 2000 chars of raw resume for deeper context
+            parts.append(f"\n## Resume Content (excerpt)\n{profile['raw_resume_text'][:2000]}")
+    else:
+        parts.append("## Profile: Not yet created (user has not uploaded a resume)")
+
+    # Saved jobs
+    saved_jobs = db.list_seeker_jobs(user_id)
+    if saved_jobs:
+        parts.append(f"\n## Saved Jobs ({len(saved_jobs)})")
+        for j in saved_jobs[:10]:
+            line = f"- {j['title']} at {j['company']}"
+            if j.get("location"):
+                line += f" ({j['location']})"
+            if j.get("required_skills"):
+                line += f" — skills: {', '.join(j['required_skills'][:5])}"
+            parts.append(line)
+    else:
+        parts.append("\n## Saved Jobs: None")
 
     return "\n".join(parts)

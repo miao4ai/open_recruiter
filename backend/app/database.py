@@ -150,6 +150,25 @@ def init_db() -> None:
             updated_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS seeker_jobs (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            title TEXT DEFAULT '',
+            company TEXT DEFAULT '',
+            posted_date TEXT DEFAULT '',
+            required_skills TEXT DEFAULT '[]',
+            preferred_skills TEXT DEFAULT '[]',
+            experience_years INTEGER,
+            location TEXT DEFAULT '',
+            remote INTEGER DEFAULT 0,
+            salary_range TEXT DEFAULT '',
+            summary TEXT DEFAULT '',
+            raw_text TEXT DEFAULT '',
+            source_url TEXT DEFAULT '',
+            status TEXT DEFAULT 'interested',
+            created_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS events (
             id TEXT PRIMARY KEY,
             title TEXT,
@@ -900,3 +919,64 @@ def upsert_job_seeker_profile(user_id: str, data: dict) -> dict:
         }
         insert_job_seeker_profile(profile)
         return get_job_seeker_profile_by_user(user_id)
+
+
+# ── Seeker Jobs ───────────────────────────────────────────────────────────
+
+def _enrich_seeker_job(d: dict) -> dict:
+    d["required_skills"] = json.loads(d["required_skills"] or "[]")
+    d["preferred_skills"] = json.loads(d["preferred_skills"] or "[]")
+    d["remote"] = bool(d["remote"])
+    d.setdefault("posted_date", "")
+    return d
+
+
+def insert_seeker_job(job: dict) -> None:
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO seeker_jobs
+           (id, user_id, title, company, posted_date, required_skills, preferred_skills,
+            experience_years, location, remote, salary_range, summary, raw_text,
+            source_url, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            job["id"], job["user_id"], job.get("title", ""),
+            job.get("company", ""), job.get("posted_date", ""),
+            json.dumps(job.get("required_skills", [])),
+            json.dumps(job.get("preferred_skills", [])),
+            job.get("experience_years"),
+            job.get("location", ""), int(job.get("remote", False)),
+            job.get("salary_range", ""), job.get("summary", ""),
+            job.get("raw_text", ""), job.get("source_url", ""),
+            job.get("status", "interested"), job["created_at"],
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_seeker_jobs(user_id: str) -> list[dict]:
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM seeker_jobs WHERE user_id = ? ORDER BY created_at DESC",
+        (user_id,),
+    ).fetchall()
+    conn.close()
+    return [_enrich_seeker_job(dict(r)) for r in rows]
+
+
+def get_seeker_job(job_id: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM seeker_jobs WHERE id = ?", (job_id,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    return _enrich_seeker_job(dict(row))
+
+
+def delete_seeker_job(job_id: str) -> bool:
+    conn = get_conn()
+    cur = conn.execute("DELETE FROM seeker_jobs WHERE id = ?", (job_id,))
+    conn.commit()
+    conn.close()
+    return cur.rowcount > 0

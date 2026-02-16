@@ -14,7 +14,7 @@ const PAGE_TITLES: Record<string, string> = {
 
 const JOB_SEEKER_TITLES: Record<string, string> = {
   "/": "Ai Chan",
-  "/jobs": "Job Search",
+  "/jobs": "My Jobs",
   "/profile": "My Profile",
 };
 
