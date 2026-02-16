@@ -114,6 +114,7 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
 
     # Build context and system prompt based on user role
     user_role = current_user.get("role", "recruiter")
+    log.info("Chat request from user %s with role '%s'", user_id, user_role)
     if user_role == "job_seeker":
         from app.prompts import CHAT_SYSTEM_JOB_SEEKER
         context = _build_job_seeker_context(user_id)
@@ -157,6 +158,11 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
 
     # If there's a compose_email action, delegate to communication agent for rich drafting
     response: dict = {"reply": reply_text, "session_id": session_id}
+
+    # GUARD: job seekers must never trigger recruiter-only actions
+    if user_role == "job_seeker":
+        action_data = None
+
     if action_data and isinstance(action_data, dict) and action_data.get("type") == "compose_email":
         try:
             from app.agents.communication import draft_email as agent_draft

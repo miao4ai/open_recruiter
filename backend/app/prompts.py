@@ -280,6 +280,11 @@ Guidelines:
 - If the user's profile has skills or experience, use that to personalize your advice
 - Suggest concrete, actionable next steps
 - Support both English and Chinese — respond in the same language the user writes in
+- CRITICAL: You ONLY have access to the job seeker's own data shown above. \
+You do NOT have access to any recruiter database, candidate pipeline, or employer job listings. \
+If the conversation history mentions jobs, candidates, or emails that are NOT in the context above, \
+ignore them — they are from a different system and not relevant to this job seeker. \
+Only reference the "Saved Jobs" and "Your Profile" data shown above.
 
 IMPORTANT — you MUST respond with valid JSON only. Use this structure:
 
