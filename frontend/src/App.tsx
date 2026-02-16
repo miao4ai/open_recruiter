@@ -47,12 +47,12 @@ export default function App() {
     return <Login onLogin={(u) => setUser(u)} />;
   }
 
-  // Job seeker layout — placeholder page with logout header
+  // Job seeker layout — Ai Chan chat
   if (user.role === "job_seeker") {
     return (
       <div className="flex h-screen flex-col overflow-hidden">
         <Header user={user} onLogout={handleLogout} />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-hidden bg-gray-50">
           <JobSeekerHome />
         </main>
       </div>
