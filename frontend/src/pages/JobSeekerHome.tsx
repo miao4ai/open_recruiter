@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Send, Trash2, Loader2, Plus, MessageSquare, X, Heart,
+  Send, Trash2, Loader2, Plus, MessageSquare, X, Heart, Upload,
 } from "lucide-react";
 import { useApi } from "../hooks/useApi";
 import {
@@ -9,6 +9,8 @@ import {
   clearChatHistory,
   listChatSessions,
   deleteChatSession,
+  saveChatMessage,
+  uploadResumeForProfile,
 } from "../lib/api";
 import type { ChatMessage, ChatSession } from "../types";
 
@@ -118,11 +120,13 @@ function SessionSidebar({
 export default function JobSeekerHome() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [started, setStarted] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const didAutoSelect = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: sessions, refresh: refreshSessions } = useApi(
     useCallback(() => listChatSessions(), [])
@@ -197,6 +201,66 @@ export default function JobSeekerHome() {
       ]);
     } finally {
       setSending(false);
+    }
+  };
+
+  /* ── Resume upload ──────────────────────────────────────────────── */
+
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+
+    if (!started) {
+      setStarted(true);
+    }
+
+    const tempMsg: ChatMessage = {
+      id: "upload-" + Date.now(),
+      user_id: "",
+      role: "user",
+      content: `Uploading resume: ${file.name}`,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+
+    try {
+      const profile = await uploadResumeForProfile(file);
+      const successMsg: ChatMessage = {
+        id: "upload-success-" + Date.now(),
+        user_id: "",
+        role: "assistant",
+        content:
+          `I've processed your resume and created your profile! Here's what I found:\n\n` +
+          `**Name:** ${profile.name || "N/A"}\n` +
+          `**Title:** ${profile.current_title || "N/A"}\n` +
+          `**Company:** ${profile.current_company || "N/A"}\n` +
+          `**Skills:** ${(profile.skills || []).slice(0, 8).join(", ") || "N/A"}\n` +
+          `**Experience:** ${profile.experience_years ?? "N/A"} years\n` +
+          `**Location:** ${profile.location || "N/A"}\n\n` +
+          `You can view and edit your full profile from the **My Profile** page in the sidebar.`,
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, successMsg]);
+
+      if (activeSessionId) {
+        saveChatMessage(activeSessionId, successMsg.content).catch(() => {});
+      }
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: "upload-error-" + Date.now(),
+          user_id: "",
+          role: "assistant",
+          content:
+            "Sorry, I had trouble processing your resume. Please make sure it's a PDF, DOCX, or TXT file and try again.",
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
   };
 
@@ -332,6 +396,26 @@ export default function JobSeekerHome() {
         {/* Input */}
         <div className="pt-4">
           <div className="flex gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.docx,.doc,.txt"
+              onChange={handleResumeUpload}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading || sending}
+              className="flex items-center justify-center rounded-xl border border-gray-300 px-3
+                text-gray-500 hover:bg-gray-50 hover:text-pink-500 disabled:opacity-50"
+              title="Upload resume"
+            >
+              {uploading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Upload className="h-5 w-5" />
+              )}
+            </button>
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -349,7 +433,7 @@ export default function JobSeekerHome() {
             </button>
           </div>
           <p className="mt-1 text-center text-xs text-gray-400">
-            Enter to send, Shift+Enter for new line
+            Upload your resume or ask Ai Chan anything. Enter to send.
           </p>
         </div>
       </div>

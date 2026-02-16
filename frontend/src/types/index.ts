@@ -74,6 +74,23 @@ export interface Candidate {
   updated_at: string;
 }
 
+export interface JobSeekerProfile {
+  id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  phone: string;
+  current_title: string;
+  current_company: string;
+  skills: string[];
+  experience_years: number | null;
+  location: string;
+  resume_summary: string;
+  resume_path: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Email {
   id: string;
   candidate_id: string;

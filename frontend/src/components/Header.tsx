@@ -9,6 +9,12 @@ const PAGE_TITLES: Record<string, string> = {
   "/candidates": "Candidates",
   "/calendar": "Calendar",
   "/settings": "Settings",
+  "/profile": "My Profile",
+};
+
+const JOB_SEEKER_TITLES: Record<string, string> = {
+  "/": "Ai Chan",
+  "/profile": "My Profile",
 };
 
 interface Props {
@@ -18,7 +24,9 @@ interface Props {
 
 export default function Header({ user, onLogout }: Props) {
   const { pathname } = useLocation();
+  const titles = user.role === "job_seeker" ? JOB_SEEKER_TITLES : PAGE_TITLES;
   const title =
+    titles[pathname] ??
     PAGE_TITLES[pathname] ??
     (pathname.startsWith("/candidates/") ? "Candidate Detail" : "Open Recruiter");
 

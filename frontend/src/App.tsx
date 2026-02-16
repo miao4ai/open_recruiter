@@ -11,6 +11,8 @@ import Calendar from "./pages/Calendar";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import JobSeekerHome from "./pages/JobSeekerHome";
+import JobSeekerSidebar from "./components/JobSeekerSidebar";
+import JobSeekerProfile from "./pages/JobSeekerProfile";
 import { clearToken, getMe, getToken } from "./lib/api";
 import type { User } from "./types";
 
@@ -47,14 +49,20 @@ export default function App() {
     return <Login onLogin={(u) => setUser(u)} />;
   }
 
-  // Job seeker layout — Ai Chan chat
+  // Job seeker layout — sidebar + pages
   if (user.role === "job_seeker") {
     return (
-      <div className="flex h-screen flex-col overflow-hidden">
-        <Header user={user} onLogout={handleLogout} />
-        <main className="flex-1 overflow-hidden bg-gray-50">
-          <JobSeekerHome />
-        </main>
+      <div className="flex h-screen overflow-hidden">
+        <JobSeekerSidebar />
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <Header user={user} onLogout={handleLogout} />
+          <main className="flex-1 overflow-y-auto bg-gray-50">
+            <Routes>
+              <Route path="/" element={<div className="h-full overflow-hidden"><JobSeekerHome /></div>} />
+              <Route path="/profile" element={<JobSeekerProfile />} />
+            </Routes>
+          </main>
+        </div>
       </div>
     );
   }

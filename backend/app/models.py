@@ -129,6 +129,38 @@ class Candidate(BaseModel):
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
+# ── Job Seeker Profile ────────────────────────────────────────────────────
+
+class JobSeekerProfile(BaseModel):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
+    user_id: str = ""
+    name: str = ""
+    email: str = ""
+    phone: str = ""
+    current_title: str = ""
+    current_company: str = ""
+    skills: list[str] = Field(default_factory=list)
+    experience_years: int | None = None
+    location: str = ""
+    resume_summary: str = ""
+    resume_path: str = ""
+    raw_resume_text: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class JobSeekerProfileUpdate(BaseModel):
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    current_title: str | None = None
+    current_company: str | None = None
+    skills: list[str] | None = None
+    experience_years: int | None = None
+    location: str | None = None
+    resume_summary: str | None = None
+
+
 # ── Email ──────────────────────────────────────────────────────────────────
 
 class EmailDraftRequest(BaseModel):

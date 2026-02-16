@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { CalendarEvent, Candidate, ChatMessage, ChatResponse, ChatSession, Email, Job, Settings, User, UserRole } from "../types";
+import type { CalendarEvent, Candidate, ChatMessage, ChatResponse, ChatSession, Email, Job, JobSeekerProfile, Settings, User, UserRole } from "../types";
 
 const api = axios.create({ baseURL: "/api" });
 
@@ -240,3 +240,14 @@ export const updateEvent = (id: string, data: Partial<CalendarEvent>) =>
   api.put<CalendarEvent>(`/calendar/${id}`, data).then((r) => r.data);
 export const deleteEvent = (id: string) =>
   api.delete(`/calendar/${id}`).then((r) => r.data);
+
+// ── Job Seeker Profile ──────────────────────────────────────────────────
+export const getMyProfile = () =>
+  api.get<JobSeekerProfile>("/profile").then((r) => r.data);
+export const updateMyProfile = (data: Partial<JobSeekerProfile>) =>
+  api.put<JobSeekerProfile>("/profile", data).then((r) => r.data);
+export const uploadResumeForProfile = (file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return api.post<JobSeekerProfile>("/profile/upload-resume", form).then((r) => r.data);
+};

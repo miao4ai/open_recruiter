@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import uuid
+from datetime import datetime
 from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent.parent / "open_recruiter.db"
@@ -126,6 +128,24 @@ def init_db() -> None:
             description TEXT,
             metadata_json TEXT DEFAULT '{}',
             created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS job_seeker_profiles (
+            id TEXT PRIMARY KEY,
+            user_id TEXT UNIQUE NOT NULL,
+            name TEXT DEFAULT '',
+            email TEXT DEFAULT '',
+            phone TEXT DEFAULT '',
+            current_title TEXT DEFAULT '',
+            current_company TEXT DEFAULT '',
+            skills TEXT DEFAULT '[]',
+            experience_years INTEGER,
+            location TEXT DEFAULT '',
+            resume_summary TEXT DEFAULT '',
+            resume_path TEXT DEFAULT '',
+            raw_resume_text TEXT DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS events (
@@ -776,3 +796,72 @@ def delete_event(eid: str) -> bool:
     conn.commit()
     conn.close()
     return cur.rowcount > 0
+
+
+# ── Job Seeker Profiles ──────────────────────────────────────────────────
+
+def insert_job_seeker_profile(profile: dict) -> None:
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO job_seeker_profiles
+           (id, user_id, name, email, phone, current_title, current_company,
+            skills, experience_years, location, resume_summary, resume_path,
+            raw_resume_text, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            profile["id"], profile["user_id"], profile.get("name", ""),
+            profile.get("email", ""), profile.get("phone", ""),
+            profile.get("current_title", ""), profile.get("current_company", ""),
+            json.dumps(profile.get("skills", [])), profile.get("experience_years"),
+            profile.get("location", ""), profile.get("resume_summary", ""),
+            profile.get("resume_path", ""), profile.get("raw_resume_text", ""),
+            profile["created_at"], profile["updated_at"],
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_job_seeker_profile_by_user(user_id: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT * FROM job_seeker_profiles WHERE user_id = ?", (user_id,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    d = dict(row)
+    d["skills"] = json.loads(d["skills"] or "[]")
+    return d
+
+
+def upsert_job_seeker_profile(user_id: str, data: dict) -> dict:
+    """Create or update a job seeker profile. Returns the profile dict."""
+    existing = get_job_seeker_profile_by_user(user_id)
+    now = datetime.now().isoformat()
+    if existing:
+        updates = {k: v for k, v in data.items() if k not in ("id", "user_id", "created_at")}
+        updates["updated_at"] = now
+        conn = get_conn()
+        sets = []
+        params = []
+        for k, v in updates.items():
+            if k == "skills":
+                v = json.dumps(v)
+            sets.append(f"{k} = ?")
+            params.append(v)
+        params.append(existing["id"])
+        conn.execute(f"UPDATE job_seeker_profiles SET {', '.join(sets)} WHERE id = ?", params)
+        conn.commit()
+        conn.close()
+        return get_job_seeker_profile_by_user(user_id)
+    else:
+        profile = {
+            "id": uuid.uuid4().hex[:8],
+            "user_id": user_id,
+            "created_at": now,
+            "updated_at": now,
+            **data,
+        }
+        insert_job_seeker_profile(profile)
+        return get_job_seeker_profile_by_user(user_id)
