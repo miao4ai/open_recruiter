@@ -62,3 +62,12 @@ def get_current_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
+
+
+def require_recruiter(
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """Reject non-recruiter users with 403."""
+    if current_user.get("role", "recruiter") != "recruiter":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Recruiter access only")
+    return current_user

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends
 from sse_starlette.sse import EventSourceResponse
 
 from app import database as db
-from app.auth import get_current_user
+from app.auth import get_current_user, require_recruiter
 from app.models import AgentRequest, ChatRequest
 
 log = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ router = APIRouter()
 
 
 @router.post("/run")
-async def run_agent(req: AgentRequest, _user: dict = Depends(get_current_user)):
+async def run_agent(req: AgentRequest, _user: dict = Depends(require_recruiter)):
     """Execute a natural language instruction via the orchestrator.
 
     Returns an SSE stream with plan/progress/result events.
