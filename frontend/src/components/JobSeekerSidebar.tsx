@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { MessageSquare, UserCircle, Heart, Briefcase } from "lucide-react";
+import { MessageSquare, UserCircle, Briefcase } from "lucide-react";
 import clsx from "clsx";
 
 const NAV_ITEMS = [
@@ -13,9 +13,11 @@ export default function JobSeekerSidebar() {
     <aside className="flex w-60 flex-col bg-gradient-to-b from-rose-900 to-pink-900 text-white">
       {/* Logo */}
       <div className="flex items-center gap-2 px-5 py-5">
-        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-pink-400 to-rose-500">
-          <Heart className="h-3.5 w-3.5 text-white" fill="white" />
-        </div>
+        <img
+          src="/ai-chan-avatar.png"
+          alt="Ai Chan"
+          className="h-7 w-7 rounded-full object-cover"
+        />
         <span className="text-lg font-semibold tracking-tight">
           Open Recruiter
         </span>

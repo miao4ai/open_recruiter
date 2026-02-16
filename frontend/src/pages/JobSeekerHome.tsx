@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Send, Trash2, Loader2, Plus, MessageSquare, X, Heart, Upload,
+  Send, Trash2, Loader2, Plus, MessageSquare, X, Upload,
 } from "lucide-react";
 import { useApi } from "../hooks/useApi";
 import {
@@ -18,11 +18,12 @@ import type { ChatMessage, ChatSession } from "../types";
 
 function AiChanAvatar({ size = "sm" }: { size?: "sm" | "lg" }) {
   const dim = size === "lg" ? "h-20 w-20" : "h-7 w-7";
-  const icon = size === "lg" ? "h-10 w-10" : "h-3.5 w-3.5";
   return (
-    <div className={`flex ${dim} shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-400 to-rose-500 shadow-md`}>
-      <Heart className={`${icon} text-white`} fill="white" />
-    </div>
+    <img
+      src="/ai-chan-avatar.png"
+      alt="Ai Chan"
+      className={`${dim} shrink-0 rounded-full object-cover shadow-md`}
+    />
   );
 }
 
