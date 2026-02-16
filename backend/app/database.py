@@ -208,24 +208,36 @@ def init_db() -> None:
         except sqlite3.OperationalError:
             pass
 
-    # Migration: add role column to users
-    try:
-        conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'recruiter'")
+    # Migration: rebuild users table so unique constraint is (email, role)
+    # SQLite cannot drop inline UNIQUE constraints, so we recreate the table.
+    schema = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'"
+    ).fetchone()
+    if schema and "UNIQUE(email, role)" not in schema[0]:
+        # Ensure role column exists before rebuild
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'recruiter'")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users_new (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                name TEXT,
+                role TEXT DEFAULT 'recruiter',
+                created_at TEXT,
+                UNIQUE(email, role)
+            )
+        """)
+        conn.execute("""
+            INSERT OR IGNORE INTO users_new (id, email, password_hash, name, role, created_at)
+            SELECT id, email, password_hash, name, COALESCE(role, 'recruiter'), created_at FROM users
+        """)
+        conn.execute("DROP TABLE users")
+        conn.execute("ALTER TABLE users_new RENAME TO users")
         conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
-    # Migration: change unique constraint from email to (email, role)
-    try:
-        conn.execute("DROP INDEX IF EXISTS sqlite_autoindex_users_1")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-    try:
-        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_role ON users(email, role)")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
 
     conn.close()
 
