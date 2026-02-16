@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Send, Trash2, Loader2, Mail, Check, X, Sparkles,
+  Send, Trash2, Loader2, Mail, Check, X,
   Plus, MessageSquare, Upload, FileText,
 } from "lucide-react";
 import { useApi } from "../hooks/useApi";
@@ -804,9 +804,11 @@ export default function Chat() {
         {/* Main area — start screen */}
         <div className="flex flex-1 flex-col items-center justify-center">
           <div className="flex flex-col items-center gap-6">
-            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
-              <Sparkles className="h-12 w-12 text-white" />
-            </div>
+            <img
+              src="/ai-chan-avatar.png"
+              alt="Erika Chan"
+              className="h-24 w-24 rounded-full object-cover shadow-lg"
+            />
             <div className="text-center">
               <h1 className="text-2xl font-bold text-gray-800">Open Recruiter</h1>
               <p className="mt-2 text-gray-500">
@@ -846,9 +848,11 @@ export default function Chat() {
         {/* Header */}
         <div className="flex items-center justify-between pb-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
-              <Sparkles className="h-4 w-4 text-white" />
-            </div>
+            <img
+              src="/ai-chan-avatar.png"
+              alt="Erika Chan"
+              className="h-8 w-8 rounded-full object-cover"
+            />
             <h2 className="text-lg font-semibold">Erika Chan</h2>
           </div>
           <button
@@ -867,9 +871,11 @@ export default function Chat() {
               className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
             >
               {msg.role === "assistant" && (
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
-                  <Sparkles className="h-3.5 w-3.5 text-white" />
-                </div>
+                <img
+                  src="/ai-chan-avatar.png"
+                  alt="Erika Chan"
+                  className="h-7 w-7 shrink-0 rounded-full object-cover"
+                />
               )}
               <div className="max-w-[80%]">
                 <div
@@ -916,9 +922,11 @@ export default function Chat() {
 
           {sending && (
             <div className="flex gap-3">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
-                <Sparkles className="h-3.5 w-3.5 text-white" />
-              </div>
+              <img
+                src="/ai-chan-avatar.png"
+                alt="Erika Chan"
+                className="h-7 w-7 shrink-0 rounded-full object-cover"
+              />
               <div className="rounded-xl bg-gray-50 px-4 py-3">
                 <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
               </div>

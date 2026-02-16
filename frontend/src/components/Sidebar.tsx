@@ -6,7 +6,6 @@ import {
   MessageSquare,
   CalendarDays,
   Settings,
-  Bot,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -24,7 +23,11 @@ export default function Sidebar() {
     <aside className="flex w-60 flex-col bg-[var(--color-sidebar)] text-white">
       {/* Logo */}
       <div className="flex items-center gap-2 px-5 py-5">
-        <Bot className="h-7 w-7 text-blue-400" />
+        <img
+          src="/ai-chan-avatar.png"
+          alt="Open Recruiter"
+          className="h-7 w-7 rounded-full object-cover"
+        />
         <span className="text-lg font-semibold tracking-tight">
           Open Recruiter
         </span>
