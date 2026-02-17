@@ -353,7 +353,7 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
     messages.append({"role": "user", "content": req.message})
 
     async def event_generator():
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         q: asyncio.Queue[str | Exception | None] = asyncio.Queue()
 
         def _produce():
@@ -381,63 +381,74 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
             full_text += item
             yield {"event": "token", "data": json.dumps({"t": item})}
 
-        # Parse accumulated JSON
-        reply_text = ""
-        action_data = None
-        if not error_occurred and full_text.strip():
-            try:
-                raw = full_text.strip()
-                if raw.startswith("```"):
-                    raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
-                    if raw.endswith("```"):
-                        raw = raw[:-3]
-                    raw = raw.strip()
-                result = json.loads(raw)
-                reply_text = result.get("message", "") if isinstance(result, dict) else str(result)
-                action_data = result.get("action") if isinstance(result, dict) else None
-            except Exception:
-                log.warning("Stream JSON parse failed, using raw text")
-                reply_text = full_text.strip()
-        elif error_occurred:
-            # Fallback to non-streaming
-            try:
-                reply_text = chat(cfg, system=system_prompt, messages=messages)
-            except Exception as e:
-                reply_text = f"I encountered an error: {e!s}"
-
-        # Process actions (same as chat_endpoint)
-        response: dict = {
-            "reply": reply_text, "session_id": session_id,
-            "blocks": [], "suggestions": [], "context_hint": None,
-        }
-
-        if user_role == "job_seeker":
+        # --- Post-streaming processing (wrapped in try/except) ---
+        try:
+            # Parse accumulated JSON
+            reply_text = ""
             action_data = None
+            if not error_occurred and full_text.strip():
+                try:
+                    raw = full_text.strip()
+                    if raw.startswith("```"):
+                        raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+                        if raw.endswith("```"):
+                            raw = raw[:-3]
+                        raw = raw.strip()
+                    result = json.loads(raw)
+                    reply_text = result.get("message", "") if isinstance(result, dict) else str(result)
+                    action_data = result.get("action") if isinstance(result, dict) else None
+                except Exception:
+                    log.warning("Stream JSON parse failed, using raw text")
+                    reply_text = full_text.strip()
+            elif error_occurred:
+                # Fallback to non-streaming
+                try:
+                    reply_text = chat(cfg, system=system_prompt, messages=messages)
+                except Exception as e:
+                    reply_text = f"I encountered an error: {e!s}"
 
-        response = _process_actions(response, action_data, cfg, user_id)
+            # Process actions (same as chat_endpoint)
+            response: dict = {
+                "reply": reply_text, "session_id": session_id,
+                "blocks": [], "suggestions": [], "context_hint": None,
+            }
 
-        # Build suggestions
-        if not response.get("suggestions") and user_role == "recruiter":
-            response["suggestions"] = _build_smart_suggestions(action_data)
+            if user_role == "job_seeker":
+                action_data = None
 
-        # Save assistant message
-        assistant_msg_id = uuid.uuid4().hex[:8]
-        action_json_str = ""
-        action_status_str = ""
-        if response.get("action"):
-            action_json_str = json.dumps(response["action"])
-            action_status_str = "pending"
-        db.insert_chat_message({
-            "id": assistant_msg_id, "user_id": user_id,
-            "session_id": session_id, "role": "assistant",
-            "content": response["reply"],
-            "action_json": action_json_str,
-            "action_status": action_status_str,
-            "created_at": datetime.now().isoformat(),
-        })
-        response["message_id"] = assistant_msg_id
+            response = _process_actions(response, action_data, cfg, user_id)
 
-        yield {"event": "done", "data": json.dumps(response)}
+            # Build suggestions
+            if not response.get("suggestions") and user_role == "recruiter":
+                response["suggestions"] = _build_smart_suggestions(action_data)
+
+            # Save assistant message
+            assistant_msg_id = uuid.uuid4().hex[:8]
+            action_json_str = ""
+            action_status_str = ""
+            if response.get("action"):
+                action_json_str = json.dumps(response["action"])
+                action_status_str = "pending"
+            db.insert_chat_message({
+                "id": assistant_msg_id, "user_id": user_id,
+                "session_id": session_id, "role": "assistant",
+                "content": response["reply"],
+                "action_json": action_json_str,
+                "action_status": action_status_str,
+                "created_at": datetime.now().isoformat(),
+            })
+            response["message_id"] = assistant_msg_id
+
+            yield {"event": "done", "data": json.dumps(response)}
+        except Exception as exc:
+            log.error("Stream post-processing error: %s", exc, exc_info=True)
+            # Always send a done event so the frontend doesn't hang
+            fallback = {
+                "reply": reply_text or "Sorry, something went wrong processing the response.",
+                "session_id": session_id,
+                "blocks": [], "suggestions": [], "context_hint": None,
+            }
+            yield {"event": "done", "data": json.dumps(fallback)}
 
     return EventSourceResponse(event_generator())
 

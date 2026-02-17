@@ -205,8 +205,23 @@ export const sendChatMessage = (message: string, session_id?: string) =>
 /**
  * SSE streaming chat. Streams text tokens via onToken callback,
  * then resolves with the final structured ChatResponse.
+ * Falls back to the non-streaming endpoint if streaming fails.
  */
-export function streamChatMessage(
+export async function streamChatMessage(
+  message: string,
+  session_id: string | undefined,
+  onToken: (text: string) => void,
+): Promise<ChatResponse> {
+  try {
+    return await _streamSSE(message, session_id, onToken);
+  } catch (err) {
+    // Fallback: try the non-streaming endpoint
+    console.warn("Streaming failed, falling back to sync chat:", err);
+    return sendChatMessage(message, session_id);
+  }
+}
+
+function _streamSSE(
   message: string,
   session_id: string | undefined,
   onToken: (text: string) => void,
@@ -229,16 +244,18 @@ export function streamChatMessage(
         const reader = resp.body!.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        let resolved = false;
 
         function pump(): Promise<void> {
           return reader.read().then(({ done, value }) => {
             if (done) {
-              reject(new Error("Stream ended without done event"));
+              if (!resolved) reject(new Error("Stream ended without done event"));
               return;
             }
             buffer += decoder.decode(value, { stream: true });
 
-            const lines = buffer.split("\n");
+            // Strip \r for robustness (handles \r\n line endings)
+            const lines = buffer.replace(/\r/g, "").split("\n");
             buffer = lines.pop() || "";
 
             let eventType = "";
@@ -249,16 +266,18 @@ export function streamChatMessage(
                 eventType = line.slice(6).trim();
               } else if (line.startsWith("data:")) {
                 dataLines.push(line.slice(5).trim());
-              } else if (line === "") {
+              } else if (line === "" || line.startsWith(":")) {
+                // Empty line = event boundary; lines starting with : are SSE comments
                 if (eventType && dataLines.length > 0) {
                   const data = dataLines.join("\n");
                   if (eventType === "token") {
                     try {
                       const parsed = JSON.parse(data);
                       if (parsed.t) onToken(parsed.t);
-                    } catch { /* ignore */ }
+                    } catch { /* ignore malformed tokens */ }
                   } else if (eventType === "done") {
                     try {
+                      resolved = true;
                       resolve(JSON.parse(data) as ChatResponse);
                       return;
                     } catch {
