@@ -24,9 +24,10 @@ import PipelineBar from "../components/PipelineBar";
 import ContextPanel from "../components/ContextPanel";
 import SmartActionBar from "../components/SmartActionBar";
 import MessageBlocks from "../components/MessageBlocks";
+import WorkflowTracker from "../components/WorkflowTracker";
 import type {
-  Candidate, CandidateStatus, ChatMessage, ChatSession,
-  ContextView, Email, Job, MessageBlock, Suggestion,
+  ActiveWorkflow, Candidate, CandidateStatus, ChatMessage, ChatSession,
+  ContextView, Email, Job, MessageBlock, Suggestion, WorkflowStepEvent,
 } from "../types";
 
 /* ── Greeting / Daily Briefing ──────────────────────────────────────────── */
@@ -384,6 +385,7 @@ export default function Chat() {
   const [pipelineStage, setPipelineStage] = useState<CandidateStatus | null>(null);
   const [streamingText, setStreamingText] = useState("");
   const [backendSuggestions, setBackendSuggestions] = useState<Suggestion[]>([]);
+  const [activeWorkflow, setActiveWorkflow] = useState<ActiveWorkflow | null>(null);
   const didAutoSelect = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -468,12 +470,48 @@ export default function Chat() {
           const msg = extractMessage(accumulated);
           if (msg) setStreamingText(msg);
         },
+        (stepEvent: WorkflowStepEvent) => {
+          setActiveWorkflow((prev) => {
+            const steps = prev?.steps ?? [];
+            // Build updated steps array from the event
+            const updated = [...steps];
+            while (updated.length <= stepEvent.step_index) {
+              updated.push({ label: "", status: "pending" });
+            }
+            updated[stepEvent.step_index] = {
+              label: stepEvent.label,
+              status: stepEvent.status as "pending" | "running" | "done" | "skipped",
+            };
+            return {
+              workflow_id: stepEvent.workflow_id,
+              workflow_type: prev?.workflow_type ?? "bulk_outreach",
+              status: "running",
+              current_step: stepEvent.step_index,
+              total_steps: stepEvent.total_steps,
+              steps: updated,
+            };
+          });
+        },
       );
 
       setStreamingText("");
       if (!activeSessionId && response.session_id) setActiveSessionId(response.session_id);
       refreshSessions();
       refreshCandidates();
+
+      // Handle workflow status from done event
+      if (response.workflow_id && response.workflow_status) {
+        if (response.workflow_status === "done" || response.workflow_status === "cancelled") {
+          // Clear tracker after a short delay so user sees the final state
+          setTimeout(() => setActiveWorkflow(null), 3000);
+          setActiveWorkflow((prev) =>
+            prev ? { ...prev, status: response.workflow_status! } : null
+          );
+        } else if (response.workflow_status === "paused") {
+          // Workflow paused at approval — clear the tracker (approval block shows in chat)
+          setActiveWorkflow(null);
+        }
+      }
 
       setMessages((prev) => [...prev, {
         id: response.message_id || "reply-" + Date.now(),
@@ -638,6 +676,17 @@ export default function Chat() {
     <div className="flex h-full flex-col gap-3">
       {/* Pipeline Bar */}
       <PipelineBar candidates={candidates ?? []} activeStage={pipelineStage} onStageClick={handleStageClick} />
+
+      {/* Workflow Tracker */}
+      {activeWorkflow && (
+        <WorkflowTracker
+          workflow={activeWorkflow}
+          onCancel={() => {
+            setActiveWorkflow(null);
+            handleSend("cancel workflow");
+          }}
+        />
+      )}
 
       {/* Main: sessions + chat + context */}
       <div className="flex min-h-0 flex-1 gap-3">

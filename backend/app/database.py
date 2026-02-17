@@ -183,6 +183,21 @@ def init_db() -> None:
             created_at TEXT,
             updated_at TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS workflows (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            workflow_type TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'running',
+            current_step INTEGER NOT NULL DEFAULT 0,
+            total_steps INTEGER NOT NULL DEFAULT 0,
+            steps_json TEXT NOT NULL DEFAULT '[]',
+            context_json TEXT NOT NULL DEFAULT '{}',
+            checkpoint_data_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
     """)
     conn.commit()
 
@@ -980,3 +995,66 @@ def delete_seeker_job(job_id: str) -> bool:
     conn.commit()
     conn.close()
     return cur.rowcount > 0
+
+
+# ── Workflows ────────────────────────────────────────────────────────────
+
+
+def insert_workflow(w: dict) -> None:
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO workflows
+           (id, session_id, user_id, workflow_type, status,
+            current_step, total_steps, steps_json, context_json,
+            checkpoint_data_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            w["id"], w["session_id"], w["user_id"], w["workflow_type"],
+            w.get("status", "running"), w.get("current_step", 0),
+            w.get("total_steps", 0), w.get("steps_json", "[]"),
+            w.get("context_json", "{}"), w.get("checkpoint_data_json", "{}"),
+            w["created_at"], w["updated_at"],
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_workflow(workflow_id: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_workflow(workflow_id: str, updates: dict) -> bool:
+    if not updates:
+        return False
+    conn = get_conn()
+    cols = ", ".join(f"{k} = ?" for k in updates)
+    vals = list(updates.values()) + [workflow_id]
+    cur = conn.execute(f"UPDATE workflows SET {cols} WHERE id = ?", vals)
+    conn.commit()
+    conn.close()
+    return cur.rowcount > 0
+
+
+def get_active_workflow(session_id: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT * FROM workflows WHERE session_id = ? AND status IN ('running', 'paused') "
+        "ORDER BY created_at DESC LIMIT 1",
+        (session_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def list_workflows(user_id: str, limit: int = 20) -> list[dict]:
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM workflows WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+        (user_id, limit),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

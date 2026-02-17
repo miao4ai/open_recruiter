@@ -163,7 +163,7 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
     if user_role == "job_seeker":
         action_data = None
 
-    response = _process_actions(response, action_data, cfg, user_id)
+    response = _process_actions(response, action_data, cfg, user_id, session_id)
 
     # Save assistant reply with action data for persistence
     assistant_msg_id = uuid.uuid4().hex[:8]
@@ -353,6 +353,30 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
     messages.append({"role": "user", "content": req.message})
 
     async def event_generator():
+        # ── EARLY CHECK: is there a paused workflow awaiting approval? ──
+        active_wf = db.get_active_workflow(session_id)
+        if active_wf and active_wf["status"] == "paused":
+            # Save user message (already saved above), then resume workflow
+            from app.agents.orchestrator import resume_workflow
+
+            async for wf_event in resume_workflow(cfg, active_wf, req.message, user_id, session_id):
+                if wf_event["event"] == "workflow_step":
+                    yield wf_event
+                elif wf_event["event"] == "done":
+                    # Save assistant message from workflow
+                    wf_data = json.loads(wf_event["data"]) if isinstance(wf_event["data"], str) else wf_event["data"]
+                    assistant_msg_id = uuid.uuid4().hex[:8]
+                    db.insert_chat_message({
+                        "id": assistant_msg_id, "user_id": user_id,
+                        "session_id": session_id, "role": "assistant",
+                        "content": wf_data.get("reply", ""),
+                        "created_at": datetime.now().isoformat(),
+                    })
+                    wf_data["message_id"] = assistant_msg_id
+                    yield {"event": "done", "data": json.dumps(wf_data)}
+            return  # skip normal LLM path
+
+        # ── NORMAL PATH: stream LLM tokens ──
         loop = asyncio.get_running_loop()
         q: asyncio.Queue[str | Exception | None] = asyncio.Queue()
 
@@ -416,7 +440,39 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
             if user_role == "job_seeker":
                 action_data = None
 
-            response = _process_actions(response, action_data, cfg, user_id)
+            response = _process_actions(response, action_data, cfg, user_id, session_id)
+
+            # ── POST-STREAMING: check if a workflow was started ──
+            if response.get("_start_workflow"):
+                from app.agents.orchestrator import run_workflow
+
+                # Save the LLM reply as assistant message first
+                assistant_msg_id = uuid.uuid4().hex[:8]
+                db.insert_chat_message({
+                    "id": assistant_msg_id, "user_id": user_id,
+                    "session_id": session_id, "role": "assistant",
+                    "content": reply_text,
+                    "created_at": datetime.now().isoformat(),
+                })
+
+                wf = db.get_workflow(response["workflow_id"])
+                # Run the workflow — yields workflow_step and done events
+                async for wf_event in run_workflow(cfg, wf, user_id, session_id):
+                    if wf_event["event"] == "workflow_step":
+                        yield wf_event
+                    elif wf_event["event"] == "done":
+                        wf_data = json.loads(wf_event["data"]) if isinstance(wf_event["data"], str) else wf_event["data"]
+                        # Save workflow completion message
+                        wf_msg_id = uuid.uuid4().hex[:8]
+                        db.insert_chat_message({
+                            "id": wf_msg_id, "user_id": user_id,
+                            "session_id": session_id, "role": "assistant",
+                            "content": wf_data.get("reply", ""),
+                            "created_at": datetime.now().isoformat(),
+                        })
+                        wf_data["message_id"] = wf_msg_id
+                        yield {"event": "done", "data": json.dumps(wf_data)}
+                return
 
             # Build suggestions
             if not response.get("suggestions") and user_role == "recruiter":
@@ -564,7 +620,7 @@ async def get_notifications(current_user: dict = Depends(get_current_user)):
 # ── Action Processing (shared by chat + streaming) ───────────────────────
 
 
-def _process_actions(response: dict, action_data, cfg, user_id: str) -> dict:
+def _process_actions(response: dict, action_data, cfg, user_id: str, session_id: str = "") -> dict:
     """Process action intents from the LLM and enrich the response."""
     from app.models import Email
 
@@ -718,6 +774,20 @@ def _process_actions(response: dict, action_data, cfg, user_id: str) -> dict:
 
     elif action_type == "upload_jd":
         response["action"] = {"type": "upload_jd"}
+
+    elif action_type == "start_workflow":
+        try:
+            from app.agents.orchestrator import create_workflow
+            wf = create_workflow(
+                session_id, user_id,
+                action_data.get("workflow_type", ""),
+                action_data.get("params", {}),
+            )
+            response["workflow_id"] = wf["id"]
+            response["_start_workflow"] = True
+        except Exception as e:
+            log.error("Failed to create workflow: %s", e)
+            response["reply"] = f"Sorry, I couldn't start the workflow: {e}"
 
     return response
 

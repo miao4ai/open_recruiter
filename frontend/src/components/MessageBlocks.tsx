@@ -1,5 +1,5 @@
-import { Briefcase, ChevronRight, Star, TrendingUp, AlertTriangle } from "lucide-react";
-import type { MessageBlock, MatchRanking } from "../types";
+import { Briefcase, Check, ChevronRight, Star, TrendingUp, AlertTriangle, X } from "lucide-react";
+import type { MessageBlock, MatchRanking, ApprovalBlock } from "../types";
 
 interface Props {
   blocks: MessageBlock[];
@@ -21,6 +21,15 @@ export default function MessageBlocks({ blocks, onSendPrompt, onViewJob }: Props
               block={block}
               onSendPrompt={onSendPrompt}
               onViewJob={onViewJob}
+            />
+          );
+        }
+        if (block.type === "approval_block") {
+          return (
+            <ApprovalBlockCard
+              key={i}
+              block={block}
+              onSendPrompt={onSendPrompt}
             />
           );
         }
@@ -102,6 +111,62 @@ function MatchReportCard({
             Compare Candidates
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Approval Block Card ──────────────────────────────────────────────── */
+
+function ApprovalBlockCard({
+  block,
+  onSendPrompt,
+}: {
+  block: ApprovalBlock;
+  onSendPrompt: (prompt: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50/80 to-white p-4">
+      <div className="mb-2 flex items-center gap-2">
+        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100">
+          <AlertTriangle className="h-3 w-3 text-amber-600" />
+        </div>
+        <span className="text-sm font-semibold text-amber-900">{block.title}</span>
+      </div>
+
+      <p className="mb-3 text-xs leading-relaxed text-gray-600">{block.description}</p>
+
+      {block.preview_items.length > 0 && (
+        <div className="mb-3 max-h-36 overflow-y-auto rounded-lg border border-amber-100 bg-white">
+          {block.preview_items.map((item, i) => (
+            <div
+              key={i}
+              className={`flex items-start gap-2 px-3 py-2 text-xs ${
+                i > 0 ? "border-t border-amber-50" : ""
+              }`}
+            >
+              <span className="font-medium text-gray-800">{item.label}</span>
+              <span className="text-gray-500">{item.detail}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => onSendPrompt("approve")}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
+        >
+          <Check className="h-3.5 w-3.5" />
+          {block.approve_label}
+        </button>
+        <button
+          onClick={() => onSendPrompt("cancel workflow")}
+          className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        >
+          <X className="h-3.5 w-3.5" />
+          {block.cancel_label}
+        </button>
       </div>
     </div>
   );

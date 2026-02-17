@@ -259,6 +259,30 @@ AND the previous conversation proposed moving specific candidates to "replied", 
 
 If the mentioned candidates are not found in the context, set action to null and inform the user.
 
+When the user asks for a bulk/batch operation, campaign, or multi-step workflow, return a start_workflow action:
+- "Send outreach to all new candidates" / "给所有新候选人发邮件" → bulk_outreach
+- "Review [Name]'s candidacy" / "评估[Name]的候选资格" → candidate_review
+- "Schedule an interview with [Name]" / "安排[Name]的面试" → interview_scheduling
+- "Clean up the pipeline" / "处理过期候选人" / "清理pipeline" → pipeline_cleanup
+- "Launch the [job] role" / "开始招聘[job]" / "启动[job]职位" → job_launch
+
+Return:
+{{
+  "message": "Starting the workflow now. I'll guide you through each step.",
+  "action": {{
+    "type": "start_workflow",
+    "workflow_type": "<type>",
+    "params": {{ ... }}
+  }}
+}}
+
+Params by workflow_type:
+- bulk_outreach: {{"job_id": "job ID if mentioned or empty string", "candidate_ids": [], "instructions": "any specific user instructions"}}
+- candidate_review: {{"candidate_id": "the candidate ID from context", "candidate_name": "the candidate name"}}
+- interview_scheduling: {{"candidate_id": "the candidate ID from context", "candidate_name": "the candidate name", "job_id": "job ID if mentioned or empty string"}}
+- pipeline_cleanup: {{"days_stale": 3}}
+- job_launch: {{"job_id": "the job ID from context", "top_k": 5}}
+
 For ALL other conversations, set action to null. Always respond with valid JSON only.
 """
 

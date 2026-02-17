@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { CalendarEvent, Candidate, ChatMessage, ChatResponse, ChatSession, Email, Job, JobSeekerProfile, Notification, Settings, User, UserRole } from "../types";
+import type { CalendarEvent, Candidate, ChatMessage, ChatResponse, ChatSession, Email, Job, JobSeekerProfile, Notification, Settings, User, UserRole, WorkflowStepEvent } from "../types";
 
 const api = axios.create({ baseURL: "/api" });
 
@@ -211,9 +211,10 @@ export async function streamChatMessage(
   message: string,
   session_id: string | undefined,
   onToken: (text: string) => void,
+  onWorkflowStep?: (step: WorkflowStepEvent) => void,
 ): Promise<ChatResponse> {
   try {
-    return await _streamSSE(message, session_id, onToken);
+    return await _streamSSE(message, session_id, onToken, onWorkflowStep);
   } catch (err) {
     // Fallback: try the non-streaming endpoint
     console.warn("Streaming failed, falling back to sync chat:", err);
@@ -225,6 +226,7 @@ function _streamSSE(
   message: string,
   session_id: string | undefined,
   onToken: (text: string) => void,
+  onWorkflowStep?: (step: WorkflowStepEvent) => void,
 ): Promise<ChatResponse> {
   return new Promise((resolve, reject) => {
     const token = getToken();
@@ -275,6 +277,10 @@ function _streamSSE(
                       const parsed = JSON.parse(data);
                       if (parsed.t) onToken(parsed.t);
                     } catch { /* ignore malformed tokens */ }
+                  } else if (eventType === "workflow_step") {
+                    try {
+                      onWorkflowStep?.(JSON.parse(data) as WorkflowStepEvent);
+                    } catch { /* ignore */ }
                   } else if (eventType === "done") {
                     try {
                       resolved = true;

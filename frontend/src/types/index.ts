@@ -161,6 +161,8 @@ export interface ChatResponse {
   context_hint?: ContextView | null;
   session_id?: string;
   message_id?: string;
+  workflow_id?: string;
+  workflow_status?: WorkflowStatus;
 }
 
 export interface ChatMessage {
@@ -250,7 +252,46 @@ export interface MatchReportBlock {
   summary: string;
 }
 
-export type MessageBlock = MatchReportBlock;
+export interface ApprovalBlock {
+  type: "approval_block";
+  workflow_id: string;
+  title: string;
+  description: string;
+  approve_label: string;
+  cancel_label: string;
+  preview_items: { label: string; detail: string }[];
+}
+
+export type MessageBlock = MatchReportBlock | ApprovalBlock;
+
+// ── Notifications ───────────────────────────────────────────────────────
+
+// ── Workflow Types ──────────────────────────────────────────────────────
+
+export type WorkflowType = "bulk_outreach" | "candidate_review" | "interview_scheduling" | "pipeline_cleanup" | "job_launch";
+export type WorkflowStatus = "running" | "paused" | "done" | "cancelled";
+
+export interface WorkflowStep {
+  label: string;
+  status: "pending" | "running" | "done" | "skipped";
+}
+
+export interface ActiveWorkflow {
+  workflow_id: string;
+  workflow_type: WorkflowType;
+  status: WorkflowStatus;
+  current_step: number;
+  total_steps: number;
+  steps: WorkflowStep[];
+}
+
+export interface WorkflowStepEvent {
+  workflow_id: string;
+  step_index: number;
+  total_steps: number;
+  label: string;
+  status: string;
+}
 
 // ── Notifications ───────────────────────────────────────────────────────
 
