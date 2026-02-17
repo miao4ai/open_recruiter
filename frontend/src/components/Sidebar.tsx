@@ -1,6 +1,5 @@
 import { NavLink } from "react-router-dom";
 import {
-  LayoutDashboard,
   Briefcase,
   Users,
   MessageSquare,
@@ -11,7 +10,6 @@ import clsx from "clsx";
 
 const NAV_ITEMS = [
   { to: "/", icon: MessageSquare, label: "Erika Chan" },
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/jobs", icon: Briefcase, label: "Jobs" },
   { to: "/candidates", icon: Users, label: "Candidates" },
   { to: "/calendar", icon: CalendarDays, label: "Calendar" },

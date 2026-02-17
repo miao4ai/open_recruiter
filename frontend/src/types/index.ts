@@ -206,3 +206,18 @@ export const PIPELINE_COLUMNS: { key: CandidateStatus; label: string }[] = [
   { key: "offer_sent", label: "Offer" },
   { key: "hired", label: "Hired" },
 ];
+
+// ── Control Center types ─────────────────────────────────────────────────
+
+export type ContextView =
+  | { type: "briefing" }
+  | { type: "candidate"; id: string }
+  | { type: "job"; id: string }
+  | { type: "pipeline_stage"; stage: CandidateStatus }
+  | { type: "events" };
+
+export interface Suggestion {
+  label: string;
+  prompt: string;
+  icon?: string;
+}

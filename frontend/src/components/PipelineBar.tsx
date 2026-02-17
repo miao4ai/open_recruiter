@@ -1,0 +1,72 @@
+import { useMemo } from "react";
+import { ChevronRight } from "lucide-react";
+import type { Candidate, CandidateStatus } from "../types";
+import { PIPELINE_COLUMNS } from "../types";
+
+const STAGE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
+  new: { bg: "bg-slate-50", text: "text-slate-700", dot: "bg-slate-400" },
+  contacted: { bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-400" },
+  replied: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-400" },
+  screening: { bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-400" },
+  interview_scheduled: { bg: "bg-purple-50", text: "text-purple-700", dot: "bg-purple-400" },
+  offer_sent: { bg: "bg-pink-50", text: "text-pink-700", dot: "bg-pink-400" },
+  hired: { bg: "bg-green-50", text: "text-green-700", dot: "bg-green-400" },
+};
+
+interface Props {
+  candidates: Candidate[];
+  activeStage: CandidateStatus | null;
+  onStageClick: (stage: CandidateStatus) => void;
+}
+
+export default function PipelineBar({ candidates, activeStage, onStageClick }: Props) {
+  const counts = useMemo(() => {
+    const c: Partial<Record<CandidateStatus, number>> = {};
+    for (const cand of candidates) {
+      c[cand.status] = (c[cand.status] || 0) + 1;
+    }
+    return c;
+  }, [candidates]);
+
+  const total = candidates.length;
+
+  return (
+    <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3 py-2">
+      <span className="mr-2 text-xs font-medium text-gray-400">
+        Pipeline
+        <span className="ml-1 text-gray-300">({total})</span>
+      </span>
+      {PIPELINE_COLUMNS.map((col, i) => {
+        const count = counts[col.key] || 0;
+        const colors = STAGE_COLORS[col.key] || STAGE_COLORS.new;
+        const isActive = activeStage === col.key;
+
+        return (
+          <div key={col.key} className="flex items-center">
+            {i > 0 && <ChevronRight className="mx-0.5 h-3 w-3 text-gray-300" />}
+            <button
+              onClick={() => onStageClick(col.key)}
+              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
+                isActive
+                  ? `${colors.bg} ${colors.text} ring-2 ring-blue-400 ring-offset-1`
+                  : `hover:${colors.bg} text-gray-500 hover:${colors.text}`
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${colors.dot}`} />
+              {col.label}
+              <span
+                className={`min-w-[1.25rem] rounded-full px-1 py-0.5 text-center text-[10px] font-bold leading-none ${
+                  count > 0
+                    ? `${colors.bg} ${colors.text}`
+                    : "bg-gray-100 text-gray-400"
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
