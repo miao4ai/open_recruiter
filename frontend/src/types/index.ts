@@ -220,7 +220,8 @@ export type ContextView =
   | { type: "candidate"; id: string }
   | { type: "job"; id: string }
   | { type: "pipeline_stage"; stage: CandidateStatus }
-  | { type: "events" };
+  | { type: "events" }
+  | { type: "comparison"; candidate_ids: [string, string] };
 
 export interface Suggestion {
   label: string;

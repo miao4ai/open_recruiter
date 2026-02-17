@@ -143,10 +143,12 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
     # Call LLM with structured JSON output
     reply_text = ""
     action_data = None
+    context_hint_data = None
     try:
         result = chat_json(cfg, system=system_prompt, messages=messages)
         reply_text = result.get("message", "") if isinstance(result, dict) else str(result)
         action_data = result.get("action") if isinstance(result, dict) else None
+        context_hint_data = result.get("context_hint") if isinstance(result, dict) else None
     except Exception:
         # Fallback to plain text chat if JSON parsing fails
         log.warning("chat_json failed, falling back to plain text chat")
@@ -157,7 +159,7 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
             reply_text = f"I encountered an error: {e!s}. Please check your LLM configuration in Settings."
 
     # Process actions using shared helper
-    response: dict = {"reply": reply_text, "session_id": session_id, "blocks": [], "suggestions": [], "context_hint": None}
+    response: dict = {"reply": reply_text, "session_id": session_id, "blocks": [], "suggestions": [], "context_hint": context_hint_data}
 
     # GUARD: job seekers must never trigger recruiter-only actions
     if user_role == "job_seeker":
@@ -410,6 +412,7 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
             # Parse accumulated JSON
             reply_text = ""
             action_data = None
+            context_hint_data = None
             if not error_occurred and full_text.strip():
                 try:
                     raw = full_text.strip()
@@ -421,6 +424,7 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
                     result = json.loads(raw)
                     reply_text = result.get("message", "") if isinstance(result, dict) else str(result)
                     action_data = result.get("action") if isinstance(result, dict) else None
+                    context_hint_data = result.get("context_hint") if isinstance(result, dict) else None
                 except Exception:
                     log.warning("Stream JSON parse failed, using raw text")
                     reply_text = full_text.strip()
@@ -434,7 +438,7 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
             # Process actions (same as chat_endpoint)
             response: dict = {
                 "reply": reply_text, "session_id": session_id,
-                "blocks": [], "suggestions": [], "context_hint": None,
+                "blocks": [], "suggestions": [], "context_hint": context_hint_data,
             }
 
             if user_role == "job_seeker":
@@ -665,7 +669,8 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
 
             response["reply"] = f"I've drafted a personalized {email_type} email for {candidate_name}. Review it below and send when ready!"
             response["action"] = {"type": "compose_email", "email": email.model_dump()}
-            response["context_hint"] = {"type": "candidate", "id": candidate_id}
+            if not response.get("context_hint"):
+                response["context_hint"] = {"type": "candidate", "id": candidate_id}
         except Exception as e:
             log.error("Failed to create email draft: %s", e)
 
@@ -714,7 +719,8 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
                     ],
                     "summary": summary,
                 })
-                response["context_hint"] = {"type": "candidate", "id": candidate_id}
+                if not response.get("context_hint"):
+                    response["context_hint"] = {"type": "candidate", "id": candidate_id}
                 response["suggestions"] = [
                     {"label": f"Draft email to {candidate_name}", "prompt": f"Draft an outreach email to {candidate_name}"},
                     {"label": "Compare candidates", "prompt": f"Compare top candidates for {rankings[0].get('title', 'this role')}" if rankings else "Show pipeline status"},
@@ -788,6 +794,31 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
         except Exception as e:
             log.error("Failed to create workflow: %s", e)
             response["reply"] = f"Sorry, I couldn't start the workflow: {e}"
+
+    elif action_type == "update_candidate_status":
+        try:
+            candidate_id = action_data.get("candidate_id", "")
+            candidate_name = action_data.get("candidate_name", "")
+            new_status = action_data.get("new_status", "")
+            now_str = datetime.now().isoformat()
+
+            if candidate_id and new_status:
+                db.update_candidate(candidate_id, {"status": new_status, "updated_at": now_str})
+                response["reply"] = f"Done! I've moved **{candidate_name}** to the **{new_status.replace('_', ' ')}** stage."
+                if not response.get("context_hint"):
+                    response["context_hint"] = {"type": "candidate", "id": candidate_id}
+                db.insert_activity({
+                    "id": uuid.uuid4().hex[:8], "user_id": user_id,
+                    "activity_type": "candidate_status_changed",
+                    "description": f"Moved {candidate_name} to {new_status}",
+                    "metadata_json": json.dumps({
+                        "candidate_id": candidate_id, "new_status": new_status,
+                    }),
+                    "created_at": now_str,
+                })
+        except Exception as e:
+            log.error("Failed to update candidate status: %s", e)
+            response["reply"] = f"Sorry, I encountered an error: {e}"
 
     return response
 

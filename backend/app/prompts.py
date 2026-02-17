@@ -151,8 +151,19 @@ IMPORTANT — you MUST respond with valid JSON only. Use this structure:
 
 {{
   "message": "your conversational reply here",
-  "action": null
+  "action": null,
+  "context_hint": null
 }}
+
+context_hint controls the right-side context panel. Set it when relevant:
+- Discussing a specific candidate: {{"type": "candidate", "id": "<candidate ID from context>"}}
+- Discussing a specific job: {{"type": "job", "id": "<job ID from context>"}}
+- Pipeline/status questions: {{"type": "pipeline_stage", "stage": "<relevant_stage>"}}
+  Stages: "new", "contacted", "replied", "screening", "interview_scheduled", "offer_sent", "hired"
+- Interviews/calendar/schedule questions: {{"type": "events"}}
+- General overview/daily status: {{"type": "briefing"}}
+- Comparing two candidates: {{"type": "comparison", "candidate_ids": ["<id1>", "<id2>"]}}
+- General conversation with no specific context: null
 
 When the user asks to send, write, draft, or compose an email to a candidate \
 (e.g. "我想给XXX发邮件", "send an email to XXX", "draft an outreach to XXX", \
@@ -170,7 +181,8 @@ When the user asks to send, write, draft, or compose an email to a candidate \
     "email_type": "outreach",
     "job_id": "the job ID if mentioned or the candidate's job_id from context, or empty string",
     "instructions": "any specific instructions from the user about the email content, tone, or purpose"
-  }}
+  }},
+  "context_hint": {{"type": "candidate", "id": "the candidate ID"}}
 }}
 
 DO NOT include "subject" or "body" in the action — the communication agent generates those.
@@ -216,7 +228,8 @@ When the user asks what jobs suit a candidate, or asks to match/evaluate a candi
     "type": "match_candidate",
     "candidate_id": "the candidate ID from context",
     "candidate_name": "the candidate name"
-  }}
+  }},
+  "context_hint": {{"type": "candidate", "id": "the candidate ID"}}
 }}
 
 If the candidate is NOT found, return action as null with a helpful message.
@@ -282,6 +295,23 @@ Params by workflow_type:
 - interview_scheduling: {{"candidate_id": "the candidate ID from context", "candidate_name": "the candidate name", "job_id": "job ID if mentioned or empty string"}}
 - pipeline_cleanup: {{"days_stale": 3}}
 - job_launch: {{"job_id": "the job ID from context", "top_k": 5}}
+
+When the user asks to move a candidate to a specific pipeline stage \
+(e.g. "Move Alice to screening", "把Alice移到面试阶段", "advance Bob to interview", \
+"将XXX移到已回复"):
+1. Look up the candidate by name in the context above
+2. If found, return:
+
+{{
+  "message": "Done! I've moved [name] to the [stage] stage.",
+  "action": {{
+    "type": "update_candidate_status",
+    "candidate_id": "the candidate ID from context",
+    "candidate_name": "the candidate name",
+    "new_status": "the target status value (e.g. screening, interview_scheduled)"
+  }},
+  "context_hint": {{"type": "candidate", "id": "the candidate ID"}}
+}}
 
 For ALL other conversations, set action to null. Always respond with valid JSON only.
 """

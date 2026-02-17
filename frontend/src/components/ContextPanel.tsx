@@ -2,15 +2,26 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   X, Users, Briefcase, Calendar, Mail, MapPin, Building2,
   Star, Clock, ChevronRight, FileText, TrendingUp,
-  AlertTriangle, Bell, Sparkles,
+  AlertTriangle, Bell, Sparkles, ArrowRight,
 } from "lucide-react";
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  useDroppable,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import { useApi } from "../hooks/useApi";
 import {
   getCandidate, getJob, listCandidates, listEmails, listEvents, listJobs,
-  getNotifications,
+  getNotifications, updateCandidate,
 } from "../lib/api";
 import type { Candidate, CandidateStatus, ContextView, CalendarEvent, Notification } from "../types";
 import { PIPELINE_COLUMNS } from "../types";
+import DraggableCandidateCard from "./DraggableCandidateCard";
 
 interface Props {
   view: ContextView | null;
@@ -33,6 +44,7 @@ export default function ContextPanel({ view, onClose, onViewCandidate, onViewJob
           {view.type === "job" && "Job Details"}
           {view.type === "pipeline_stage" && "Pipeline Stage"}
           {view.type === "events" && "Upcoming Events"}
+          {view.type === "comparison" && "Compare Candidates"}
         </h3>
         <button
           onClick={onClose}
@@ -54,10 +66,13 @@ export default function ContextPanel({ view, onClose, onViewCandidate, onViewJob
           <JobView id={view.id} onViewCandidate={onViewCandidate} onSendPrompt={onSendPrompt} />
         )}
         {view.type === "pipeline_stage" && (
-          <PipelineStageView stage={view.stage} onViewCandidate={onViewCandidate} />
+          <PipelineStageView stage={view.stage} onViewCandidate={onViewCandidate} onSendPrompt={onSendPrompt} />
         )}
         {view.type === "events" && (
           <EventsView onSendPrompt={onSendPrompt} />
+        )}
+        {view.type === "comparison" && (
+          <ComparisonView candidateIds={view.candidate_ids} onViewCandidate={onViewCandidate} onSendPrompt={onSendPrompt} />
         )}
       </div>
     </div>
@@ -313,20 +328,86 @@ function CandidateView({
       )}
 
       {/* Actions */}
-      <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-3">
-        <button
-          onClick={() => onSendPrompt(`Draft an outreach email to ${candidate.name}`)}
-          className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
-        >
-          Draft Email
-        </button>
-        <button
-          onClick={() => onSendPrompt(`What jobs match ${candidate.name}?`)}
-          className="rounded-lg bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100"
-        >
-          Match Jobs
-        </button>
+      <div className="space-y-2 border-t border-gray-100 pt-3">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => onSendPrompt(`Draft an outreach email to ${candidate.name}`)}
+            className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+          >
+            Draft Email
+          </button>
+          <button
+            onClick={() => onSendPrompt(`What jobs match ${candidate.name}?`)}
+            className="rounded-lg bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100"
+          >
+            Match Jobs
+          </button>
+        </div>
+
+        <StageSelector
+          currentStatus={candidate.status}
+          onSelect={(stage) =>
+            onSendPrompt(`Move ${candidate.name} to the ${stage.replace("_", " ")} stage`)
+          }
+        />
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => onSendPrompt(`Schedule an interview with ${candidate.name}`)}
+            className="rounded-lg bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100"
+          >
+            Schedule Interview
+          </button>
+          <button
+            onClick={() => onSendPrompt(`Show the match report for ${candidate.name}`)}
+            className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
+          >
+            Match Report
+          </button>
+        </div>
       </div>
+    </div>
+  );
+}
+
+/* ── Stage Selector ──────────────────────────────────────────────────────── */
+
+function StageSelector({
+  currentStatus,
+  onSelect,
+}: {
+  currentStatus: string;
+  onSelect: (stage: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const stages = PIPELINE_COLUMNS.filter((p) => p.key !== currentStatus);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+      >
+        <span className="flex items-center gap-1.5">
+          <ArrowRight className="h-3 w-3" />
+          Move to Stage...
+        </span>
+        <ChevronRight className={`h-3 w-3 transition-transform ${open ? "rotate-90" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 z-10 mt-1 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+          {stages.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => { onSelect(s.key); setOpen(false); }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${STATUS_COLORS[s.key]?.split(" ")[0] || "bg-gray-300"}`} />
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -412,28 +493,60 @@ function JobView({
       </div>
 
       {/* Actions */}
-      <div className="border-t border-gray-100 pt-3">
+      <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-3">
         <button
           onClick={() => onSendPrompt(`Upload a resume for the ${job.title} position`)}
           className="rounded-lg bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100"
         >
           Upload Resume
         </button>
+        <button
+          onClick={() => onSendPrompt(`Find top candidates for the ${job.title} role`)}
+          className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+        >
+          Find Candidates
+        </button>
+        <button
+          onClick={() => onSendPrompt(`Generate a summary for the ${job.title} job description`)}
+          className="rounded-lg bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100"
+        >
+          JD Summary
+        </button>
       </div>
     </div>
   );
 }
 
-/* ── Pipeline Stage View ─────────────────────────────────────────────────── */
+/* ── Pipeline Stage View (with Drag-and-Drop) ────────────────────────────── */
+
+function StageDropTarget({ stageKey, label }: { stageKey: string; label: string }) {
+  const { isOver, setNodeRef } = useDroppable({ id: stageKey });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-lg border-2 border-dashed px-3 py-2 text-center text-xs font-medium transition-colors ${
+        isOver
+          ? "border-blue-400 bg-blue-50 text-blue-700"
+          : "border-gray-200 text-gray-400 hover:border-gray-300"
+      }`}
+    >
+      {label}
+    </div>
+  );
+}
 
 function PipelineStageView({
   stage,
   onViewCandidate,
+  onSendPrompt,
 }: {
   stage: CandidateStatus;
   onViewCandidate: (id: string) => void;
+  onSendPrompt: (prompt: string) => void;
 }) {
-  const { data: allCandidates } = useApi(useCallback(() => listCandidates(), []));
+  const { data: allCandidates, refresh } = useApi(useCallback(() => listCandidates(), []));
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
   const stageCandidates = useMemo(
     () => (allCandidates || []).filter((c) => c.status === stage),
@@ -441,6 +554,47 @@ function PipelineStageView({
   );
 
   const stageLabel = PIPELINE_COLUMNS.find((p) => p.key === stage)?.label || stage;
+  const targetStages = PIPELINE_COLUMNS.filter((p) => p.key !== stage);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
+
+  const activeDragCandidate = useMemo(
+    () => stageCandidates.find((c) => c.id === activeDragId),
+    [stageCandidates, activeDragId]
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveDragId(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const targetStage = over.id as string;
+    const candidateId = active.id as string;
+    const candidate = stageCandidates.find((c) => c.id === candidateId);
+    if (!candidate || targetStage === stage) return;
+
+    // Update via API
+    try {
+      await updateCandidate(candidateId, { status: targetStage });
+      refresh();
+    } catch { /* chat prompt handles feedback */ }
+
+    // Conversational follow-up
+    const name = candidate.name;
+    if (targetStage === "contacted") {
+      onSendPrompt(`I moved ${name} to Contacted. Draft an outreach email for ${name}?`);
+    } else if (targetStage === "interview_scheduled") {
+      onSendPrompt(`I moved ${name} to Interview Scheduled. When should I schedule the interview with ${name}?`);
+    } else if (targetStage === "rejected") {
+      onSendPrompt(`I moved ${name} to Rejected. Should I send a rejection email to ${name}?`);
+    } else if (targetStage === "offer_sent") {
+      onSendPrompt(`I moved ${name} to Offer Sent. Should I draft an offer email for ${name}?`);
+    } else {
+      onSendPrompt(`I've moved ${name} to the ${targetStage.replace("_", " ")} stage.`);
+    }
+  };
 
   if (!allCandidates) return <LoadingDots />;
 
@@ -451,41 +605,70 @@ function PipelineStageView({
         <span className="font-semibold text-gray-700">{stageLabel}</span>
       </p>
 
-      {stageCandidates.length > 0 ? (
-        <div className="space-y-2">
-          {stageCandidates.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => onViewCandidate(c.id)}
-              className="flex w-full items-start gap-3 rounded-lg border border-gray-100 p-3 text-left hover:border-gray-200 hover:shadow-sm"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="font-medium text-gray-900">{c.name}</p>
-                <p className="truncate text-xs text-gray-500">
-                  {c.current_title || "N/A"}
-                  {c.current_company ? ` at ${c.current_company}` : ""}
-                </p>
-                {c.skills.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {c.skills.slice(0, 3).map((s) => (
-                      <span key={s} className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {c.match_score > 0 && (
-                <span className="shrink-0 text-xs font-semibold text-amber-600">
-                  {Math.round(c.match_score * 100)}%
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <p className="py-6 text-center text-sm text-gray-400">No candidates in this stage</p>
-      )}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={(event) => setActiveDragId(event.active.id as string)}
+        onDragEnd={handleDragEnd}
+      >
+        {stageCandidates.length > 0 ? (
+          <div className="space-y-2">
+            {stageCandidates.map((c) => (
+              <DraggableCandidateCard
+                key={c.id}
+                candidate={c}
+                onViewCandidate={onViewCandidate}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="py-6 text-center text-sm text-gray-400">No candidates in this stage</p>
+        )}
+
+        {/* Drop zone: stage targets (visible during drag) */}
+        {activeDragId && (
+          <div className="mt-4 space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+              Drop to move to...
+            </p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {targetStages.map((t) => (
+                <StageDropTarget key={t.key} stageKey={t.key} label={t.label} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Drag overlay */}
+        <DragOverlay>
+          {activeDragCandidate && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 shadow-lg">
+              <p className="text-sm font-semibold text-blue-900">{activeDragCandidate.name}</p>
+              <p className="text-xs text-blue-600">{activeDragCandidate.current_title}</p>
+            </div>
+          )}
+        </DragOverlay>
+      </DndContext>
+
+      {/* Stage-specific actions */}
+      <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+        {stage === "new" && stageCandidates.length > 0 && (
+          <button
+            onClick={() => onSendPrompt("Send outreach emails to all new candidates")}
+            className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+          >
+            Outreach All New
+          </button>
+        )}
+        {stage === "contacted" && stageCandidates.length > 0 && (
+          <button
+            onClick={() => onSendPrompt("Follow up with stale contacted candidates")}
+            className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+          >
+            Follow-up Stale
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -522,6 +705,7 @@ function EventsView({ onSendPrompt }: { onSendPrompt: (prompt: string) => void }
               weekday: "short", month: "short", day: "numeric",
             });
             const timeStr = e.start_time?.slice(11, 16);
+            const who = e.candidate_name || "the candidate";
             return (
               <div key={e.id} className="rounded-lg border border-gray-100 p-3">
                 <div className="flex items-start justify-between">
@@ -536,6 +720,26 @@ function EventsView({ onSendPrompt }: { onSendPrompt: (prompt: string) => void }
                 {e.candidate_name && (
                   <p className="text-xs text-gray-400">with {e.candidate_name}</p>
                 )}
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => onSendPrompt(`Reschedule the ${e.event_type.replace("_", " ")} with ${who}`)}
+                    className="text-[10px] font-medium text-blue-600 hover:underline"
+                  >
+                    Reschedule
+                  </button>
+                  <button
+                    onClick={() => onSendPrompt(`Send a reminder about the ${e.event_type.replace("_", " ")} with ${who}`)}
+                    className="text-[10px] font-medium text-green-600 hover:underline"
+                  >
+                    Remind
+                  </button>
+                  <button
+                    onClick={() => onSendPrompt(`Cancel the ${e.event_type.replace("_", " ")} with ${who}`)}
+                    className="text-[10px] font-medium text-red-500 hover:underline"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -552,6 +756,149 @@ function EventsView({ onSendPrompt }: { onSendPrompt: (prompt: string) => void }
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Comparison View ─────────────────────────────────────────────────────── */
+
+function ComparisonView({
+  candidateIds,
+  onViewCandidate,
+  onSendPrompt,
+}: {
+  candidateIds: [string, string];
+  onViewCandidate: (id: string) => void;
+  onSendPrompt: (prompt: string) => void;
+}) {
+  const { data: c1 } = useApi(useCallback(() => getCandidate(candidateIds[0]), [candidateIds[0]]));
+  const { data: c2 } = useApi(useCallback(() => getCandidate(candidateIds[1]), [candidateIds[1]]));
+
+  if (!c1 || !c2) return <LoadingDots />;
+
+  const s1 = new Set(c1.skills.map((s) => s.toLowerCase()));
+  const s2 = new Set(c2.skills.map((s) => s.toLowerCase()));
+  const shared = c1.skills.filter((s) => s2.has(s.toLowerCase()));
+  const only1 = c1.skills.filter((s) => !s2.has(s.toLowerCase()));
+  const only2 = c2.skills.filter((s) => !s1.has(s.toLowerCase()));
+
+  return (
+    <div className="space-y-3">
+      {/* Compact profile cards */}
+      {[c1, c2].map((c) => (
+        <button
+          key={c.id}
+          onClick={() => onViewCandidate(c.id)}
+          className="w-full rounded-lg border border-gray-100 p-3 text-left hover:border-gray-200"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">{c.name}</p>
+              <p className="text-xs text-gray-500">{c.current_title}</p>
+            </div>
+            {c.match_score > 0 && (
+              <span className="text-xs font-semibold text-amber-600">
+                {Math.round(c.match_score * 100)}%
+              </span>
+            )}
+          </div>
+          <div className="mt-1 flex items-center gap-2 text-[10px] text-gray-400">
+            {c.experience_years != null && <span>{c.experience_years}+ yrs</span>}
+            {c.location && <span>{c.location}</span>}
+          </div>
+        </button>
+      ))}
+
+      {/* Skills comparison */}
+      {shared.length > 0 && (
+        <div>
+          <h5 className="mb-1 text-xs font-semibold text-gray-500">Shared Skills ({shared.length})</h5>
+          <div className="flex flex-wrap gap-1">
+            {shared.slice(0, 6).map((s) => (
+              <span key={s} className="rounded-full bg-green-50 px-2 py-0.5 text-[10px] text-green-700">{s}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {only1.length > 0 && (
+        <div>
+          <h5 className="mb-1 text-xs font-semibold text-gray-500">{c1.name} only</h5>
+          <div className="flex flex-wrap gap-1">
+            {only1.slice(0, 4).map((s) => (
+              <span key={s} className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700">{s}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {only2.length > 0 && (
+        <div>
+          <h5 className="mb-1 text-xs font-semibold text-gray-500">{c2.name} only</h5>
+          <div className="flex flex-wrap gap-1">
+            {only2.slice(0, 4).map((s) => (
+              <span key={s} className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] text-purple-700">{s}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick comparison */}
+      <div className="rounded-lg border border-gray-100 p-3">
+        <h5 className="mb-2 text-xs font-semibold text-gray-500">Quick Comparison</h5>
+        <div className="space-y-1">
+          <CompareRow
+            label="Match"
+            v1={c1.match_score > 0 ? `${Math.round(c1.match_score * 100)}%` : "N/A"}
+            v2={c2.match_score > 0 ? `${Math.round(c2.match_score * 100)}%` : "N/A"}
+            winner={c1.match_score > c2.match_score ? 1 : c2.match_score > c1.match_score ? 2 : 0}
+          />
+          <CompareRow
+            label="Experience"
+            v1={c1.experience_years != null ? `${c1.experience_years} yrs` : "N/A"}
+            v2={c2.experience_years != null ? `${c2.experience_years} yrs` : "N/A"}
+            winner={
+              c1.experience_years != null && c2.experience_years != null
+                ? c1.experience_years > c2.experience_years ? 1 : c2.experience_years > c1.experience_years ? 2 : 0
+                : 0
+            }
+          />
+          <CompareRow
+            label="Skills"
+            v1={`${c1.skills.length}`}
+            v2={`${c2.skills.length}`}
+            winner={c1.skills.length > c2.skills.length ? 1 : c2.skills.length > c1.skills.length ? 2 : 0}
+          />
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+        <button
+          onClick={() => onSendPrompt(`Draft email to ${c1.name}`)}
+          className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-[10px] font-medium text-blue-700 hover:bg-blue-100"
+        >
+          Email {c1.name.split(" ")[0]}
+        </button>
+        <button
+          onClick={() => onSendPrompt(`Draft email to ${c2.name}`)}
+          className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-[10px] font-medium text-blue-700 hover:bg-blue-100"
+        >
+          Email {c2.name.split(" ")[0]}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CompareRow({ label, v1, v2, winner }: {
+  label: string; v1: string; v2: string; winner: 0 | 1 | 2;
+}) {
+  return (
+    <div className="flex items-center gap-2 py-1 text-xs">
+      <span className="w-20 text-gray-400">{label}</span>
+      <span className={`flex-1 text-center ${winner === 1 ? "font-semibold text-green-700" : "text-gray-600"}`}>{v1}</span>
+      <span className={`flex-1 text-center ${winner === 2 ? "font-semibold text-green-700" : "text-gray-600"}`}>{v2}</span>
     </div>
   );
 }
