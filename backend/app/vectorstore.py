@@ -25,6 +25,7 @@ _embedding_fn: Any = None
 
 JOBS_COLLECTION = "jobs"
 CANDIDATES_COLLECTION = "candidates"
+CHAT_SUMMARIES_COLLECTION = "chat_summaries"
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 
 
@@ -60,6 +61,11 @@ def init_vectorstore() -> None:
     )
     _client.get_or_create_collection(
         name=CANDIDATES_COLLECTION,
+        embedding_function=_embedding_fn,
+        metadata={"hnsw:space": "cosine"},
+    )
+    _client.get_or_create_collection(
+        name=CHAT_SUMMARIES_COLLECTION,
         embedding_function=_embedding_fn,
         metadata={"hnsw:space": "cosine"},
     )
@@ -307,3 +313,44 @@ def build_candidate_embed_text(c: dict | object) -> str:
     if title:
         parts.append(f"Current role: {title}")
     return "\n\n".join(parts)
+
+
+# ── Session Summary Vectors ──────────────────────────────────────────────
+
+
+def index_session_summary(summary_id: str, text: str, metadata: dict) -> None:
+    col = _get_collection(CHAT_SUMMARIES_COLLECTION)
+    col.upsert(ids=[summary_id], documents=[text], metadatas=[metadata])
+
+
+def search_session_summaries(
+    query_text: str,
+    user_id: str,
+    n_results: int = 3,
+) -> list[dict]:
+    """Find past session summaries semantically relevant to a query."""
+    col = _get_collection(CHAT_SUMMARIES_COLLECTION)
+    if col.count() == 0:
+        return []
+    results = col.query(
+        query_texts=[query_text],
+        n_results=min(n_results, col.count()),
+        where={"user_id": user_id},
+        include=["distances", "metadatas", "documents"],
+    )
+    output = []
+    for i, sid in enumerate(results["ids"][0]):
+        dist = results["distances"][0][i]
+        output.append({
+            "id": sid,
+            "distance": dist,
+            "score": round(1.0 - dist, 4),
+            "metadata": results["metadatas"][0][i],
+            "document": results["documents"][0][i],
+        })
+    return output
+
+
+def remove_session_summary(summary_id: str) -> None:
+    col = _get_collection(CHAT_SUMMARIES_COLLECTION)
+    col.delete(ids=[summary_id])

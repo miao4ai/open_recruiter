@@ -245,6 +245,17 @@ def init_db() -> None:
             items_affected INTEGER DEFAULT 0,
             created_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS session_summaries (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            topics TEXT DEFAULT '[]',
+            entity_refs TEXT DEFAULT '{}',
+            message_count INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
     """)
     conn.commit()
 
@@ -1291,3 +1302,53 @@ def update_automation_log(log_id: str, updates: dict) -> bool:
     conn.commit()
     conn.close()
     return cur.rowcount > 0
+
+
+# ── Session Summaries ────────────────────────────────────────────────────
+
+
+def insert_session_summary(s: dict) -> None:
+    conn = get_conn()
+    conn.execute(
+        "INSERT OR REPLACE INTO session_summaries (id, session_id, user_id, summary, topics, entity_refs, message_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (s["id"], s["session_id"], s["user_id"], s["summary"],
+         json.dumps(s.get("topics", [])), json.dumps(s.get("entity_refs", {})),
+         s.get("message_count", 0), s["created_at"]),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_session_summary(session_id: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM session_summaries WHERE session_id = ?", (session_id,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    d = dict(row)
+    d["topics"] = json.loads(d.get("topics") or "[]")
+    d["entity_refs"] = json.loads(d.get("entity_refs") or "{}")
+    return d
+
+
+def list_session_summaries(user_id: str, limit: int = 20) -> list[dict]:
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM session_summaries WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+        (user_id, limit),
+    ).fetchall()
+    conn.close()
+    results = []
+    for r in rows:
+        d = dict(r)
+        d["topics"] = json.loads(d.get("topics") or "[]")
+        d["entity_refs"] = json.loads(d.get("entity_refs") or "{}")
+        results.append(d)
+    return results
+
+
+def delete_session_summary(session_id: str) -> None:
+    conn = get_conn()
+    conn.execute("DELETE FROM session_summaries WHERE session_id = ?", (session_id,))
+    conn.commit()
+    conn.close()

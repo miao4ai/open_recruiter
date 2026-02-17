@@ -120,8 +120,11 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
         context = _build_job_seeker_context(user_id)
         system_prompt = CHAT_SYSTEM_JOB_SEEKER.format(context=context)
     else:
-        context = _build_chat_context(user_id)
+        context = _build_chat_context(user_id, current_message=req.message)
         system_prompt = CHAT_SYSTEM_WITH_ACTIONS.format(context=context)
+
+    # Background: summarize previous session if needed
+    _maybe_summarize_previous_session(cfg, user_id, session_id)
 
     # Load conversation history for this session
     history = db.list_chat_messages(user_id, limit=20, session_id=session_id)
@@ -355,8 +358,11 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
         context = _build_job_seeker_context(user_id)
         system_prompt = CHAT_SYSTEM_JOB_SEEKER.format(context=context)
     else:
-        context = _build_chat_context(user_id)
+        context = _build_chat_context(user_id, current_message=req.message)
         system_prompt = CHAT_SYSTEM_WITH_ACTIONS.format(context=context)
+
+    # Background: summarize previous session if needed
+    _maybe_summarize_previous_session(cfg, user_id, session_id)
 
     history = db.list_chat_messages(user_id, limit=20, session_id=session_id)
     db.insert_chat_message({
@@ -886,9 +892,31 @@ def _build_smart_suggestions(action_data) -> list[dict]:
     return suggestions[:4]
 
 
-def _build_chat_context(user_id: str = "") -> str:
+def _build_chat_context(user_id: str = "", current_message: str = "") -> str:
     """Build a context string from the database for the chat system prompt."""
+    from app import vectorstore
+
     parts = []
+
+    # Relevant Past Conversations (RAG)
+    if user_id and current_message:
+        try:
+            past = vectorstore.search_session_summaries(current_message, user_id, n_results=3)
+            relevant = [p for p in past if p["score"] > 0.3]
+            if relevant:
+                parts.append("## Relevant Past Conversations")
+                total = 0
+                for p in relevant:
+                    meta = p.get("metadata", {})
+                    date = meta.get("created_at", "")[:10]
+                    text = f"- [{date}] {p['document']}" if date else f"- {p['document']}"
+                    if total + len(text) > 600:
+                        break
+                    parts.append(text)
+                    total += len(text)
+                parts.append("")
+        except Exception as e:
+            log.warning("Past conversation retrieval failed (non-fatal): %s", e)
 
     # Recruiter Preferences & Memory
     if user_id:
@@ -1132,3 +1160,88 @@ def _extract_implicit_memories(cfg, user_id: str) -> None:
             })
     except Exception as e:
         log.warning("Implicit memory extraction failed (non-fatal): %s", e)
+
+
+# ── Cross-Session Intelligence ───────────────────────────────────────────
+
+
+def _summarize_session(cfg, session_id: str, user_id: str) -> None:
+    """Background task: generate an LLM summary of a chat session and index it for RAG."""
+    from app.prompts import SESSION_SUMMARY
+    from app.llm import chat_json
+    from app import vectorstore
+
+    # Skip if summary already exists
+    existing = db.get_session_summary(session_id)
+    if existing:
+        return
+
+    # Load all messages from the session
+    messages = db.list_chat_messages(user_id, limit=100, session_id=session_id)
+    if len(messages) < 4:
+        return
+
+    # Format conversation for the LLM
+    lines = []
+    for m in messages:
+        role = "Recruiter" if m["role"] == "user" else "Assistant"
+        lines.append(f"{role}: {m['content']}")
+    conversation = "\n\n".join(lines)
+
+    try:
+        result = chat_json(
+            cfg, system=SESSION_SUMMARY,
+            messages=[{"role": "user", "content": conversation}],
+        )
+
+        summary_text = result.get("summary", "") if isinstance(result, dict) else ""
+        if not summary_text:
+            return
+
+        topics = result.get("topics", []) if isinstance(result, dict) else []
+        entities = result.get("entities", {}) if isinstance(result, dict) else {}
+
+        now = datetime.now().isoformat()
+        summary_id = uuid.uuid4().hex[:8]
+
+        # Save to SQLite
+        db.insert_session_summary({
+            "id": summary_id,
+            "session_id": session_id,
+            "user_id": user_id,
+            "summary": summary_text,
+            "topics": topics,
+            "entity_refs": entities,
+            "message_count": len(messages),
+            "created_at": now,
+        })
+
+        # Index in ChromaDB for semantic retrieval
+        session = db.get_chat_session(session_id)
+        session_title = session["title"] if session else "Chat"
+        embed_text = f"{session_title}\n{summary_text}\nTopics: {', '.join(topics)}"
+        vectorstore.index_session_summary(summary_id, embed_text, {
+            "user_id": user_id,
+            "session_id": session_id,
+            "created_at": now,
+        })
+
+        log.info("Summarized session %s (%d messages) and indexed for RAG", session_id, len(messages))
+    except Exception as e:
+        log.warning("Session summarization failed (non-fatal): %s", e)
+
+
+def _maybe_summarize_previous_session(cfg, user_id: str, current_session_id: str) -> None:
+    """Check if the user's previous session needs summarization and trigger it in background."""
+    sessions = db.list_chat_sessions(user_id)
+    for s in sessions:
+        if s["id"] == current_session_id:
+            continue
+        # Found the most recent other session — check if it needs summarization
+        existing = db.get_session_summary(s["id"])
+        if not existing:
+            threading.Thread(
+                target=_summarize_session,
+                args=(cfg, s["id"], user_id), daemon=True,
+            ).start()
+        break  # Only check the most recent one

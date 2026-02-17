@@ -351,6 +351,24 @@ For ALL conversations, set action to null. Always respond with valid JSON only.
 """
 
 
+# ── Session Summary Prompt ────────────────────────────────────────────────
+
+SESSION_SUMMARY = """\
+Given this chat conversation between a recruiter and an AI recruiting assistant, \
+write a concise summary capturing the key facts discussed.
+
+Return a JSON object with:
+- "summary": 2-4 sentence summary of what was discussed and any decisions or conclusions reached
+- "topics": list of key topic strings (e.g. "candidate matching", "email outreach", "interview scheduling")
+- "entities": {"candidates": [list of candidate names mentioned], "jobs": [list of job titles mentioned]}
+
+Focus on factual content: which candidates were discussed, what jobs were considered, \
+what actions were taken or planned, and any conclusions reached. \
+Include specific names, scores, and decisions so the assistant can recall them later.
+Only output valid JSON.
+"""
+
+
 # ── Memory Extraction Prompts ────────────────────────────────────────────
 
 MEMORY_EXTRACTION = """\
