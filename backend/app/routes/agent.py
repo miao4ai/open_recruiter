@@ -853,6 +853,183 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
             log.error("Failed to update candidate status: %s", e)
             response["reply"] = f"Sorry, I encountered an error: {e}"
 
+    elif action_type == "create_job":
+        try:
+            from app.models import Job
+            from app import vectorstore
+
+            title = action_data.get("title", "").strip() or "Untitled Position"
+            company = action_data.get("company", "")
+            required_skills = action_data.get("required_skills", [])
+            preferred_skills = action_data.get("preferred_skills", [])
+            experience_years = action_data.get("experience_years")
+            location = action_data.get("location", "")
+            remote = bool(action_data.get("remote", False))
+            salary_range = action_data.get("salary_range", "")
+            summary = action_data.get("summary", "")
+            raw_text = action_data.get("raw_text", "")
+
+            # Build raw_text from fields if not provided
+            if not raw_text.strip():
+                parts = [f"Job Title: {title}"]
+                if company:
+                    parts.append(f"Company: {company}")
+                if required_skills:
+                    parts.append(f"Required Skills: {', '.join(required_skills)}")
+                if preferred_skills:
+                    parts.append(f"Preferred Skills: {', '.join(preferred_skills)}")
+                if experience_years:
+                    parts.append(f"Experience: {experience_years} years")
+                if location:
+                    parts.append(f"Location: {location}")
+                if remote:
+                    parts.append("Remote: Yes")
+                if salary_range:
+                    parts.append(f"Salary Range: {salary_range}")
+                if summary:
+                    parts.append(f"\n{summary}")
+                raw_text = "\n".join(parts)
+
+            job = Job(
+                title=title, company=company,
+                posted_date=datetime.now().strftime("%Y-%m-%d"),
+                required_skills=required_skills, preferred_skills=preferred_skills,
+                experience_years=experience_years, location=location,
+                remote=remote, salary_range=salary_range,
+                summary=summary, raw_text=raw_text,
+            )
+            db.insert_job(job.model_dump())
+
+            try:
+                vectorstore.index_job(
+                    job_id=job.id, text=raw_text,
+                    metadata={"title": title, "company": company},
+                )
+            except Exception as ve:
+                log.warning("Failed to index job in vector store: %s", ve)
+
+            db.insert_activity({
+                "id": uuid.uuid4().hex[:8], "user_id": user_id,
+                "activity_type": "job_created_via_chat",
+                "description": f"Created job: {title} at {company}",
+                "metadata_json": json.dumps({"job_id": job.id, "title": title, "company": company}),
+                "created_at": datetime.now().isoformat(),
+            })
+
+            response["action"] = {"type": "create_job", "job": job.model_dump()}
+            response["context_hint"] = {"type": "job", "id": job.id}
+            response["suggestions"] = [
+                {"label": "Find candidates", "prompt": f"Find matching candidates for {title}"},
+                {"label": "Upload full JD", "prompt": f"Upload a detailed JD for {title}"},
+            ]
+        except Exception as e:
+            log.error("Failed to create job via chat: %s", e)
+            response["reply"] = f"Sorry, I encountered an error creating the job: {e}"
+
+    elif action_type == "create_candidate":
+        try:
+            from app.models import Candidate
+            from app import vectorstore
+
+            name = action_data.get("name", "").strip()
+            if not name:
+                response["reply"] = "I need at least a name to create a candidate profile. What's their name?"
+                return response
+
+            email = action_data.get("email", "")
+            phone = action_data.get("phone", "")
+            current_title = action_data.get("current_title", "")
+            current_company = action_data.get("current_company", "")
+            skills = action_data.get("skills", [])
+            experience_years = action_data.get("experience_years")
+            location = action_data.get("location", "")
+            notes = action_data.get("notes", "")
+            job_id = action_data.get("job_id", "")
+
+            # Duplicate check
+            if email:
+                existing = db.find_candidate_by_name_email(name, email)
+                if existing:
+                    response["reply"] = f"A candidate named **{name}** with email {email} already exists in the system."
+                    response["context_hint"] = {"type": "candidate", "id": existing["id"]}
+                    return response
+
+            # Build resume summary from available info
+            summary_parts = []
+            if current_title:
+                summary_parts.append(current_title)
+            if current_company:
+                summary_parts.append(f"at {current_company}")
+            if experience_years:
+                summary_parts.append(f"with {experience_years} years of experience")
+            if skills:
+                summary_parts.append(f"skilled in {', '.join(skills[:5])}")
+            resume_summary = " ".join(summary_parts) if summary_parts else ""
+
+            candidate = Candidate(
+                name=name, email=email, phone=phone,
+                current_title=current_title, current_company=current_company,
+                skills=skills if isinstance(skills, list) else [],
+                experience_years=experience_years, location=location,
+                resume_summary=resume_summary, notes=notes, job_id=job_id,
+            )
+            db.insert_candidate(candidate.model_dump())
+
+            # Vector index
+            embed_text = vectorstore.build_candidate_embed_text(candidate.model_dump())
+            if embed_text.strip():
+                try:
+                    vectorstore.index_candidate(
+                        candidate_id=candidate.id, text=embed_text,
+                        metadata={"name": name, "job_id": job_id, "current_title": current_title},
+                    )
+                except Exception as ve:
+                    log.warning("Failed to index candidate in vector store: %s", ve)
+
+                # Auto-match against all jobs
+                try:
+                    top_jobs = vectorstore.search_jobs_for_candidate(
+                        candidate.id, n_results=5, candidate_text=embed_text,
+                    )
+                    if top_jobs:
+                        best = top_jobs[0]
+                        best_job = db.get_job(best["job_id"])
+                        if best_job and best["score"] >= 0.3:
+                            db.update_candidate(candidate.id, {
+                                "job_id": best["job_id"],
+                                "match_score": best["score"],
+                                "match_reasoning": f"Best match: {best_job['title']} at {best_job['company']} ({round(best['score'] * 100)}%)",
+                                "updated_at": datetime.now().isoformat(),
+                            })
+                            # Update the candidate dict with match info
+                            candidate_dict = candidate.model_dump()
+                            candidate_dict["job_id"] = best["job_id"]
+                            candidate_dict["match_score"] = best["score"]
+                            candidate_dict["match_reasoning"] = f"Best match: {best_job['title']} at {best_job['company']} ({round(best['score'] * 100)}%)"
+                            response["action"] = {"type": "create_candidate", "candidate": candidate_dict}
+                except Exception as me:
+                    log.warning("Auto-match failed (non-fatal): %s", me)
+
+            if "action" not in response or response.get("action", {}).get("type") != "create_candidate":
+                response["action"] = {"type": "create_candidate", "candidate": candidate.model_dump()}
+
+            db.insert_activity({
+                "id": uuid.uuid4().hex[:8], "user_id": user_id,
+                "activity_type": "candidate_created_via_chat",
+                "description": f"Created candidate: {name} — {current_title}",
+                "metadata_json": json.dumps({"candidate_id": candidate.id, "name": name}),
+                "created_at": datetime.now().isoformat(),
+            })
+
+            response["context_hint"] = {"type": "candidate", "id": candidate.id}
+            response["suggestions"] = [
+                {"label": "Match to jobs", "prompt": f"What jobs match {name}?"},
+                {"label": "Draft email", "prompt": f"Draft an outreach email to {name}"},
+            ]
+        except Exception as e:
+            log.error("Failed to create candidate via chat: %s", e)
+            response["reply"] = f"Sorry, I encountered an error creating the candidate: {e}"
+
     return response
 
 
@@ -879,6 +1056,15 @@ def _build_smart_suggestions(action_data) -> list[dict]:
         if atype == "upload_jd":
             suggestions.append({"label": "Find candidates", "prompt": "Find candidates for the latest job"})
             suggestions.append({"label": "Upload resume", "prompt": "Upload a resume"})
+            return suggestions[:4]
+        if atype == "create_job":
+            suggestions.append({"label": "Find candidates", "prompt": "Find matching candidates for the new job"})
+            suggestions.append({"label": "Create another", "prompt": "Create another job posting"})
+            return suggestions[:4]
+        if atype == "create_candidate":
+            name = action_data.get("name", "the new candidate")
+            suggestions.append({"label": "Match to jobs", "prompt": f"What jobs match {name}?"})
+            suggestions.append({"label": "Draft email", "prompt": f"Draft an outreach email to {name}"})
             return suggestions[:4]
 
     if contacted:

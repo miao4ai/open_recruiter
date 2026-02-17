@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Send, Trash2, Loader2, Mail, Check, X,
-  Plus, MessageSquare, Upload, FileText,
+  Plus, MessageSquare, Upload, FileText, Briefcase, UserPlus,
 } from "lucide-react";
 import { useApi } from "../hooks/useApi";
 import {
@@ -311,6 +311,62 @@ function JdUploadCard({
           {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
           {uploading ? "Uploading..." : "Upload JD"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Inline Job Created Card ───────────────────────────────────────────── */
+
+function JobCreatedCard({ job }: { job: Job }) {
+  return (
+    <div className="mt-2 rounded-xl border border-green-200 bg-green-50 p-4">
+      <div className="flex items-center gap-2 text-green-700">
+        <Briefcase className="h-5 w-5" />
+        <span className="font-medium">Job created!</span>
+      </div>
+      <div className="mt-2 space-y-1 text-sm text-green-700">
+        <p><span className="font-medium">Title:</span> {job.title}</p>
+        {job.company && <p><span className="font-medium">Company:</span> {job.company}</p>}
+        {job.location && <p><span className="font-medium">Location:</span> {job.location}{job.remote ? " (Remote)" : ""}</p>}
+        {job.salary_range && <p><span className="font-medium">Salary:</span> {job.salary_range}</p>}
+        {job.required_skills?.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-1">
+            {job.required_skills.slice(0, 8).map((s: string) => (
+              <span key={s} className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">{s}</span>
+            ))}
+          </div>
+        )}
+        {job.summary && <p className="pt-1 text-xs text-green-600">{job.summary}</p>}
+      </div>
+    </div>
+  );
+}
+
+/* ── Inline Candidate Created Card ────────────────────────────────────── */
+
+function CandidateCreatedCard({ candidate }: { candidate: Candidate }) {
+  return (
+    <div className="mt-2 rounded-xl border border-green-200 bg-green-50 p-4">
+      <div className="flex items-center gap-2 text-green-700">
+        <UserPlus className="h-5 w-5" />
+        <span className="font-medium">Candidate added!</span>
+      </div>
+      <div className="mt-2 space-y-1 text-sm text-green-700">
+        <p><span className="font-medium">Name:</span> {candidate.name}</p>
+        {candidate.current_title && <p><span className="font-medium">Title:</span> {candidate.current_title}{candidate.current_company ? ` at ${candidate.current_company}` : ""}</p>}
+        {candidate.email && <p><span className="font-medium">Email:</span> {candidate.email}</p>}
+        {candidate.experience_years && <p><span className="font-medium">Experience:</span> {candidate.experience_years} years</p>}
+        {candidate.skills?.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-1">
+            {candidate.skills.slice(0, 8).map((s: string) => (
+              <span key={s} className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">{s}</span>
+            ))}
+          </div>
+        )}
+        {candidate.match_score > 0 && (
+          <p className="pt-1 text-xs text-green-600">Match score: {Math.round(candidate.match_score * 100)}%</p>
+        )}
       </div>
     </div>
   );
@@ -739,6 +795,12 @@ export default function Chat() {
                       uploadedJob={(msg as ChatMessage & { uploadedJob?: Job }).uploadedJob}
                       onUpload={(file) => handleJdUpload(msg.id, file)}
                       onCancel={() => handleJdCancel(msg.id)} />
+                  )}
+                  {msg.action?.type === "create_job" && (
+                    <JobCreatedCard job={msg.action.job} />
+                  )}
+                  {msg.action?.type === "create_candidate" && (
+                    <CandidateCreatedCard candidate={msg.action.candidate} />
                   )}
 
                   {msg.blocks && msg.blocks.length > 0 && (

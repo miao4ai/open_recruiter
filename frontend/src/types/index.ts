@@ -151,7 +151,17 @@ export interface ChatJdUploadAction {
   type: "upload_jd";
 }
 
-export type ChatAction = ChatEmailAction | ChatResumeUploadAction | ChatJdUploadAction;
+export interface ChatCreateJobAction {
+  type: "create_job";
+  job: Job;
+}
+
+export interface ChatCreateCandidateAction {
+  type: "create_candidate";
+  candidate: Candidate;
+}
+
+export type ChatAction = ChatEmailAction | ChatResumeUploadAction | ChatJdUploadAction | ChatCreateJobAction | ChatCreateCandidateAction;
 
 export interface ChatResponse {
   reply: string;

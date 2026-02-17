@@ -313,6 +313,74 @@ When the user asks to move a candidate to a specific pipeline stage \
   "context_hint": {{"type": "candidate", "id": "the candidate ID"}}
 }}
 
+When the user asks to create, post, or add a new job/position through conversation \
+(e.g. "帮我发布一个Senior React工程师职位", "create a job for backend engineer", \
+"添加一个新职位", "post a new position", "I need to hire a data scientist"):
+
+IMPORTANT: Do NOT return the create_job action immediately. Instead, gather information through conversation:
+1. If key information is missing, ask 1-2 follow-up questions per turn (not all at once). Key fields:
+   - title (required — if not provided, ask)
+   - company (ask if not mentioned)
+   - required_skills (ask: "这个职位需要哪些技术栈/技能？")
+   - salary_range (suggest: "要不要加上薪资范围？如果不需要我先跳过")
+   - location / remote (ask if not mentioned)
+   - experience_years, summary, preferred_skills (optional, don't always ask)
+2. When the user says "就这样", "that's enough", "不用了", "go ahead", "create it", \
+   or when you have enough information (at minimum title), return the action:
+
+{{
+  "message": "职位已创建！Senior React Engineer at TechCorp, ...",
+  "action": {{
+    "type": "create_job",
+    "title": "the job title",
+    "company": "company name or empty string",
+    "required_skills": ["skill1", "skill2"],
+    "preferred_skills": [],
+    "experience_years": null,
+    "location": "location or empty string",
+    "remote": true,
+    "salary_range": "salary range or empty string",
+    "summary": "2-3 sentence summary compiled from all conversation context",
+    "raw_text": "Compile ALL gathered information into a complete job description text"
+  }},
+  "context_hint": null
+}}
+
+The raw_text should be a well-formatted job description compiled from everything discussed.
+
+When the user asks to add or register a candidate through conversation \
+(e.g. "帮我添加一个候选人", "add a candidate named Alice", "记录一下这个人的信息", \
+"I met someone at a conference", "有个候选人叫XXX"):
+
+IMPORTANT: Do NOT return the create_candidate action immediately. Gather information:
+1. Ask follow-up questions for missing info. Key fields:
+   - name (required — if not provided, ask)
+   - email (preferred — ask: "有他/她的邮箱吗？")
+   - current_title, current_company (ask: "目前的职位和公司？")
+   - skills (ask: "主要技能有哪些？")
+   - experience_years, location, phone (optional, don't always ask)
+2. When user says they're done or you have enough info (at minimum name), return:
+
+{{
+  "message": "候选人已添加！Alice Chen — Frontend Engineer ...",
+  "action": {{
+    "type": "create_candidate",
+    "name": "full name",
+    "email": "email or empty string",
+    "phone": "phone or empty string",
+    "current_title": "title or empty string",
+    "current_company": "company or empty string",
+    "skills": ["skill1", "skill2"],
+    "experience_years": null,
+    "location": "location or empty string",
+    "notes": "any additional notes from conversation",
+    "job_id": "job ID from context if user mentioned linking to a job, or empty string"
+  }},
+  "context_hint": null
+}}
+
+If the user mentions a specific job to link the candidate to, look up the job ID from context.
+
 For ALL other conversations, set action to null. Always respond with valid JSON only.
 """
 
