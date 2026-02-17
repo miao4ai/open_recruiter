@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { useApi } from "../hooks/useApi";
 import {
-  sendChatMessage,
+  streamChatMessage,
   getChatHistory,
   clearChatHistory,
   sendEmail,
@@ -23,9 +23,10 @@ import {
 import PipelineBar from "../components/PipelineBar";
 import ContextPanel from "../components/ContextPanel";
 import SmartActionBar from "../components/SmartActionBar";
+import MessageBlocks from "../components/MessageBlocks";
 import type {
   Candidate, CandidateStatus, ChatMessage, ChatSession,
-  ContextView, Email, Job, Suggestion,
+  ContextView, Email, Job, MessageBlock, Suggestion,
 } from "../types";
 
 /* ── Greeting / Daily Briefing ──────────────────────────────────────────── */
@@ -381,6 +382,8 @@ export default function Chat() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [contextView, setContextView] = useState<ContextView | null>({ type: "briefing" });
   const [pipelineStage, setPipelineStage] = useState<CandidateStatus | null>(null);
+  const [streamingText, setStreamingText] = useState("");
+  const [backendSuggestions, setBackendSuggestions] = useState<Suggestion[]>([]);
   const didAutoSelect = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -422,16 +425,13 @@ export default function Chat() {
     return undefined;
   }, [messages]);
 
-  useEffect(() => {
-    if (!lastAction) return;
-    if (lastAction.type === "compose_email" && lastAction.email?.candidate_id) {
-      setContextView({ type: "candidate", id: lastAction.email.candidate_id });
-    }
-  }, [lastAction]);
+  // Context auto-switch is now handled by backend context_hint in handleSend
 
   const suggestions = useMemo(
-    () => buildSuggestions(messages, candidates ?? null, lastAction),
-    [messages, candidates, lastAction],
+    () => backendSuggestions.length > 0
+      ? backendSuggestions
+      : buildSuggestions(messages, candidates ?? null, lastAction),
+    [messages, candidates, lastAction, backendSuggestions],
   );
 
   /* ── Send ──────────────────────────────────────────────────────────────── */
@@ -441,14 +441,36 @@ export default function Chat() {
     if (!text || sending) return;
     if (!overrideMessage) setInput("");
     setSending(true);
+    setStreamingText("");
 
     setMessages((prev) => [...prev, {
       id: "temp-" + Date.now(), user_id: "", role: "user",
       content: text, created_at: new Date().toISOString(),
     }]);
 
+    // Accumulate streamed JSON and extract the "message" field progressively
+    let accumulated = "";
+    const extractMessage = (raw: string): string => {
+      const match = raw.match(/"message"\s*:\s*"((?:[^"\\]|\\.)*)(?:"|$)/);
+      if (!match) return "";
+      return match[1]
+        .replace(/\\n/g, "\n")
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, "\\");
+    };
+
     try {
-      const response = await sendChatMessage(text, activeSessionId ?? undefined);
+      const response = await streamChatMessage(
+        text,
+        activeSessionId ?? undefined,
+        (token) => {
+          accumulated += token;
+          const msg = extractMessage(accumulated);
+          if (msg) setStreamingText(msg);
+        },
+      );
+
+      setStreamingText("");
       if (!activeSessionId && response.session_id) setActiveSessionId(response.session_id);
       refreshSessions();
       refreshCandidates();
@@ -458,8 +480,21 @@ export default function Chat() {
         user_id: "", role: "assistant", content: response.reply,
         created_at: new Date().toISOString(),
         action: response.action, actionStatus: response.action ? "pending" : undefined,
+        blocks: response.blocks,
       }]);
+
+      // Apply backend suggestions and context hint
+      if (response.suggestions && response.suggestions.length > 0) {
+        setBackendSuggestions(response.suggestions);
+      } else {
+        setBackendSuggestions([]);
+      }
+      if (response.context_hint) {
+        setContextView(response.context_hint);
+        setPipelineStage(null);
+      }
     } catch {
+      setStreamingText("");
       setMessages((prev) => [...prev, {
         id: "error-" + Date.now(), user_id: "", role: "assistant",
         content: "Sorry, I encountered an error. Please try again.",
@@ -656,6 +691,15 @@ export default function Chat() {
                       onUpload={(file) => handleJdUpload(msg.id, file)}
                       onCancel={() => handleJdCancel(msg.id)} />
                   )}
+
+                  {msg.blocks && msg.blocks.length > 0 && (
+                    <MessageBlocks
+                      blocks={msg.blocks}
+                      onSendPrompt={(p) => handleSend(p)}
+                      onViewCandidate={handleViewCandidate}
+                      onViewJob={handleViewJob}
+                    />
+                  )}
                 </div>
               </div>
             ))}
@@ -663,8 +707,14 @@ export default function Chat() {
             {sending && (
               <div className="flex gap-2.5">
                 <img src="/ai-chan-avatar.png" alt="Erika" className="h-6 w-6 shrink-0 rounded-full object-cover" />
-                <div className="rounded-xl bg-gray-50 px-4 py-3">
-                  <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                <div className="max-w-[85%]">
+                  <div className="rounded-xl bg-gray-50 px-3.5 py-2.5 text-gray-800">
+                    {streamingText ? (
+                      <p className="whitespace-pre-wrap text-sm">{streamingText}<span className="ml-0.5 inline-block h-4 w-1 animate-pulse bg-gray-400" /></p>
+                    ) : (
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                    )}
+                  </div>
                 </div>
               </div>
             )}

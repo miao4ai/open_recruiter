@@ -1,13 +1,15 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   X, Users, Briefcase, Calendar, Mail, MapPin, Building2,
   Star, Clock, ChevronRight, FileText, TrendingUp,
+  AlertTriangle, Bell, Sparkles,
 } from "lucide-react";
 import { useApi } from "../hooks/useApi";
 import {
   getCandidate, getJob, listCandidates, listEmails, listEvents, listJobs,
+  getNotifications,
 } from "../lib/api";
-import type { Candidate, CandidateStatus, ContextView, CalendarEvent } from "../types";
+import type { Candidate, CandidateStatus, ContextView, CalendarEvent, Notification } from "../types";
 import { PIPELINE_COLUMNS } from "../types";
 
 interface Props {
@@ -75,6 +77,20 @@ function BriefingView({
   const { data: emails } = useApi(useCallback(() => listEmails(), []));
   const { data: events } = useApi(useCallback(() => listEvents(), []));
   const { data: jobs } = useApi(useCallback(() => listJobs(), []));
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  // Fetch notifications with polling every 60s
+  useEffect(() => {
+    let mounted = true;
+    const fetchNotifs = () => {
+      getNotifications()
+        .then((n) => { if (mounted) setNotifications(n); })
+        .catch(() => {});
+    };
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 60000);
+    return () => { mounted = false; clearInterval(interval); };
+  }, []);
 
   const stats = useMemo(() => {
     if (!candidates) return null;
@@ -98,6 +114,20 @@ function BriefingView({
         <StatCard icon={<Mail className="h-4 w-4" />} label="Pending Emails" value={stats.pendingEmails.length} color="amber" />
         <StatCard icon={<Calendar className="h-4 w-4" />} label="Today's Events" value={stats.todayEvents.length} color="green" />
       </div>
+
+      {/* Proactive Notifications */}
+      {notifications.length > 0 && (
+        <div>
+          <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            <Bell className="h-3.5 w-3.5" /> Alerts ({notifications.length})
+          </h4>
+          <div className="space-y-1.5">
+            {notifications.slice(0, 5).map((n) => (
+              <NotificationCard key={n.id} notification={n} onAction={onSendPrompt} onViewCandidate={onViewCandidate} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Awaiting reply */}
       {stats.contacted.length > 0 && (
@@ -522,6 +552,59 @@ function EventsView({ onSendPrompt }: { onSendPrompt: (prompt: string) => void }
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Notification Card ────────────────────────────────────────────────────── */
+
+function NotificationCard({
+  notification: n,
+  onAction,
+  onViewCandidate,
+}: {
+  notification: Notification;
+  onAction: (prompt: string) => void;
+  onViewCandidate: (id: string) => void;
+}) {
+  const severityStyles = {
+    warning: "border-amber-200 bg-amber-50",
+    success: "border-green-200 bg-green-50",
+    info: "border-blue-200 bg-blue-50",
+  };
+  const iconStyles = {
+    warning: "text-amber-500",
+    success: "text-green-500",
+    info: "text-blue-500",
+  };
+  const SeverityIcon = n.severity === "warning" ? AlertTriangle
+    : n.severity === "success" ? Sparkles : Bell;
+
+  return (
+    <div className={`rounded-lg border p-2.5 ${severityStyles[n.severity]}`}>
+      <div className="flex items-start gap-2">
+        <SeverityIcon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${iconStyles[n.severity]}`} />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-gray-800">{n.title}</p>
+          <p className="mt-0.5 text-[10px] text-gray-500">{n.description}</p>
+          <div className="mt-1.5 flex gap-2">
+            <button
+              onClick={() => onAction(n.action_prompt)}
+              className="text-[10px] font-medium text-blue-600 hover:underline"
+            >
+              {n.action_label}
+            </button>
+            {n.candidate_id && (
+              <button
+                onClick={() => onViewCandidate(n.candidate_id!)}
+                className="text-[10px] text-gray-400 hover:text-gray-600"
+              >
+                View profile
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

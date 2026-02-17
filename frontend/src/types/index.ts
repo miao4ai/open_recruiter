@@ -156,6 +156,9 @@ export type ChatAction = ChatEmailAction | ChatResumeUploadAction | ChatJdUpload
 export interface ChatResponse {
   reply: string;
   action?: ChatAction;
+  blocks?: MessageBlock[];
+  suggestions?: Suggestion[];
+  context_hint?: ContextView | null;
   session_id?: string;
   message_id?: string;
 }
@@ -169,6 +172,7 @@ export interface ChatMessage {
   created_at: string;
   action?: ChatAction;
   actionStatus?: "pending" | "sent" | "uploaded" | "cancelled";
+  blocks?: MessageBlock[];
 }
 
 export interface ChatSession {
@@ -220,4 +224,45 @@ export interface Suggestion {
   label: string;
   prompt: string;
   icon?: string;
+}
+
+// ── Rich Message Blocks ─────────────────────────────────────────────────
+
+export interface MatchRanking {
+  job_id: string;
+  title: string;
+  company: string;
+  score: number;
+  strengths: string[];
+  gaps: string[];
+  one_liner: string;
+}
+
+export interface MatchReportBlock {
+  type: "match_report";
+  candidate: {
+    id: string;
+    name: string;
+    current_title: string;
+    skills: string[];
+  };
+  rankings: MatchRanking[];
+  summary: string;
+}
+
+export type MessageBlock = MatchReportBlock;
+
+// ── Notifications ───────────────────────────────────────────────────────
+
+export interface Notification {
+  id: string;
+  type: "stale_candidate" | "upcoming_event" | "new_match" | "pending_drafts";
+  severity: "warning" | "success" | "info";
+  title: string;
+  description: string;
+  candidate_id?: string;
+  candidate_name?: string;
+  action_label: string;
+  action_prompt: string;
+  created_at: string;
 }

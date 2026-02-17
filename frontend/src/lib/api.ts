@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { CalendarEvent, Candidate, ChatMessage, ChatResponse, ChatSession, Email, Job, JobSeekerProfile, Settings, User, UserRole } from "../types";
+import type { CalendarEvent, Candidate, ChatMessage, ChatResponse, ChatSession, Email, Job, JobSeekerProfile, Notification, Settings, User, UserRole } from "../types";
 
 const api = axios.create({ baseURL: "/api" });
 
@@ -201,6 +201,86 @@ export const runAgent = (instruction: string) =>
 // ── Chat ─────────────────────────────────────────────────────────────────
 export const sendChatMessage = (message: string, session_id?: string) =>
   api.post<ChatResponse>("/agent/chat", { message, session_id }).then((r) => r.data);
+
+/**
+ * SSE streaming chat. Streams text tokens via onToken callback,
+ * then resolves with the final structured ChatResponse.
+ */
+export function streamChatMessage(
+  message: string,
+  session_id: string | undefined,
+  onToken: (text: string) => void,
+): Promise<ChatResponse> {
+  return new Promise((resolve, reject) => {
+    const token = getToken();
+    fetch("/api/agent/chat/stream", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ message, session_id: session_id || "" }),
+    })
+      .then((resp) => {
+        if (!resp.ok) {
+          reject(new Error(`Stream failed: ${resp.status}`));
+          return;
+        }
+        const reader = resp.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        function pump(): Promise<void> {
+          return reader.read().then(({ done, value }) => {
+            if (done) {
+              reject(new Error("Stream ended without done event"));
+              return;
+            }
+            buffer += decoder.decode(value, { stream: true });
+
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            let eventType = "";
+            let dataLines: string[] = [];
+
+            for (const line of lines) {
+              if (line.startsWith("event:")) {
+                eventType = line.slice(6).trim();
+              } else if (line.startsWith("data:")) {
+                dataLines.push(line.slice(5).trim());
+              } else if (line === "") {
+                if (eventType && dataLines.length > 0) {
+                  const data = dataLines.join("\n");
+                  if (eventType === "token") {
+                    try {
+                      const parsed = JSON.parse(data);
+                      if (parsed.t) onToken(parsed.t);
+                    } catch { /* ignore */ }
+                  } else if (eventType === "done") {
+                    try {
+                      resolve(JSON.parse(data) as ChatResponse);
+                      return;
+                    } catch {
+                      reject(new Error("Failed to parse done event"));
+                      return;
+                    }
+                  }
+                }
+                eventType = "";
+                dataLines = [];
+              }
+            }
+            return pump();
+          });
+        }
+
+        pump().catch(reject);
+      })
+      .catch(reject);
+  });
+}
+
 export const getChatHistory = (session_id?: string) =>
   api.get<ChatMessage[]>("/agent/chat/history", { params: session_id ? { session_id } : {} }).then((r) => r.data);
 export const clearChatHistory = () =>
@@ -264,3 +344,7 @@ export const uploadResumeForProfile = (file: File) => {
   form.append("file", file);
   return api.post<JobSeekerProfile>("/profile/upload-resume", form).then((r) => r.data);
 };
+
+// ── Notifications ────────────────────────────────────────────────────────
+export const getNotifications = () =>
+  api.get<Notification[]>("/agent/notifications").then((r) => r.data);
