@@ -55,6 +55,7 @@ class EmailType(str, Enum):
     FOLLOWUP = "followup"
     REJECTION = "rejection"
     INTERVIEW_INVITE = "interview_invite"
+    RECOMMENDATION = "recommendation"
 
 
 # ── Job ────────────────────────────────────────────────────────────────────
@@ -64,6 +65,8 @@ class JobCreate(BaseModel):
     company: str = ""
     posted_date: str = ""
     raw_text: str
+    contact_name: str = ""
+    contact_email: str = ""
 
 class Job(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
@@ -78,6 +81,8 @@ class Job(BaseModel):
     salary_range: str = ""
     summary: str = ""
     raw_text: str = ""
+    contact_name: str = ""
+    contact_email: str = ""
     candidate_count: int = 0
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
@@ -102,6 +107,8 @@ class JobUpdate(BaseModel):
     company: str | None = None
     posted_date: str | None = None
     raw_text: str | None = None
+    contact_name: str | None = None
+    contact_email: str | None = None
 
 class MatchRequest(BaseModel):
     job_id: str = ""

@@ -381,6 +381,52 @@ IMPORTANT: Do NOT return the create_candidate action immediately. Gather informa
 
 If the user mentions a specific job to link the candidate to, look up the job ID from context.
 
+When the user asks about salary, market data, compensation benchmarks, or hiring demand for a role \
+(e.g. "这个职位的市场薪资是多少？", "what's the salary range for Senior React Engineer?", \
+"市场上这个岗位行情怎么样", "market data for this role", "compensation benchmark"):
+1. Identify the role title, location, and industry from the conversation
+2. If the user is discussing a specific job from context, use that job's title and location
+3. Return:
+
+{{
+  "message": "Let me pull up the market data for [role]. One moment...",
+  "action": {{
+    "type": "market_analysis",
+    "role": "the job title / role name",
+    "location": "location if mentioned, or empty string",
+    "industry": "industry if mentioned, or empty string",
+    "job_id": "the job ID from context if discussing a specific job, or empty string"
+  }},
+  "context_hint": {{"type": "job", "id": "job ID"}} or null
+}}
+
+When the user asks to recommend a candidate to an employer, send a resume to a hiring manager, \
+or introduce a candidate to a company contact \
+(e.g. "把Alice推荐给TechCorp", "send Alice's resume to the hiring manager", \
+"推荐这个候选人给公司", "recommend XXX to the employer", "introduce XXX to HR"):
+1. Look up the candidate by name in context
+2. Identify the target job (which has the employer contact info)
+3. Check if the job has contact_email — if not, ask the user to provide it
+4. If both candidate and employer contact are available, return:
+
+{{
+  "message": "Let me draft a recommendation email for [candidate] to [contact_name]. One moment...",
+  "action": {{
+    "type": "recommend_to_employer",
+    "candidate_id": "the candidate ID from context",
+    "candidate_name": "the candidate name",
+    "job_id": "the job ID from context",
+    "job_title": "the job title",
+    "to_email": "the contact_email from the job",
+    "to_name": "the contact_name from the job",
+    "instructions": "any specific instructions from the user"
+  }},
+  "context_hint": {{"type": "candidate", "id": "the candidate ID"}}
+}}
+
+If the job has no contact_email, return action as null and ask: \
+"这个职位还没有设置联系人邮箱。能提供雇主/HR的邮箱吗？"
+
 For ALL other conversations, set action to null. Always respond with valid JSON only.
 """
 
@@ -433,6 +479,79 @@ Return a JSON object with:
 Focus on factual content: which candidates were discussed, what jobs were considered, \
 what actions were taken or planned, and any conclusions reached. \
 Include specific names, scores, and decisions so the assistant can recall them later.
+Only output valid JSON.
+"""
+
+
+# ── Market Agent Prompt ───────────────────────────────────────────────────
+
+MARKET_ANALYSIS = """\
+You are a compensation and market intelligence analyst for the tech recruiting industry. \
+Given a job role, location, and optional industry context, provide a detailed salary and market analysis.
+
+Return a JSON object with:
+- "salary_range": {{"min": number, "max": number, "median": number, "currency": "USD"}}
+  Use annual salary in local currency. For USD roles, use integers (e.g. 150000, not 150k).
+- "market_demand": "high" | "medium" | "low" — current hiring demand for this role
+- "key_factors": list of 3-5 factors that influence compensation for this role \
+  (e.g. "remote premium", "AI/ML skills bonus", "startup vs enterprise gap")
+- "comparable_titles": list of 2-4 similar/related job titles that candidates might also consider
+- "regional_notes": 1-2 sentences about how the location affects compensation and availability
+- "summary": 2-3 sentence overview of the market for this role
+
+Be specific and realistic with salary numbers based on current market data. \
+If the location is not specified, use US national averages. \
+Consider seniority level, required skills, and industry when estimating ranges.
+Only output valid JSON.
+"""
+
+
+# ── Employer Contact Agent Prompts ───────────────────────────────────────
+
+DRAFT_RECOMMENDATION = """\
+You are a professional tech recruiter drafting a candidate recommendation email to a hiring manager. \
+Write a compelling, professional email that introduces the candidate and explains why they're a strong fit.
+
+Return a JSON object with:
+- "subject": a concise, professional subject line (e.g. "Strong candidate for [Role]: [Name]")
+- "body": full email body text
+
+Guidelines:
+- Open with a warm but professional greeting
+- Briefly introduce the candidate: name, current role, years of experience
+- Highlight 2-3 specific strengths that match the job requirements
+- Reference the match score or key skills overlap if available
+- Mention that a resume is attached for review
+- Include a clear call-to-action (e.g. "Would you like to schedule an interview?")
+- Keep it concise (under 250 words)
+- Be professional and confident, not pushy
+- Match the language the recruiter uses (English or Chinese)
+Only output valid JSON.
+"""
+
+CLASSIFY_EMPLOYER_REPLY = """\
+You are an email intent classifier for a recruiting platform. \
+Given an employer's reply to a candidate recommendation email, classify the employer's intent.
+
+Return a JSON object with:
+- "intent": one of "interested", "interview_scheduled", "offer", "pass", "question", "other"
+- "new_status": the candidate pipeline status to set, or null if no change needed
+  - "interview_scheduled" if employer wants to schedule or has scheduled an interview
+  - "offer_sent" if employer mentions extending an offer or discussing compensation
+  - "rejected" if employer explicitly passes or says not a fit
+  - null for "interested", "question", or "other" (no auto-update)
+- "summary": 1-2 sentence summary of the employer's response
+- "action_needed": what the recruiter should do next (e.g. "Coordinate interview time", "Send offer details")
+
+Intent detection rules:
+- "interview_scheduled": mentions interview, schedule, availability, time slots, calendar invite
+- "offer": mentions offer, compensation, salary negotiation, start date, offer letter
+- "pass": not interested, position filled, not a fit, going with another candidate
+- "interested": positive but vague — wants to learn more, looks promising, will review
+- "question": asks questions about the candidate without clear interest signal
+- "other": auto-reply, out of office, unrelated content
+
+Be precise — only classify as "interview_scheduled" or "offer" if the intent is clearly stated.
 Only output valid JSON.
 """
 

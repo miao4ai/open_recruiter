@@ -24,7 +24,8 @@ export type EmailType =
   | "outreach"
   | "followup"
   | "rejection"
-  | "interview_invite";
+  | "interview_invite"
+  | "recommendation";
 
 export interface Job {
   id: string;
@@ -39,6 +40,8 @@ export interface Job {
   salary_range: string;
   summary: string;
   raw_text: string;
+  contact_name: string;
+  contact_email: string;
   candidate_count: number;
   created_at: string;
 }
@@ -161,7 +164,23 @@ export interface ChatCreateCandidateAction {
   candidate: Candidate;
 }
 
-export type ChatAction = ChatEmailAction | ChatResumeUploadAction | ChatJdUploadAction | ChatCreateJobAction | ChatCreateCandidateAction;
+export interface MarketReport {
+  salary_range: { min: number; max: number; median: number; currency: string };
+  market_demand: "high" | "medium" | "low";
+  key_factors: string[];
+  comparable_titles: string[];
+  regional_notes: string;
+  summary: string;
+  role: string;
+  location: string;
+}
+
+export interface ChatMarketAnalysisAction {
+  type: "market_analysis";
+  report: MarketReport;
+}
+
+export type ChatAction = ChatEmailAction | ChatResumeUploadAction | ChatJdUploadAction | ChatCreateJobAction | ChatCreateCandidateAction | ChatMarketAnalysisAction;
 
 export interface ChatResponse {
   reply: string;

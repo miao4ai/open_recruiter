@@ -85,6 +85,18 @@ We wish you all the best in your career journey.
 
 Warm regards`,
   },
+  recommendation: {
+    subject: "Strong Candidate Recommendation — [Position Title]",
+    body: `Hi [Hiring Manager],
+
+I'd like to recommend a strong candidate for the [Position Title] role.
+
+[Candidate Name] is currently a [Current Title] with [X] years of experience. Their background in [key skills] aligns well with your requirements.
+
+I've attached their resume for your review. Would you be interested in scheduling an interview?
+
+Best regards`,
+  },
 };
 
 const EMAIL_TYPE_LABELS: Record<EmailType, string> = {
@@ -92,6 +104,7 @@ const EMAIL_TYPE_LABELS: Record<EmailType, string> = {
   followup: "Follow-up",
   interview_invite: "Interview Invite",
   rejection: "Rejection",
+  recommendation: "Recommendation",
 };
 
 // ── Compose / Edit Modal ─────────────────────────────────────────────────

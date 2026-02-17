@@ -926,6 +926,111 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
             log.error("Failed to create job via chat: %s", e)
             response["reply"] = f"Sorry, I encountered an error creating the job: {e}"
 
+    elif action_type == "market_analysis":
+        try:
+            from app.agents.market import analyze_market
+
+            role = action_data.get("role", "")
+            location = action_data.get("location", "")
+            industry = action_data.get("industry", "")
+            job_id = action_data.get("job_id", "")
+
+            # Enrich with job data if available
+            context_parts = []
+            if job_id:
+                job = db.get_job(job_id)
+                if job:
+                    if not role:
+                        role = job["title"]
+                    if not location:
+                        location = job.get("location", "")
+                    context_parts.append(f"Job: {job['title']} at {job['company']}")
+                    if job.get("salary_range"):
+                        context_parts.append(f"Listed salary: {job['salary_range']}")
+                    if job.get("required_skills"):
+                        context_parts.append(f"Required skills: {', '.join(job['required_skills'])}")
+
+            report = analyze_market(
+                cfg, role=role, location=location, industry=industry,
+                context="\n".join(context_parts),
+            )
+
+            if report.get("error"):
+                response["reply"] = f"Sorry, I couldn't generate the market analysis: {report['error']}"
+            else:
+                response["action"] = {"type": "market_analysis", "report": report}
+                if job_id:
+                    response["context_hint"] = {"type": "job", "id": job_id}
+                response["suggestions"] = [
+                    {"label": "Find candidates", "prompt": f"Find candidates for {role}"},
+                    {"label": "Compare roles", "prompt": f"What about similar roles to {role}?"},
+                ]
+        except Exception as e:
+            log.error("Failed to run market analysis: %s", e)
+            response["reply"] = f"Sorry, I encountered an error: {e}"
+
+    elif action_type == "recommend_to_employer":
+        try:
+            from app.agents.employer import draft_recommendation
+            from app.models import Email
+
+            candidate_id = action_data.get("candidate_id", "")
+            candidate_name = action_data.get("candidate_name", "")
+            job_id = action_data.get("job_id", "")
+            job_title = action_data.get("job_title", "")
+            to_email = action_data.get("to_email", "")
+            to_name = action_data.get("to_name", "")
+            instructions = action_data.get("instructions", "")
+
+            draft = draft_recommendation(cfg, candidate_id, job_id, instructions)
+            if draft.get("error"):
+                log.warning("Employer agent error: %s", draft["error"])
+
+            # Get candidate resume path for attachment
+            candidate = db.get_candidate(candidate_id)
+            attachment_path = ""
+            if candidate and candidate.get("resume_path"):
+                attachment_path = candidate["resume_path"]
+
+            email = Email(
+                candidate_id=candidate_id,
+                candidate_name=candidate_name,
+                to_email=to_email,
+                subject=draft.get("subject", ""),
+                body=draft.get("body", ""),
+                email_type="recommendation",
+                attachment_path=attachment_path,
+            )
+            db.insert_email(email.model_dump())
+
+            db.insert_activity({
+                "id": uuid.uuid4().hex[:8], "user_id": user_id,
+                "activity_type": "recommendation_drafted",
+                "description": f"Drafted recommendation of {candidate_name} to {to_name or to_email} for {job_title}",
+                "metadata_json": json.dumps({
+                    "email_id": email.id, "candidate_id": candidate_id,
+                    "candidate_name": candidate_name, "job_id": job_id,
+                    "to_email": to_email, "to_name": to_name,
+                }),
+                "created_at": datetime.now().isoformat(),
+            })
+
+            attach_note = " (resume attached)" if attachment_path else ""
+            response["reply"] = (
+                f"I've drafted a recommendation email for **{candidate_name}** to "
+                f"**{to_name or to_email}**{attach_note}. Review it below and send when ready!"
+            )
+            response["action"] = {"type": "compose_email", "email": email.model_dump()}
+            if not response.get("context_hint"):
+                response["context_hint"] = {"type": "candidate", "id": candidate_id}
+            response["suggestions"] = [
+                {"label": "Market data", "prompt": f"What's the market salary for {job_title}?"},
+                {"label": "View pipeline", "prompt": "Show pipeline status"},
+            ]
+        except Exception as e:
+            log.error("Failed to draft recommendation: %s", e)
+            response["reply"] = f"Sorry, I encountered an error: {e}"
+
     elif action_type == "create_candidate":
         try:
             from app.models import Candidate
@@ -1066,6 +1171,16 @@ def _build_smart_suggestions(action_data) -> list[dict]:
             suggestions.append({"label": "Match to jobs", "prompt": f"What jobs match {name}?"})
             suggestions.append({"label": "Draft email", "prompt": f"Draft an outreach email to {name}"})
             return suggestions[:4]
+        if atype == "market_analysis":
+            role = action_data.get("role", "this role")
+            suggestions.append({"label": "Find candidates", "prompt": f"Find candidates for {role}"})
+            suggestions.append({"label": "Compare roles", "prompt": f"What about similar roles to {role}?"})
+            return suggestions[:4]
+        if atype == "recommend_to_employer":
+            name = action_data.get("candidate_name", "the candidate")
+            suggestions.append({"label": "Check pipeline", "prompt": "What's the pipeline status?"})
+            suggestions.append({"label": "Check for replies", "prompt": "Have any employers replied?"})
+            return suggestions[:4]
 
     if contacted:
         suggestions.append({"label": "Check for replies", "prompt": "Have any contacted candidates replied?"})
@@ -1132,9 +1247,12 @@ def _build_chat_context(user_id: str = "", current_message: str = "") -> str:
     if jobs:
         parts.append(f"## Active Jobs ({len(jobs)})")
         for j in jobs[:10]:
+            contact = ""
+            if j.get("contact_name") or j.get("contact_email"):
+                contact = f", contact: {j.get('contact_name', '')} <{j.get('contact_email', '')}>"
             parts.append(
                 f"- {j['title']} at {j['company']} "
-                f"(ID: {j['id']}, candidates: {j.get('candidate_count', 0)})"
+                f"(ID: {j['id']}, candidates: {j.get('candidate_count', 0)}{contact})"
             )
     else:
         parts.append("## Jobs: None")

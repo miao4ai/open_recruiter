@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Send, Trash2, Loader2, Mail, Check, X,
   Plus, MessageSquare, Upload, FileText, Briefcase, UserPlus,
+  TrendingUp, DollarSign,
 } from "lucide-react";
 import { useApi } from "../hooks/useApi";
 import {
@@ -27,7 +28,7 @@ import MessageBlocks from "../components/MessageBlocks";
 import WorkflowTracker from "../components/WorkflowTracker";
 import type {
   ActiveWorkflow, Candidate, CandidateStatus, ChatMessage, ChatSession,
-  ContextView, Email, Job, MessageBlock, Suggestion, WorkflowStepEvent,
+  ContextView, Email, Job, MarketReport, MessageBlock, Suggestion, WorkflowStepEvent,
 } from "../types";
 
 /* ── Greeting / Daily Briefing ──────────────────────────────────────────── */
@@ -368,6 +369,97 @@ function CandidateCreatedCard({ candidate }: { candidate: Candidate }) {
           <p className="pt-1 text-xs text-green-600">Match score: {Math.round(candidate.match_score * 100)}%</p>
         )}
       </div>
+    </div>
+  );
+}
+
+function MarketReportCard({ report }: { report: MarketReport }) {
+  const demandColor = report.market_demand === "high" ? "text-green-700 bg-green-100"
+    : report.market_demand === "medium" ? "text-yellow-700 bg-yellow-100"
+    : "text-red-700 bg-red-100";
+
+  const fmt = (n: number) => {
+    const currency = report.salary_range?.currency || "USD";
+    return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(n);
+  };
+
+  const sr = report.salary_range || {} as MarketReport["salary_range"];
+
+  return (
+    <div className="mt-2 rounded-xl border border-blue-200 bg-blue-50 p-4">
+      <div className="flex items-center gap-2 text-blue-700">
+        <TrendingUp className="h-5 w-5" />
+        <span className="font-medium">Market Report: {report.role}</span>
+        {report.location && <span className="text-xs text-blue-500">({report.location})</span>}
+      </div>
+
+      {/* Salary Range */}
+      {sr.min != null && sr.max != null && (
+        <div className="mt-3 rounded-lg bg-white/60 p-3">
+          <div className="flex items-center gap-1 text-xs font-medium text-blue-600 mb-2">
+            <DollarSign className="h-3.5 w-3.5" />
+            Salary Range
+          </div>
+          <div className="flex items-end gap-4 text-sm">
+            <div><span className="text-xs text-gray-500">Min</span><br /><span className="font-medium">{fmt(sr.min)}</span></div>
+            <div><span className="text-xs text-gray-500">Median</span><br /><span className="font-semibold text-blue-700">{fmt(sr.median)}</span></div>
+            <div><span className="text-xs text-gray-500">Max</span><br /><span className="font-medium">{fmt(sr.max)}</span></div>
+          </div>
+          {/* Simple bar */}
+          <div className="mt-2 h-2 w-full rounded-full bg-gray-200 relative">
+            <div className="absolute h-2 rounded-full bg-blue-400" style={{
+              left: "0%", width: "100%",
+            }} />
+            {sr.max > sr.min && (
+              <div className="absolute top-0 h-2 w-1 bg-blue-700 rounded-full" style={{
+                left: `${((sr.median - sr.min) / (sr.max - sr.min)) * 100}%`,
+              }} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Demand badge */}
+      <div className="mt-3 flex items-center gap-2">
+        <span className="text-xs text-gray-500">Market Demand:</span>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${demandColor}`}>
+          {report.market_demand}
+        </span>
+      </div>
+
+      {/* Key Factors */}
+      {report.key_factors?.length > 0 && (
+        <div className="mt-2">
+          <span className="text-xs font-medium text-blue-600">Key Factors</span>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {report.key_factors.map((f: string, i: number) => (
+              <span key={i} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{f}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Comparable Titles */}
+      {report.comparable_titles?.length > 0 && (
+        <div className="mt-2">
+          <span className="text-xs font-medium text-blue-600">Comparable Titles</span>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {report.comparable_titles.map((t: string, i: number) => (
+              <span key={i} className="rounded-full bg-white/80 px-2 py-0.5 text-xs text-blue-600 border border-blue-200">{t}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Regional Notes */}
+      {report.regional_notes && (
+        <p className="mt-2 text-xs text-blue-600">{report.regional_notes}</p>
+      )}
+
+      {/* Summary */}
+      {report.summary && (
+        <p className="mt-2 text-sm text-blue-700">{report.summary}</p>
+      )}
     </div>
   );
 }
@@ -801,6 +893,9 @@ export default function Chat() {
                   )}
                   {msg.action?.type === "create_candidate" && (
                     <CandidateCreatedCard candidate={msg.action.candidate} />
+                  )}
+                  {msg.action?.type === "market_analysis" && msg.action.report && (
+                    <MarketReportCard report={msg.action.report} />
                   )}
 
                   {msg.blocks && msg.blocks.length > 0 && (

@@ -133,6 +133,7 @@ def run_inbox_scan(conditions: dict, actions: dict) -> dict:
     update_status = actions.get("update_candidate_status", True)
     now = datetime.now().isoformat()
     updated = 0
+    classification_results = []
 
     for m in matches:
         eid = m["email_id"]
@@ -141,18 +142,77 @@ def run_inbox_scan(conditions: dict, actions: dict) -> dict:
             "reply_body": m.get("reply_body", ""),
             "replied_at": m.get("replied_at", now),
         })
-        if update_status:
-            email_record = db.get_email(eid)
-            if email_record and email_record.get("candidate_id"):
-                db.update_candidate(email_record["candidate_id"], {
-                    "status": "replied",
-                    "updated_at": now,
+
+        email_record = db.get_email(eid)
+        if not email_record or not email_record.get("candidate_id"):
+            updated += 1
+            continue
+
+        candidate_id = email_record["candidate_id"]
+
+        # For recommendation emails, classify the employer's reply intent
+        if email_record.get("email_type") == "recommendation" and m.get("reply_body"):
+            try:
+                from app.agents.employer import classify_employer_reply
+
+                candidate = db.get_candidate(candidate_id)
+                candidate_name = candidate["name"] if candidate else ""
+                job_title = ""
+                if candidate and candidate.get("job_id"):
+                    job = db.get_job(candidate["job_id"])
+                    job_title = job["title"] if job else ""
+
+                classification = classify_employer_reply(
+                    cfg, m["reply_body"], email_record.get("subject", ""),
+                    candidate_name, job_title,
+                )
+                classification_results.append({
+                    "email_id": eid,
+                    "candidate": candidate_name,
+                    "classification": classification,
                 })
+
+                # Auto-update candidate status based on classification
+                new_status = classification.get("new_status")
+                if new_status and candidate:
+                    db.update_candidate(candidate_id, {
+                        "status": new_status,
+                        "updated_at": now,
+                    })
+                    log.info(
+                        "Auto-updated %s to '%s' based on employer reply (intent: %s)",
+                        candidate_name, new_status, classification.get("intent"),
+                    )
+                elif update_status:
+                    db.update_candidate(candidate_id, {
+                        "status": "replied",
+                        "updated_at": now,
+                    })
+            except Exception as e:
+                log.warning("Employer reply classification failed for email %s: %s", eid, e)
+                if update_status:
+                    db.update_candidate(candidate_id, {
+                        "status": "replied",
+                        "updated_at": now,
+                    })
+        elif update_status:
+            db.update_candidate(candidate_id, {
+                "status": "replied",
+                "updated_at": now,
+            })
+
         updated += 1
 
+    summary = f"Found {updated} replies." if updated else "No new replies."
+    if classification_results:
+        summary += f" Classified {len(classification_results)} employer responses."
+
     return {
-        "summary": f"Found {updated} replies." if updated else "No new replies.",
-        "details": {"replies_found": updated},
+        "summary": summary,
+        "details": {
+            "replies_found": updated,
+            "employer_classifications": classification_results,
+        },
         "items_processed": len(matches),
         "items_affected": updated,
     }

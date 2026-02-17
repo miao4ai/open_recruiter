@@ -300,6 +300,14 @@ def init_db() -> None:
         except sqlite3.OperationalError:
             pass
 
+    # Migration: add contact fields to jobs
+    for col, default in [("contact_name", "''"), ("contact_email", "''")]:
+        try:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT DEFAULT {default}")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
     # Migration: rebuild users table so unique constraint is (email, role)
     # SQLite cannot drop inline UNIQUE constraints, so we recreate the table.
     schema = conn.execute(
@@ -394,8 +402,9 @@ def insert_job(job: dict) -> None:
     conn = get_conn()
     conn.execute(
         """INSERT INTO jobs (id, title, company, posted_date, required_skills, preferred_skills,
-           experience_years, location, remote, salary_range, summary, raw_text, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           experience_years, location, remote, salary_range, summary, raw_text,
+           contact_name, contact_email, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             job["id"], job["title"], job["company"],
             job.get("posted_date", ""),
@@ -404,7 +413,9 @@ def insert_job(job: dict) -> None:
             job.get("experience_years"),
             job.get("location", ""), int(job.get("remote", False)),
             job.get("salary_range", ""), job.get("summary", ""),
-            job.get("raw_text", ""), job["created_at"],
+            job.get("raw_text", ""),
+            job.get("contact_name", ""), job.get("contact_email", ""),
+            job["created_at"],
         ),
     )
     conn.commit()
@@ -422,6 +433,8 @@ def list_jobs() -> list[dict]:
         d["preferred_skills"] = json.loads(d["preferred_skills"] or "[]")
         d["remote"] = bool(d["remote"])
         d.setdefault("posted_date", "")
+        d.setdefault("contact_name", "")
+        d.setdefault("contact_email", "")
         # Count candidates
         conn2 = get_conn()
         cnt = conn2.execute(
@@ -444,6 +457,8 @@ def get_job(job_id: str) -> dict | None:
     d["preferred_skills"] = json.loads(d["preferred_skills"] or "[]")
     d["remote"] = bool(d["remote"])
     d.setdefault("posted_date", "")
+    d.setdefault("contact_name", "")
+    d.setdefault("contact_email", "")
     conn2 = get_conn()
     d["candidate_count"] = conn2.execute(
         "SELECT COUNT(*) as c FROM candidates WHERE job_id = ?", (d["id"],)
