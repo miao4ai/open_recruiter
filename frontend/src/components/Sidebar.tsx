@@ -4,6 +4,7 @@ import {
   Users,
   MessageSquare,
   CalendarDays,
+  Zap,
   Settings,
 } from "lucide-react";
 import clsx from "clsx";
@@ -13,6 +14,7 @@ const NAV_ITEMS = [
   { to: "/jobs", icon: Briefcase, label: "Jobs" },
   { to: "/candidates", icon: Users, label: "Candidates" },
   { to: "/calendar", icon: CalendarDays, label: "Calendar" },
+  { to: "/automations", icon: Zap, label: "Automations" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 

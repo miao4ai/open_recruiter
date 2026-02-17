@@ -211,6 +211,40 @@ def init_db() -> None:
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS automation_rules (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            rule_type TEXT NOT NULL,
+            trigger_type TEXT NOT NULL DEFAULT 'interval',
+            schedule_value TEXT DEFAULT '',
+            conditions_json TEXT DEFAULT '{}',
+            actions_json TEXT DEFAULT '{}',
+            enabled INTEGER DEFAULT 0,
+            last_run_at TEXT,
+            next_run_at TEXT,
+            run_count INTEGER DEFAULT 0,
+            error_count INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS automation_logs (
+            id TEXT PRIMARY KEY,
+            rule_id TEXT NOT NULL,
+            rule_name TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'running',
+            started_at TEXT NOT NULL,
+            finished_at TEXT,
+            duration_ms INTEGER DEFAULT 0,
+            summary TEXT DEFAULT '',
+            details_json TEXT DEFAULT '{}',
+            error_message TEXT DEFAULT '',
+            items_processed INTEGER DEFAULT 0,
+            items_affected INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
     """)
     conn.commit()
 
@@ -1128,3 +1162,132 @@ def list_workflows(user_id: str, limit: int = 20) -> list[dict]:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ── Automation Rules ──────────────────────────────────────────────────────
+
+
+def insert_automation_rule(r: dict) -> None:
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO automation_rules
+           (id, name, description, rule_type, trigger_type, schedule_value,
+            conditions_json, actions_json, enabled, last_run_at, next_run_at,
+            run_count, error_count, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            r["id"], r["name"], r.get("description", ""),
+            r["rule_type"], r.get("trigger_type", "interval"),
+            r.get("schedule_value", ""),
+            r.get("conditions_json", "{}"), r.get("actions_json", "{}"),
+            int(r.get("enabled", False)), r.get("last_run_at"),
+            r.get("next_run_at"), r.get("run_count", 0),
+            r.get("error_count", 0), r["created_at"], r["updated_at"],
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_automation_rules(enabled_only: bool = False) -> list[dict]:
+    conn = get_conn()
+    query = "SELECT * FROM automation_rules"
+    if enabled_only:
+        query += " WHERE enabled = 1"
+    query += " ORDER BY created_at DESC"
+    rows = conn.execute(query).fetchall()
+    conn.close()
+    return [_row_to_rule(r) for r in rows]
+
+
+def get_automation_rule(rule_id: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT * FROM automation_rules WHERE id = ?", (rule_id,)
+    ).fetchone()
+    conn.close()
+    return _row_to_rule(row) if row else None
+
+
+def update_automation_rule(rule_id: str, updates: dict) -> bool:
+    conn = get_conn()
+    sets, params = [], []
+    for k, v in updates.items():
+        if isinstance(v, bool):
+            v = int(v)
+        sets.append(f"{k} = ?")
+        params.append(v)
+    if not sets:
+        conn.close()
+        return False
+    params.append(rule_id)
+    conn.execute(
+        f"UPDATE automation_rules SET {', '.join(sets)} WHERE id = ?", params
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def delete_automation_rule(rule_id: str) -> bool:
+    conn = get_conn()
+    cur = conn.execute("DELETE FROM automation_rules WHERE id = ?", (rule_id,))
+    conn.commit()
+    conn.close()
+    return cur.rowcount > 0
+
+
+def _row_to_rule(row) -> dict:
+    d = dict(row)
+    d["enabled"] = bool(d["enabled"])
+    return d
+
+
+# ── Automation Logs ───────────────────────────────────────────────────────
+
+
+def insert_automation_log(entry: dict) -> None:
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO automation_logs
+           (id, rule_id, rule_name, status, started_at, finished_at,
+            duration_ms, summary, details_json, error_message,
+            items_processed, items_affected, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            entry["id"], entry["rule_id"], entry.get("rule_name", ""),
+            entry["status"], entry["started_at"], entry.get("finished_at"),
+            entry.get("duration_ms", 0), entry.get("summary", ""),
+            entry.get("details_json", "{}"), entry.get("error_message", ""),
+            entry.get("items_processed", 0), entry.get("items_affected", 0),
+            entry["created_at"],
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_automation_logs(
+    rule_id: str | None = None, limit: int = 100
+) -> list[dict]:
+    conn = get_conn()
+    query = "SELECT * FROM automation_logs WHERE 1=1"
+    params: list = []
+    if rule_id:
+        query += " AND rule_id = ?"
+        params.append(rule_id)
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_automation_log(log_id: str, updates: dict) -> bool:
+    conn = get_conn()
+    sets = ", ".join(f"{k} = ?" for k in updates)
+    vals = list(updates.values()) + [log_id]
+    cur = conn.execute(f"UPDATE automation_logs SET {sets} WHERE id = ?", vals)
+    conn.commit()
+    conn.close()
+    return cur.rowcount > 0

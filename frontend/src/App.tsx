@@ -7,6 +7,7 @@ import Candidates from "./pages/Candidates";
 import CandidateDetail from "./pages/CandidateDetail";
 import Chat from "./pages/Chat";
 import Calendar from "./pages/Calendar";
+import Automations from "./pages/Automations";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import JobSeekerHome from "./pages/JobSeekerHome";
@@ -82,6 +83,7 @@ export default function App() {
             <Route path="/candidates" element={<Candidates />} />
             <Route path="/candidates/:id" element={<CandidateDetail />} />
             <Route path="/calendar" element={<Calendar />} />
+            <Route path="/automations" element={<Automations />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>

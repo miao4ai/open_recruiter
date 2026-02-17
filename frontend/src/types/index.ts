@@ -308,3 +308,53 @@ export interface Notification {
   action_prompt: string;
   created_at: string;
 }
+
+// ── Automation Types ────────────────────────────────────────────────────
+
+export type AutomationRuleType =
+  | "auto_match"
+  | "inbox_scan"
+  | "auto_followup"
+  | "pipeline_cleanup";
+
+export type AutomationTriggerType = "interval" | "cron";
+
+export interface AutomationRule {
+  id: string;
+  name: string;
+  description: string;
+  rule_type: AutomationRuleType;
+  trigger_type: AutomationTriggerType;
+  schedule_value: string;
+  conditions_json: string;
+  actions_json: string;
+  enabled: boolean;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  run_count: number;
+  error_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationLog {
+  id: string;
+  rule_id: string;
+  rule_name: string;
+  status: "running" | "success" | "error" | "skipped";
+  started_at: string;
+  finished_at: string | null;
+  duration_ms: number;
+  summary: string;
+  details_json: string;
+  error_message: string;
+  items_processed: number;
+  items_affected: number;
+  created_at: string;
+}
+
+export interface SchedulerStatus {
+  running: boolean;
+  active_jobs: number;
+  jobs: { id: string; name: string; next_run: string }[];
+}

@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { CalendarEvent, Candidate, ChatMessage, ChatResponse, ChatSession, Email, Job, JobSeekerProfile, Notification, Settings, User, UserRole, WorkflowStepEvent } from "../types";
+import type { AutomationLog, AutomationRule, CalendarEvent, Candidate, ChatMessage, ChatResponse, ChatSession, Email, Job, JobSeekerProfile, Notification, SchedulerStatus, Settings, User, UserRole, WorkflowStepEvent } from "../types";
 
 const api = axios.create({ baseURL: "/api" });
 
@@ -373,3 +373,37 @@ export const uploadResumeForProfile = (file: File) => {
 // ── Notifications ────────────────────────────────────────────────────────
 export const getNotifications = () =>
   api.get<Notification[]>("/agent/notifications").then((r) => r.data);
+
+// ── Automations ─────────────────────────────────────────────────────────
+export const listAutomationRules = () =>
+  api.get<AutomationRule[]>("/automations/rules").then((r) => r.data);
+export const getAutomationRule = (id: string) =>
+  api.get<AutomationRule>(`/automations/rules/${id}`).then((r) => r.data);
+export const createAutomationRule = (data: {
+  name: string;
+  description?: string;
+  rule_type: string;
+  trigger_type?: string;
+  schedule_value?: string;
+  conditions_json?: string;
+  actions_json?: string;
+  enabled?: boolean;
+}) => api.post<AutomationRule>("/automations/rules", data).then((r) => r.data);
+export const updateAutomationRule = (
+  id: string,
+  data: Partial<AutomationRule>,
+) => api.patch<AutomationRule>(`/automations/rules/${id}`, data).then((r) => r.data);
+export const deleteAutomationRule = (id: string) =>
+  api.delete(`/automations/rules/${id}`).then((r) => r.data);
+export const toggleAutomationRule = (id: string) =>
+  api.post<{ enabled: boolean }>(`/automations/rules/${id}/toggle`).then((r) => r.data);
+export const runAutomationRule = (id: string) =>
+  api.post(`/automations/rules/${id}/run`).then((r) => r.data);
+export const listAutomationLogs = (ruleId?: string, limit?: number) =>
+  api
+    .get<AutomationLog[]>("/automations/logs", {
+      params: { ...(ruleId ? { rule_id: ruleId } : {}), ...(limit ? { limit } : {}) },
+    })
+    .then((r) => r.data);
+export const getSchedulerStatus = () =>
+  api.get<SchedulerStatus>("/automations/status").then((r) => r.data);

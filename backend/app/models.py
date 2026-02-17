@@ -307,3 +307,73 @@ class Settings(BaseModel):
     slack_app_token: str = ""
     slack_signing_secret: str = ""
     slack_intake_channel: str = ""
+
+
+# ── Automation ────────────────────────────────────────────────────────────
+
+
+class AutomationRuleType(str, Enum):
+    AUTO_MATCH = "auto_match"
+    INBOX_SCAN = "inbox_scan"
+    AUTO_FOLLOWUP = "auto_followup"
+    PIPELINE_CLEANUP = "pipeline_cleanup"
+
+
+class AutomationTriggerType(str, Enum):
+    INTERVAL = "interval"
+    CRON = "cron"
+
+
+class AutomationRuleCreate(BaseModel):
+    name: str
+    description: str = ""
+    rule_type: AutomationRuleType
+    trigger_type: AutomationTriggerType = AutomationTriggerType.INTERVAL
+    schedule_value: str = ""
+    conditions_json: str = "{}"
+    actions_json: str = "{}"
+    enabled: bool = False
+
+
+class AutomationRuleUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    trigger_type: AutomationTriggerType | None = None
+    schedule_value: str | None = None
+    conditions_json: str | None = None
+    actions_json: str | None = None
+    enabled: bool | None = None
+
+
+class AutomationRule(BaseModel):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
+    name: str = ""
+    description: str = ""
+    rule_type: AutomationRuleType = AutomationRuleType.AUTO_MATCH
+    trigger_type: AutomationTriggerType = AutomationTriggerType.INTERVAL
+    schedule_value: str = ""
+    conditions_json: str = "{}"
+    actions_json: str = "{}"
+    enabled: bool = False
+    last_run_at: str | None = None
+    next_run_at: str | None = None
+    run_count: int = 0
+    error_count: int = 0
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class AutomationLog(BaseModel):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
+    rule_id: str = ""
+    rule_name: str = ""
+    status: str = "running"
+    started_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    finished_at: str | None = None
+    duration_ms: int = 0
+    summary: str = ""
+    details_json: str = "{}"
+    error_message: str = ""
+    items_processed: int = 0
+    items_affected: int = 0
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
