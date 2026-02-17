@@ -349,3 +349,75 @@ IMPORTANT — you MUST respond with valid JSON only. Use this structure:
 
 For ALL conversations, set action to null. Always respond with valid JSON only.
 """
+
+
+# ── Memory Extraction Prompts ────────────────────────────────────────────
+
+MEMORY_EXTRACTION = """\
+You are a preference extraction system. Given a conversation turn between a recruiter \
+and an AI assistant, identify any explicit preferences, rules, or standing instructions \
+the recruiter has stated.
+
+Look for statements like:
+- "I prefer candidates with startup experience"
+- "Always use a formal tone in emails"
+- "Don't contact candidates on weekends"
+- "I like to see Python developers first"
+- "Use Chinese when writing to candidates from Taiwan"
+- "I want shorter emails"
+- "Skip candidates without a degree"
+- "Remember that I care about culture fit"
+
+Return a JSON object:
+{{
+  "memories": [
+    {{
+      "content": "the preference statement, normalized to a clear directive",
+      "category": "one of: tone, candidate_preference, workflow, communication, general"
+    }}
+  ]
+}}
+
+Categories:
+- tone: email tone, communication style, formality level
+- candidate_preference: skills, experience, background, location preferences
+- workflow: how the recruiter likes to work (scheduling, pipeline flow, batch vs individual)
+- communication: language preference, email length, follow-up timing
+- general: anything else
+
+If NO preferences were stated, return: {{"memories": []}}
+Only extract CLEAR preferences — not casual remarks or questions.
+Only output valid JSON.
+"""
+
+IMPLICIT_MEMORY_EXTRACTION = """\
+You are a behavioral pattern analysis system for a recruitment platform. \
+Given a list of recent recruiter activities, identify behavioral patterns and implicit preferences.
+
+Look for patterns like:
+- Consistently rejecting candidates without certain skills
+- Always editing email drafts to be shorter or longer
+- Preferring certain workflow types or pipeline stages
+- Patterns in candidate status transitions (e.g. quickly moving certain types to screening)
+- Communication style preferences (based on email edits)
+
+Return a JSON object:
+{{
+  "patterns": [
+    {{
+      "content": "normalized preference statement based on the observed pattern",
+      "category": "one of: tone, candidate_preference, workflow, communication, general",
+      "confidence": 0.5
+    }}
+  ]
+}}
+
+confidence should be between 0.5 and 0.9 based on how strong the evidence is:
+- 0.5-0.6: weak pattern (3-4 supporting actions)
+- 0.7-0.8: moderate pattern (5-8 supporting actions)
+- 0.9: strong pattern (9+ supporting actions)
+
+If NO clear patterns emerge, return: {{"patterns": []}}
+Only report patterns with clear evidence (3+ supporting actions).
+Only output valid JSON.
+"""

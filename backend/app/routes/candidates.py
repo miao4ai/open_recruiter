@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -153,7 +155,7 @@ async def get_candidate_route(candidate_id: str, _user: dict = Depends(get_curre
 
 
 @router.patch("/{candidate_id}")
-async def update_candidate_route(candidate_id: str, update: CandidateUpdate, _user: dict = Depends(get_current_user)):
+async def update_candidate_route(candidate_id: str, update: CandidateUpdate, current_user: dict = Depends(get_current_user)):
     updates = update.model_dump(exclude_none=True)
     updates["updated_at"] = datetime.now().isoformat()
     if not db.update_candidate(candidate_id, updates):
@@ -182,11 +184,26 @@ async def update_candidate_route(candidate_id: str, update: CandidateUpdate, _us
     except Exception as e:
         log.warning("Auto-match-all failed for candidate %s: %s", candidate_id, e)
 
+    # Log activity for implicit memory learning
+    db.insert_activity({
+        "id": uuid.uuid4().hex[:8],
+        "user_id": current_user["id"],
+        "activity_type": "candidate_updated",
+        "description": f"Updated {updated.get('name', '')} — fields: {', '.join(updates.keys())}",
+        "metadata_json": json.dumps({
+            "candidate_id": candidate_id,
+            "fields_changed": list(updates.keys()),
+            "new_status": updates.get("status", ""),
+        }),
+        "created_at": datetime.now().isoformat(),
+    })
+
     return db.get_candidate(candidate_id) or updated
 
 
 @router.delete("/{candidate_id}")
-async def delete_candidate_route(candidate_id: str, _user: dict = Depends(get_current_user)):
+async def delete_candidate_route(candidate_id: str, current_user: dict = Depends(get_current_user)):
+    candidate = db.get_candidate(candidate_id)
     if not db.delete_candidate(candidate_id):
         raise HTTPException(status_code=404, detail="Candidate not found")
 
@@ -194,6 +211,21 @@ async def delete_candidate_route(candidate_id: str, _user: dict = Depends(get_cu
         vectorstore.remove_candidate(candidate_id)
     except Exception:
         pass  # Non-fatal: embedding cleanup is best-effort
+
+    # Log deletion for implicit memory learning
+    if candidate:
+        db.insert_activity({
+            "id": uuid.uuid4().hex[:8],
+            "user_id": current_user["id"],
+            "activity_type": "candidate_deleted",
+            "description": f"Deleted {candidate.get('name', '')}",
+            "metadata_json": json.dumps({
+                "candidate_id": candidate_id,
+                "candidate_name": candidate.get("name", ""),
+                "status": candidate.get("status", ""),
+            }),
+            "created_at": datetime.now().isoformat(),
+        })
 
     return {"status": "deleted"}
 

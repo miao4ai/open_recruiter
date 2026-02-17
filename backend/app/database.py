@@ -198,6 +198,19 @@ def init_db() -> None:
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS memories (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            memory_type TEXT NOT NULL DEFAULT 'explicit',
+            category TEXT NOT NULL DEFAULT 'general',
+            content TEXT NOT NULL,
+            source TEXT DEFAULT '',
+            confidence REAL DEFAULT 1.0,
+            access_count INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
     """)
     conn.commit()
 
@@ -792,6 +805,63 @@ def list_activities(user_id: str, limit: int = 50) -> list[dict]:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ── Memories ──────────────────────────────────────────────────────────
+
+def insert_memory(m: dict) -> None:
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO memories
+           (id, user_id, memory_type, category, content, source, confidence, access_count, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (m["id"], m["user_id"], m.get("memory_type", "explicit"), m.get("category", "general"),
+         m["content"], m.get("source", ""), m.get("confidence", 1.0), m.get("access_count", 0),
+         m["created_at"], m["updated_at"]),
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_memories(user_id: str, memory_type: str | None = None, limit: int = 15) -> list[dict]:
+    conn = get_conn()
+    if memory_type:
+        rows = conn.execute(
+            "SELECT * FROM memories WHERE user_id = ? AND memory_type = ? ORDER BY confidence DESC, updated_at DESC LIMIT ?",
+            (user_id, memory_type, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM memories WHERE user_id = ? ORDER BY confidence DESC, updated_at DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_memory(memory_id: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM memories WHERE id = ?", (memory_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_memory(memory_id: str, updates: dict) -> bool:
+    conn = get_conn()
+    sets = ", ".join(f"{k} = ?" for k in updates)
+    vals = list(updates.values()) + [memory_id]
+    cur = conn.execute(f"UPDATE memories SET {sets} WHERE id = ?", vals)
+    conn.commit()
+    conn.close()
+    return cur.rowcount > 0
+
+
+def delete_memory(memory_id: str) -> bool:
+    conn = get_conn()
+    cur = conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+    conn.commit()
+    conn.close()
+    return cur.rowcount > 0
 
 
 # ── Calendar Events ───────────────────────────────────────────────────

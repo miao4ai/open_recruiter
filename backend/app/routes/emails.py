@@ -1,5 +1,7 @@
 """Email routes — CRUD, draft, compose, approve, send."""
 
+import json
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -108,11 +110,19 @@ async def followup_emails(_user: dict = Depends(get_current_user)):
 
 
 @router.post("/{email_id}/approve")
-async def approve_email(email_id: str, _user: dict = Depends(get_current_user)):
+async def approve_email(email_id: str, current_user: dict = Depends(get_current_user)):
     email = db.get_email(email_id)
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
     db.update_email(email_id, {"approved": True})
+    db.insert_activity({
+        "id": uuid.uuid4().hex[:8],
+        "user_id": current_user["id"],
+        "activity_type": "email_approved",
+        "description": f"Approved email to {email.get('candidate_name', email['to_email'])}",
+        "metadata_json": json.dumps({"email_id": email_id}),
+        "created_at": datetime.now().isoformat(),
+    })
     return {"status": "approved"}
 
 
@@ -242,13 +252,26 @@ async def check_replies(_user: dict = Depends(get_current_user)):
 
 
 @router.put("/{email_id}")
-async def update_email_route(email_id: str, req: EmailComposeRequest, _user: dict = Depends(get_current_user)):
+async def update_email_route(email_id: str, req: EmailComposeRequest, current_user: dict = Depends(get_current_user)):
     """Update a draft email."""
     email = db.get_email(email_id)
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
     if email["sent"]:
         raise HTTPException(status_code=400, detail="Cannot edit a sent email")
+    # Log edit activity for implicit memory learning (before overwrite)
+    db.insert_activity({
+        "id": uuid.uuid4().hex[:8],
+        "user_id": current_user["id"],
+        "activity_type": "email_edited",
+        "description": f"Edited draft to {email.get('candidate_name', email['to_email'])}",
+        "metadata_json": json.dumps({
+            "email_id": email_id,
+            "body_changed": email.get("body", "") != req.body,
+            "subject_changed": email.get("subject", "") != req.subject,
+        }),
+        "created_at": datetime.now().isoformat(),
+    })
     db.update_email(email_id, {
         "to_email": req.to_email,
         "subject": req.subject,

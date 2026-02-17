@@ -120,7 +120,7 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
         context = _build_job_seeker_context(user_id)
         system_prompt = CHAT_SYSTEM_JOB_SEEKER.format(context=context)
     else:
-        context = _build_chat_context()
+        context = _build_chat_context(user_id)
         system_prompt = CHAT_SYSTEM_WITH_ACTIONS.format(context=context)
 
     # Load conversation history for this session
@@ -195,6 +195,20 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
     # Build smart suggestions if not already set by action handlers
     if not response.get("suggestions") and user_role == "recruiter":
         response["suggestions"] = _build_smart_suggestions(action_data)
+
+    # Background: extract memories from this conversation turn
+    if user_role == "recruiter":
+        threading.Thread(
+            target=_extract_and_store_memories,
+            args=(cfg, user_id, req.message, reply_text), daemon=True,
+        ).start()
+        # Periodic implicit memory extraction (~every 20 messages)
+        msg_count = len(db.list_chat_messages(user_id, limit=100, session_id=session_id))
+        if msg_count > 0 and msg_count % 20 == 0:
+            threading.Thread(
+                target=_extract_implicit_memories,
+                args=(cfg, user_id), daemon=True,
+            ).start()
 
     return response
 
@@ -341,7 +355,7 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
         context = _build_job_seeker_context(user_id)
         system_prompt = CHAT_SYSTEM_JOB_SEEKER.format(context=context)
     else:
-        context = _build_chat_context()
+        context = _build_chat_context(user_id)
         system_prompt = CHAT_SYSTEM_WITH_ACTIONS.format(context=context)
 
     history = db.list_chat_messages(user_id, limit=20, session_id=session_id)
@@ -498,6 +512,19 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
                 "created_at": datetime.now().isoformat(),
             })
             response["message_id"] = assistant_msg_id
+
+            # Background: extract memories from this conversation turn
+            if user_role == "recruiter":
+                threading.Thread(
+                    target=_extract_and_store_memories,
+                    args=(cfg, user_id, req.message, reply_text), daemon=True,
+                ).start()
+                msg_count = len(db.list_chat_messages(user_id, limit=100, session_id=session_id))
+                if msg_count > 0 and msg_count % 20 == 0:
+                    threading.Thread(
+                        target=_extract_implicit_memories,
+                        args=(cfg, user_id), daemon=True,
+                    ).start()
 
             yield {"event": "done", "data": json.dumps(response)}
         except Exception as exc:
@@ -859,9 +886,32 @@ def _build_smart_suggestions(action_data) -> list[dict]:
     return suggestions[:4]
 
 
-def _build_chat_context() -> str:
+def _build_chat_context(user_id: str = "") -> str:
     """Build a context string from the database for the chat system prompt."""
     parts = []
+
+    # Recruiter Preferences & Memory
+    if user_id:
+        memories = db.list_memories(user_id, limit=10)
+        if memories:
+            mem_lines = ["## Your Preferences & Memory"]
+            for m in memories:
+                tag = "preference" if m["memory_type"] == "explicit" else "observed"
+                mem_lines.append(f"- [{tag}] {m['content']}")
+                db.update_memory(m["id"], {"access_count": m.get("access_count", 0) + 1})
+            # Cap memory section at ~800 chars to preserve context budget
+            mem_text = "\n".join(mem_lines)
+            if len(mem_text) > 800:
+                trimmed = [mem_lines[0]]
+                total = len(trimmed[0])
+                for line in mem_lines[1:]:
+                    if total + len(line) + 1 > 750:
+                        break
+                    trimmed.append(line)
+                    total += len(line) + 1
+                mem_lines = trimmed
+            parts.extend(mem_lines)
+            parts.append("")
 
     # Jobs summary
     jobs = db.list_jobs()
@@ -959,3 +1009,126 @@ def _build_job_seeker_context(user_id: str) -> str:
         parts.append("\n## Saved Jobs: None")
 
     return "\n".join(parts)
+
+
+# ── Memory Extraction ─────────────────────────────────────────────────
+
+def _extract_and_store_memories(cfg, user_id: str, user_message: str, assistant_reply: str) -> None:
+    """Background task: detect explicit preferences in the recruiter's message."""
+    from app.prompts import MEMORY_EXTRACTION
+    from app.llm import chat_json
+
+    if len(user_message) < 15:
+        return
+
+    # Keyword pre-filter — avoid an LLM call on most messages
+    signals = [
+        "prefer", "always", "never", "don't", "i like", "i want", "make sure",
+        "please use", "tone", "style", "remember", "from now on",
+        "偏好", "总是", "不要", "我喜欢", "我想要", "确保", "请用", "记住", "以后",
+    ]
+    if not any(s in user_message.lower() for s in signals):
+        return
+
+    try:
+        conversation = f"Recruiter: {user_message}\nAssistant: {assistant_reply}"
+        result = chat_json(cfg, system=MEMORY_EXTRACTION,
+                           messages=[{"role": "user", "content": conversation}])
+
+        memories_out = result.get("memories", []) if isinstance(result, dict) else []
+        now = datetime.now().isoformat()
+
+        for mem in memories_out:
+            content = mem.get("content", "").strip()
+            if not content:
+                continue
+
+            # Dedup: check existing memories for substring overlap
+            existing = db.list_memories(user_id, limit=50)
+            duplicate = next(
+                (m for m in existing
+                 if content.lower() in m["content"].lower()
+                 or m["content"].lower() in content.lower()),
+                None,
+            )
+            if duplicate:
+                db.update_memory(duplicate["id"], {
+                    "confidence": min(duplicate["confidence"] + 0.1, 1.0),
+                    "updated_at": now,
+                })
+                continue
+
+            db.insert_memory({
+                "id": uuid.uuid4().hex[:8],
+                "user_id": user_id,
+                "memory_type": "explicit",
+                "category": mem.get("category", "general"),
+                "content": content,
+                "source": "chat",
+                "confidence": 1.0,
+                "access_count": 0,
+                "created_at": now,
+                "updated_at": now,
+            })
+    except Exception as e:
+        log.warning("Memory extraction failed (non-fatal): %s", e)
+
+
+def _extract_implicit_memories(cfg, user_id: str) -> None:
+    """Background task: analyze activity logs to find behavioral patterns."""
+    from app.prompts import IMPLICIT_MEMORY_EXTRACTION
+    from app.llm import chat_json
+
+    activities = db.list_activities(user_id, limit=50)
+    if len(activities) < 10:
+        return  # Not enough data yet
+
+    activity_lines = []
+    for a in activities[:30]:
+        activity_lines.append(
+            f"- [{a['activity_type']}] {a.get('description', '')} "
+            f"(meta: {a.get('metadata_json', '{}')})"
+        )
+
+    try:
+        result = chat_json(
+            cfg, system=IMPLICIT_MEMORY_EXTRACTION,
+            messages=[{"role": "user", "content": "Recent activities:\n" + "\n".join(activity_lines)}],
+        )
+
+        patterns = result.get("patterns", []) if isinstance(result, dict) else []
+        now = datetime.now().isoformat()
+
+        for pat in patterns:
+            content = pat.get("content", "").strip()
+            if not content:
+                continue
+
+            existing = db.list_memories(user_id, memory_type="implicit", limit=50)
+            duplicate = next(
+                (m for m in existing
+                 if content.lower() in m["content"].lower()
+                 or m["content"].lower() in content.lower()),
+                None,
+            )
+            if duplicate:
+                db.update_memory(duplicate["id"], {
+                    "confidence": min(duplicate["confidence"] + 0.05, 0.95),
+                    "updated_at": now,
+                })
+                continue
+
+            db.insert_memory({
+                "id": uuid.uuid4().hex[:8],
+                "user_id": user_id,
+                "memory_type": "implicit",
+                "category": pat.get("category", "general"),
+                "content": content,
+                "source": "action_pattern",
+                "confidence": pat.get("confidence", 0.6),
+                "access_count": 0,
+                "created_at": now,
+                "updated_at": now,
+            })
+    except Exception as e:
+        log.warning("Implicit memory extraction failed (non-fatal): %s", e)
