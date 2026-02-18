@@ -7,9 +7,13 @@ import Tab from "@mui/material/Tab";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import Alert from "@mui/material/Alert";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import SmartToyOutlined from "@mui/icons-material/SmartToyOutlined";
+import BusinessCenterOutlined from "@mui/icons-material/BusinessCenterOutlined";
+import SearchOutlined from "@mui/icons-material/SearchOutlined";
 import { login, register, setToken } from "../lib/api";
-import type { User } from "../types";
+import type { User, UserRole } from "../types";
 
 interface Props {
   onLogin: (user: User) => void;
@@ -21,6 +25,7 @@ export default function Login({ onLogin }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [role, setRole] = useState<UserRole>("recruiter");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -30,8 +35,8 @@ export default function Login({ onLogin }: Props) {
     setLoading(true);
     try {
       const res = isRegister
-        ? await register(email, password, name)
-        : await login(email, password);
+        ? await register(email, password, name, role)
+        : await login(email, password, role);
       setToken(res.token);
       onLogin(res.user);
     } catch (err: unknown) {
@@ -73,6 +78,29 @@ export default function Login({ onLogin }: Props) {
         )}
 
         <Box component="form" onSubmit={handleSubmit} sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {/* Role selector */}
+          <Box>
+            <Typography variant="body2" fontWeight={500} sx={{ mb: 1 }}>
+              I am a...
+            </Typography>
+            <ToggleButtonGroup
+              value={role}
+              exclusive
+              onChange={(_, v) => { if (v) setRole(v); }}
+              fullWidth
+              size="small"
+            >
+              <ToggleButton value="recruiter" sx={{ py: 1.5, display: "flex", flexDirection: "column", gap: 0.5 }}>
+                <BusinessCenterOutlined fontSize="small" />
+                <Typography variant="caption">Recruiter</Typography>
+              </ToggleButton>
+              <ToggleButton value="job_seeker" sx={{ py: 1.5, display: "flex", flexDirection: "column", gap: 0.5 }}>
+                <SearchOutlined fontSize="small" />
+                <Typography variant="caption">Job Seeker</Typography>
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+
           {isRegister && (
             <TextField
               label="Name"
