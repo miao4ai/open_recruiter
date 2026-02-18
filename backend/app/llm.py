@@ -1,4 +1,4 @@
-"""Unified LLM interface supporting Anthropic and OpenAI."""
+"""Unified LLM interface via LiteLLM — supports 100+ providers."""
 
 from __future__ import annotations
 
@@ -9,36 +9,75 @@ from typing import Any
 from app.config import Config
 
 
+def _model_name(cfg: Config) -> str:
+    """Build the LiteLLM model string (e.g. 'anthropic/claude-sonnet-4-20250514')."""
+    model = cfg.llm_model
+    # If user already included a provider prefix, use as-is
+    if "/" in model:
+        return model
+    # Otherwise, prepend the provider prefix
+    provider = cfg.llm_provider
+    if provider == "anthropic":
+        return f"anthropic/{model}"
+    elif provider == "openai":
+        return f"openai/{model}"
+    elif provider == "gemini":
+        return f"gemini/{model}"
+    # Fallback: pass model name directly, let litellm figure it out
+    return model
+
+
+def _api_key(cfg: Config) -> str | None:
+    """Return the appropriate API key for the provider."""
+    provider = cfg.llm_provider
+    if provider == "anthropic":
+        return cfg.anthropic_api_key or None
+    elif provider == "openai":
+        return cfg.openai_api_key or None
+    elif provider == "gemini":
+        return cfg.gemini_api_key or None
+    return None
+
+
 # ── Non-streaming calls ─────────────────────────────────────────────────
 
-def _call_anthropic(cfg: Config, system: str, messages: list[dict], json_mode: bool = False) -> str:
-    from anthropic import Anthropic
+def _prepare_json_mode(system: str, messages: list[dict]) -> tuple[str, list[dict]]:
+    """Inject JSON instructions into both system and the last user message.
 
-    client = Anthropic(api_key=cfg.anthropic_api_key)
-    if json_mode:
-        system += "\n\nIMPORTANT: Respond ONLY with valid JSON. No markdown fences, no explanation."
-    resp = client.messages.create(
-        model=cfg.llm_model, max_tokens=4096, system=system, messages=messages,
-    )
-    return resp.content[0].text
-
-
-def _call_openai(cfg: Config, system: str, messages: list[dict], json_mode: bool = False) -> str:
-    from openai import OpenAI
-
-    client = OpenAI(api_key=cfg.openai_api_key)
-    full = [{"role": "system", "content": system}] + messages
-    kwargs: dict[str, Any] = {}
-    if json_mode:
-        kwargs["response_format"] = {"type": "json_object"}
-    resp = client.chat.completions.create(model=cfg.llm_model, messages=full, max_tokens=4096, **kwargs)
-    return resp.choices[0].message.content or ""
+    OpenAI's Responses API requires the word 'json' in user input,
+    not just in the system prompt. This ensures all providers work.
+    """
+    system += "\n\nIMPORTANT: Respond ONLY with valid JSON. No markdown fences, no explanation."
+    messages = [m.copy() for m in messages]
+    # Ensure the last user message mentions JSON
+    for m in reversed(messages):
+        if m.get("role") == "user" and "json" not in m.get("content", "").lower():
+            m["content"] += "\n\n[Respond in JSON format.]"
+            break
+    return system, messages
 
 
 def chat(cfg: Config, system: str, messages: list[dict], json_mode: bool = False) -> str:
-    if cfg.llm_provider == "openai":
-        return _call_openai(cfg, system, messages, json_mode)
-    return _call_anthropic(cfg, system, messages, json_mode)
+    from litellm import completion
+
+    if json_mode:
+        system, messages = _prepare_json_mode(system, messages)
+
+    kwargs: dict[str, Any] = {
+        "model": _model_name(cfg),
+        "messages": [{"role": "system", "content": system}] + messages,
+        "max_tokens": 4096,
+    }
+
+    api_key = _api_key(cfg)
+    if api_key:
+        kwargs["api_key"] = api_key
+
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+
+    resp = completion(**kwargs)
+    return resp.choices[0].message.content or ""
 
 
 def chat_json(cfg: Config, system: str, messages: list[dict]) -> dict | list:
@@ -53,38 +92,28 @@ def chat_json(cfg: Config, system: str, messages: list[dict]) -> dict | list:
 
 # ── Streaming calls ─────────────────────────────────────────────────────
 
-def _stream_anthropic(cfg: Config, system: str, messages: list[dict], json_mode: bool = False) -> Iterator[str]:
-    from anthropic import Anthropic
+def chat_stream(cfg: Config, system: str, messages: list[dict], json_mode: bool = False) -> Iterator[str]:
+    """Yield text chunks from the LLM (synchronous generator)."""
+    from litellm import completion
 
-    client = Anthropic(api_key=cfg.anthropic_api_key)
     if json_mode:
-        system += "\n\nIMPORTANT: Respond ONLY with valid JSON. No markdown fences, no explanation."
-    with client.messages.stream(
-        model=cfg.llm_model, max_tokens=4096, system=system, messages=messages,
-    ) as stream:
-        for text in stream.text_stream:
-            yield text
+        system, messages = _prepare_json_mode(system, messages)
 
+    kwargs: dict[str, Any] = {
+        "model": _model_name(cfg),
+        "messages": [{"role": "system", "content": system}] + messages,
+        "max_tokens": 4096,
+        "stream": True,
+    }
 
-def _stream_openai(cfg: Config, system: str, messages: list[dict], json_mode: bool = False) -> Iterator[str]:
-    from openai import OpenAI
+    api_key = _api_key(cfg)
+    if api_key:
+        kwargs["api_key"] = api_key
 
-    client = OpenAI(api_key=cfg.openai_api_key)
-    full = [{"role": "system", "content": system}] + messages
-    kwargs: dict[str, Any] = {}
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
-    resp = client.chat.completions.create(
-        model=cfg.llm_model, messages=full, max_tokens=4096, stream=True, **kwargs,
-    )
+
+    resp = completion(**kwargs)
     for chunk in resp:
         if chunk.choices and chunk.choices[0].delta.content:
             yield chunk.choices[0].delta.content
-
-
-def chat_stream(cfg: Config, system: str, messages: list[dict], json_mode: bool = False) -> Iterator[str]:
-    """Yield text chunks from the LLM (synchronous generator)."""
-    if cfg.llm_provider == "openai":
-        yield from _stream_openai(cfg, system, messages, json_mode)
-    else:
-        yield from _stream_anthropic(cfg, system, messages, json_mode)

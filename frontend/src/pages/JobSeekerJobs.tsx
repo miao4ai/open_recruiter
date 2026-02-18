@@ -1,13 +1,16 @@
 import { useCallback, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
-  Search, Loader2, MapPin, Building2, DollarSign, Clock, Briefcase,
-  ChevronDown, ChevronUp, X, Upload, Trash2,
-} from "lucide-react";
+  SearchOutlined, LocationOnOutlined, BusinessOutlined, AttachMoneyOutlined, AccessTimeOutlined, WorkOutline,
+  ExpandMoreOutlined, ExpandLessOutlined, CloseOutlined, UploadOutlined, DeleteOutline,
+} from "@mui/icons-material";
+import { CircularProgress } from "@mui/material";
 import { useApi } from "../hooks/useApi";
 import { seekerListJobs, seekerUploadJd, seekerDeleteJob } from "../lib/api";
 import type { Job } from "../types";
 
 export default function JobSeekerJobs() {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const { data: jobs, loading, refresh } = useApi(
@@ -54,9 +57,9 @@ export default function JobSeekerJobs() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">My Jobs</h1>
+          <h1 className="text-2xl font-bold text-gray-800">{t("jobSeekerJobs.myJobs")}</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Upload job descriptions to track positions you're interested in
+            {t("jobSeekerJobs.subtitle")}
           </p>
         </div>
         <div>
@@ -74,11 +77,11 @@ export default function JobSeekerJobs() {
               text-sm font-medium text-white hover:bg-pink-600 disabled:opacity-50"
           >
             {uploading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <CircularProgress size={16} />
             ) : (
-              <Upload className="h-4 w-4" />
+              <UploadOutlined className="h-4 w-4" />
             )}
-            {uploading ? "Parsing..." : "Upload JD"}
+            {uploading ? t("jobSeekerJobs.parsing") : t("jobSeekerJobs.uploadJd")}
           </button>
         </div>
       </div>
@@ -86,12 +89,12 @@ export default function JobSeekerJobs() {
       {/* Search bar */}
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <SearchOutlined className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search by title, company, skills, location..."
+            placeholder={t("jobSeekerJobs.searchPlaceholder")}
             className="w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-9 text-sm
               focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
           />
@@ -100,7 +103,7 @@ export default function JobSeekerJobs() {
               onClick={handleClear}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
             >
-              <X className="h-4 w-4" />
+              <CloseOutlined className="h-4 w-4" />
             </button>
           )}
         </div>
@@ -109,22 +112,22 @@ export default function JobSeekerJobs() {
           className="rounded-xl bg-pink-500 px-5 py-2.5 text-sm font-medium text-white
             hover:bg-pink-600"
         >
-          Search
+          {t("common.search")}
         </button>
       </div>
 
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-pink-400" />
+          <CircularProgress size={24} sx={{ color: 'rgb(244 114 182)' }} />
         </div>
       )}
 
       {/* Results count */}
       {!loading && jobs && (
         <p className="text-sm text-gray-500">
-          {jobs.length} job{jobs.length !== 1 ? "s" : ""} saved
-          {searchTerm ? ` matching "${searchTerm}"` : ""}
+          {t("jobSeekerJobs.jobsSaved", { count: jobs.length })}
+          {searchTerm ? ` ${t("jobSeekerJobs.matching", { term: searchTerm })}` : ""}
         </p>
       )}
 
@@ -148,11 +151,11 @@ export default function JobSeekerJobs() {
       {/* Empty state */}
       {!loading && jobs && jobs.length === 0 && (
         <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
-          <Briefcase className="mx-auto h-10 w-10 text-gray-300" />
+          <WorkOutline className="mx-auto h-10 w-10 text-gray-300" />
           <p className="mt-3 text-sm text-gray-500">
             {searchTerm
-              ? "No jobs match your search. Try different keywords."
-              : "No jobs yet. Upload a JD to get started!"}
+              ? t("jobSeekerJobs.noMatch")
+              : t("jobSeekerJobs.noJobsYet")}
           </p>
         </div>
       )}
@@ -173,6 +176,8 @@ function JobCard({
   onToggle: () => void;
   onDelete: (id: string, e: React.MouseEvent) => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div className="group rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
       {/* Main row */}
@@ -182,44 +187,44 @@ function JobCard({
       >
         {/* Icon */}
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-pink-50">
-          <Briefcase className="h-5 w-5 text-pink-500" />
+          <WorkOutline className="h-5 w-5 text-pink-500" />
         </div>
 
         {/* Info */}
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold text-gray-900">
-            {job.title || "Untitled Position"}
+            {job.title || t("jobSeekerJobs.untitledPosition")}
           </h3>
 
           <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
             {job.company && (
               <span className="inline-flex items-center gap-1">
-                <Building2 className="h-3.5 w-3.5" />
+                <BusinessOutlined className="h-3.5 w-3.5" />
                 {job.company}
               </span>
             )}
             {job.location && (
               <span className="inline-flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5" />
+                <LocationOnOutlined className="h-3.5 w-3.5" />
                 {job.location}
-                {job.remote && " (Remote)"}
+                {job.remote && ` (${t("common.remote")})`}
               </span>
             )}
             {!job.location && job.remote && (
               <span className="inline-flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5" />
-                Remote
+                <LocationOnOutlined className="h-3.5 w-3.5" />
+                {t("common.remote")}
               </span>
             )}
             {job.salary_range && (
               <span className="inline-flex items-center gap-1">
-                <DollarSign className="h-3.5 w-3.5" />
+                <AttachMoneyOutlined className="h-3.5 w-3.5" />
                 {job.salary_range}
               </span>
             )}
             {job.posted_date && (
               <span className="inline-flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5" />
+                <AccessTimeOutlined className="h-3.5 w-3.5" />
                 {job.posted_date}
               </span>
             )}
@@ -251,14 +256,14 @@ function JobCard({
             role="button"
             onClick={(e) => onDelete(job.id, e)}
             className="text-gray-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
-            title="Delete"
+            title={t("common.delete")}
           >
-            <Trash2 className="h-4 w-4" />
+            <DeleteOutline className="h-4 w-4" />
           </span>
           {expanded ? (
-            <ChevronUp className="h-5 w-5 text-gray-400" />
+            <ExpandLessOutlined className="h-5 w-5 text-gray-400" />
           ) : (
-            <ChevronDown className="h-5 w-5 text-gray-400" />
+            <ExpandMoreOutlined className="h-5 w-5 text-gray-400" />
           )}
         </div>
       </button>
@@ -269,7 +274,7 @@ function JobCard({
           {job.summary && (
             <div className="mb-4">
               <h4 className="mb-1 text-sm font-semibold text-gray-700">
-                Summary
+                {t("jobSeekerJobs.summaryLabel")}
               </h4>
               <p className="whitespace-pre-wrap text-sm text-gray-600">
                 {job.summary}
@@ -279,15 +284,14 @@ function JobCard({
 
           {job.experience_years != null && (
             <p className="mb-3 text-sm text-gray-600">
-              <span className="font-medium">Experience:</span>{" "}
-              {job.experience_years}+ years
+              {t("jobSeekerJobs.experience", { years: job.experience_years })}
             </p>
           )}
 
           {job.preferred_skills && job.preferred_skills.length > 0 && (
             <div className="mb-3">
               <h4 className="mb-1 text-sm font-semibold text-gray-700">
-                Nice to have
+                {t("jobSeekerJobs.niceToHave")}
               </h4>
               <div className="flex flex-wrap gap-1.5">
                 {job.preferred_skills.map((s) => (
@@ -305,7 +309,7 @@ function JobCard({
           {job.raw_text && (
             <div>
               <h4 className="mb-1 text-sm font-semibold text-gray-700">
-                Full Description
+                {t("jobSeekerJobs.fullDescription")}
               </h4>
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-600">
                 {job.raw_text}

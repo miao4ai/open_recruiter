@@ -1,0 +1,22 @@
+[project]
+name = "open-recruiter"
+version = "0.1.0"
+description = "Open Recruiter — AI-powered recruitment automation agent"
+requires-python = ">=3.11"
+dependencies = ["open-recruiter-backend"]
+
+[project.scripts]
+open-recruiter = "app.cli:main"
+
+[tool.uv.workspace]
+members = ["backend"]
+
+[tool.uv.sources]
+open-recruiter-backend = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend/app"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

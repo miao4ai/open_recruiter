@@ -17,6 +17,22 @@
 
 ---
 
+## Quick Install (macOS / Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/miao4ai/open_recruiter/main/install.sh | bash
+```
+
+The installer will automatically:
+1. Check & install dependencies (Python 3.11+, Node.js 18+, uv, git)
+2. Let you choose an LLM provider (Anthropic Claude / OpenAI GPT) and enter your API key
+3. Clone the repo, install all packages, and generate your `.env`
+4. Offer to launch immediately
+
+> You can also set a custom install directory: `OPEN_RECRUITER_DIR=~/my-dir curl -fsSL ... | bash`
+
+---
+
 ## Introduction
 
 Open Recruiter is a self-hosted, AI-powered recruitment assistant designed for independent recruiters and small hiring teams. It streamlines the entire talent discovery workflow — from uploading and parsing resumes, to semantically matching candidates against job descriptions, to composing outreach emails with one click. Powered by local vector embeddings and configurable LLMs (Claude / GPT), it delivers intelligent candidate-job matching without sending your data to third-party platforms. Everything runs locally with zero infrastructure: SQLite for data, ChromaDB for semantic search, and an optional Slack integration for receiving resumes directly from your team's channels.
@@ -115,9 +131,14 @@ Open Recruiter is a self-hosted, AI-powered recruitment assistant designed for i
 
 ## Quick Start
 
+**Recommended:** Use the [one-line installer](#quick-install-macos--linux) above.
+
+<details>
+<summary>Manual setup</summary>
+
 ```bash
 # Clone
-git clone https://github.com/YOUR_USERNAME/open_recruiter.git
+git clone https://github.com/miao4ai/open_recruiter.git
 cd open_recruiter
 
 # Setup (installs backend + frontend dependencies)
@@ -130,6 +151,8 @@ cd open_recruiter
 # or
 ./start.ps1       # Windows
 ```
+
+</details>
 
 Then open http://localhost:5173 in your browser.
 

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import Jobs from "./pages/Jobs";
@@ -40,9 +42,9 @@ export default function App() {
 
   if (checking) {
     return (
-      <div className="flex h-screen items-center justify-center text-gray-400">
-        Loading...
-      </div>
+      <Box sx={{ display: "flex", height: "100vh", alignItems: "center", justifyContent: "center" }}>
+        <CircularProgress />
+      </Box>
     );
   }
 
@@ -50,32 +52,32 @@ export default function App() {
     return <Login onLogin={(u) => setUser(u)} />;
   }
 
-  // Job seeker layout — sidebar + pages
+  // Job seeker layout
   if (user.role === "job_seeker") {
     return (
-      <div className="flex h-screen overflow-hidden">
+      <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
         <JobSeekerSidebar />
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, overflow: "hidden" }}>
           <Header user={user} onLogout={handleLogout} />
-          <main className="flex-1 overflow-y-auto bg-gray-50">
+          <Box component="main" sx={{ flexGrow: 1, overflowY: "auto", bgcolor: "background.default" }}>
             <Routes>
-              <Route path="/" element={<div className="h-full overflow-hidden"><JobSeekerHome /></div>} />
+              <Route path="/" element={<Box sx={{ height: "100%", overflow: "hidden" }}><JobSeekerHome /></Box>} />
               <Route path="/jobs" element={<JobSeekerJobs />} />
               <Route path="/profile" element={<JobSeekerProfile />} />
             </Routes>
-          </main>
-        </div>
-      </div>
+          </Box>
+        </Box>
+      </Box>
     );
   }
 
-  // Recruiter layout — full app
+  // Recruiter layout
   return (
-    <div className="flex h-screen overflow-hidden">
+    <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, overflow: "hidden" }}>
         <Header user={user} onLogout={handleLogout} />
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
+        <Box component="main" sx={{ flexGrow: 1, overflowY: "auto", bgcolor: "background.default", p: 3 }}>
           <Routes>
             <Route path="/" element={<Chat />} />
             <Route path="/dashboard" element={<Navigate to="/" replace />} />
@@ -86,8 +88,8 @@ export default function App() {
             <Route path="/automations" element={<Automations />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
-        </main>
-      </div>
-    </div>
+        </Box>
+      </Box>
+    </Box>
   );
 }

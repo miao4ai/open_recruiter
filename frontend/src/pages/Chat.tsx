@@ -1,9 +1,33 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Send, Trash2, Loader2, Mail, Check, X,
-  Plus, MessageSquare, Upload, FileText, Briefcase, UserPlus,
-  TrendingUp, DollarSign,
-} from "lucide-react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import IconButton from "@mui/material/IconButton";
+import Avatar from "@mui/material/Avatar";
+import Chip from "@mui/material/Chip";
+import CircularProgress from "@mui/material/CircularProgress";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import LinearProgress from "@mui/material/LinearProgress";
+import SendOutlined from "@mui/icons-material/SendOutlined";
+import DeleteOutline from "@mui/icons-material/DeleteOutline";
+import CheckCircleOutline from "@mui/icons-material/CheckCircleOutline";
+import Close from "@mui/icons-material/Close";
+import Add from "@mui/icons-material/Add";
+import ChatBubbleOutline from "@mui/icons-material/ChatBubbleOutline";
+import CloudUpload from "@mui/icons-material/CloudUpload";
+import DescriptionOutlined from "@mui/icons-material/DescriptionOutlined";
+import WorkOutline from "@mui/icons-material/WorkOutline";
+import PersonAddOutlined from "@mui/icons-material/PersonAddOutlined";
+import TrendingUpOutlined from "@mui/icons-material/TrendingUpOutlined";
+import AttachMoneyOutlined from "@mui/icons-material/AttachMoneyOutlined";
+import MailOutline from "@mui/icons-material/MailOutline";
 import { useApi } from "../hooks/useApi";
 import {
   streamChatMessage,
@@ -33,7 +57,7 @@ import type {
 
 /* ── Greeting / Daily Briefing ──────────────────────────────────────────── */
 
-function makeBriefing(candidates: Candidate[]): ChatMessage {
+function makeBriefing(candidates: Candidate[], t: TFunction): ChatMessage {
   const dateStr = new Date().toLocaleDateString("en-US", {
     year: "numeric", month: "long", day: "numeric",
   });
@@ -42,16 +66,16 @@ function makeBriefing(candidates: Candidate[]): ChatMessage {
   const contacted = candidates.filter((c) => c.status === "contacted");
   const interviews = candidates.filter((c) => c.status === "interview_scheduled");
 
-  const lines = [`Good morning! Today is ${dateStr}. Here's your recruiting brief:\n`];
+  const lines = [t("chat.briefingIntro", { date: dateStr })];
 
-  lines.push(`**Pipeline**: ${total} candidate${total !== 1 ? "s" : ""} total`);
-  if (newCount > 0) lines.push(`  • ${newCount} new — ready for review`);
+  lines.push(t("chat.briefingPipeline", { count: total }));
+  if (newCount > 0) lines.push(t("chat.briefingNew", { count: newCount }));
   if (contacted.length > 0)
-    lines.push(`  • ${contacted.length} awaiting reply (${contacted.slice(0, 3).map((c) => c.name).join(", ")}${contacted.length > 3 ? "..." : ""})`);
+    lines.push(t("chat.briefingContacted", { count: contacted.length, names: contacted.slice(0, 3).map((c) => c.name).join(", "), more: contacted.length > 3 ? "..." : "" }));
   if (interviews.length > 0)
-    lines.push(`  • ${interviews.length} interview${interviews.length !== 1 ? "s" : ""} scheduled`);
+    lines.push(t("chat.briefingInterviews", { count: interviews.length }));
 
-  lines.push("\nHow can I help you today?");
+  lines.push("\n" + t("chat.briefingHelp"));
 
   return {
     id: "briefing-" + Date.now(),
@@ -62,12 +86,12 @@ function makeBriefing(candidates: Candidate[]): ChatMessage {
   };
 }
 
-function makeSimpleGreeting(): ChatMessage {
+function makeSimpleGreeting(t: TFunction): ChatMessage {
   return {
     id: "greeting-" + Date.now(),
     user_id: "",
     role: "assistant",
-    content: `Hi! Welcome to Open Recruiter — I'm Erika, your recruiting assistant. How can I help you today?`,
+    content: t("chat.simpleGreeting"),
     created_at: new Date().toISOString(),
   };
 }
@@ -78,6 +102,7 @@ function buildSuggestions(
   messages: ChatMessage[],
   candidates: Candidate[] | null,
   lastAction?: ChatMessage["action"],
+  t?: TFunction,
 ): Suggestion[] {
   const result: Suggestion[] = [];
 
@@ -90,21 +115,21 @@ function buildSuggestions(
     const newOnes = candidates.filter((c) => c.status === "new");
 
     if (contacted.length > 0) {
-      result.push({ label: "Check for replies", prompt: "Have any contacted candidates replied?", icon: "📩" });
+      result.push({ label: t ? t("chat.checkForReplies") : "Check for replies", prompt: "Have any contacted candidates replied?", icon: "📩" });
     }
     if (newOnes.length > 0 && newOnes.length <= 5) {
-      result.push({ label: `Review ${newOnes[0].name}`, prompt: `What jobs match ${newOnes[0].name}?`, icon: "📊" });
+      result.push({ label: t ? t("chat.review", { name: newOnes[0].name }) : `Review ${newOnes[0].name}`, prompt: `What jobs match ${newOnes[0].name}?`, icon: "📊" });
     }
   }
 
   if (messages.length <= 2) {
-    result.push({ label: "Upload resume", prompt: "Upload a resume", icon: "📄" });
-    result.push({ label: "Upload JD", prompt: "Upload a job description", icon: "📋" });
+    result.push({ label: t ? t("chat.uploadResume") : "Upload resume", prompt: "Upload a resume", icon: "📄" });
+    result.push({ label: t ? t("chat.uploadJD") : "Upload JD", prompt: "Upload a job description", icon: "📋" });
   }
 
   if (result.length === 0) {
-    result.push({ label: "Pipeline status", prompt: "What's the pipeline status today?", icon: "📊" });
-    result.push({ label: "Upload resume", prompt: "Upload a resume", icon: "📄" });
+    result.push({ label: t ? t("chat.pipelineStatus") : "Pipeline status", prompt: "What's the pipeline status today?", icon: "📊" });
+    result.push({ label: t ? t("chat.uploadResume") : "Upload resume", prompt: "Upload a resume", icon: "📄" });
   }
 
   return result.slice(0, 4);
@@ -121,18 +146,28 @@ function EmailComposeCard({
   onCancel: (emailId: string) => void;
   onUpdateField: (emailId: string, field: string, value: string) => void;
 }) {
+  const { t } = useTranslation();
   const [sending, setSending] = useState(false);
 
   if (status === "sent") {
     return (
-      <div className="mt-2 rounded-xl border border-green-200 bg-green-50 p-4">
-        <div className="flex items-center gap-2 text-green-700"><Check className="h-5 w-5" /><span className="font-medium">Email sent!</span></div>
-        <p className="mt-1 text-sm text-green-600">Sent to {email.to_email} ({email.candidate_name})</p>
-      </div>
+      <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "success.light", bgcolor: "success.50", backgroundColor: "#f0fdf4" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "success.dark" }}>
+          <CheckCircleOutline sx={{ fontSize: 20 }} />
+          <Typography variant="body2" fontWeight={500}>{t("chat.emailSent")}</Typography>
+        </Box>
+        <Typography variant="body2" sx={{ mt: 0.5, color: "success.main" }}>
+          {t("chat.sentTo", { email: email.to_email, name: email.candidate_name })}
+        </Typography>
+      </Paper>
     );
   }
   if (status === "cancelled") {
-    return <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-3"><p className="text-sm italic text-gray-500">Email draft cancelled.</p></div>;
+    return (
+      <Paper sx={{ mt: 1, p: 1.5, borderRadius: 3, border: "1px solid", borderColor: "grey.200", bgcolor: "grey.50" }}>
+        <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>{t("chat.emailCancelled")}</Typography>
+      </Paper>
+    );
   }
 
   const handleSend = async () => {
@@ -141,34 +176,53 @@ function EmailComposeCard({
   };
 
   return (
-    <div className="mt-2 space-y-3 rounded-xl border border-blue-200 bg-blue-50/50 p-4">
-      <div className="flex items-center gap-2 text-sm font-medium text-blue-700"><Mail className="h-4 w-4" /> Email Draft</div>
-      <div className="text-sm">
-        <span className="text-gray-500">To:</span> <span className="font-medium">{email.to_email}</span>
-        {email.candidate_name && <span className="ml-1 text-gray-400">({email.candidate_name})</span>}
-      </div>
-      <div>
-        <label className="mb-1 block text-xs text-gray-500">Subject</label>
-        <input type="text" value={email.subject} onChange={(e) => onUpdateField(email.id, "subject", e.target.value)}
-          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-      </div>
-      <div>
-        <label className="mb-1 block text-xs text-gray-500">Body</label>
-        <textarea value={email.body} onChange={(e) => onUpdateField(email.id, "body", e.target.value)} rows={8}
-          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-relaxed focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-      </div>
-      <div className="flex justify-end gap-2">
-        <button onClick={() => onCancel(email.id)} disabled={sending}
-          className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-          <X className="h-3.5 w-3.5" /> Cancel
-        </button>
-        <button onClick={handleSend} disabled={sending}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-          {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-          {sending ? "Sending..." : "Send Email"}
-        </button>
-      </div>
-    </div>
+    <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "#93c5fd", bgcolor: "#eff6ff80", display: "flex", flexDirection: "column", gap: 1.5 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#1d4ed8" }}>
+        <MailOutline sx={{ fontSize: 16 }} />
+        <Typography variant="body2" fontWeight={500}>{t("chat.emailDraft")}</Typography>
+      </Box>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+        <Typography variant="body2" color="text.secondary">To:</Typography>
+        <Typography variant="body2" fontWeight={500}>{email.to_email}</Typography>
+        {email.candidate_name && (
+          <Typography variant="body2" sx={{ ml: 0.5, color: "text.disabled" }}>({email.candidate_name})</Typography>
+        )}
+      </Box>
+      <Box>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>{t("outreach.subject")}</Typography>
+        <TextField
+          fullWidth size="small" value={email.subject}
+          onChange={(e) => onUpdateField(email.id, "subject", e.target.value)}
+          sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2, bgcolor: "white" } }}
+        />
+      </Box>
+      <Box>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>{t("outreach.body")}</Typography>
+        <TextField
+          fullWidth multiline rows={8} size="small" value={email.body}
+          onChange={(e) => onUpdateField(email.id, "body", e.target.value)}
+          sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2, bgcolor: "white" }, "& .MuiInputBase-input": { lineHeight: 1.6 } }}
+        />
+      </Box>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
+        <Button
+          size="small" variant="outlined" color="inherit" disabled={sending}
+          onClick={() => onCancel(email.id)}
+          startIcon={<Close sx={{ fontSize: 14 }} />}
+          sx={{ borderRadius: 2, textTransform: "none", fontSize: "0.75rem", color: "text.secondary" }}
+        >
+          {t("common.cancel")}
+        </Button>
+        <Button
+          size="small" variant="contained" disabled={sending}
+          onClick={handleSend}
+          startIcon={sending ? <CircularProgress size={14} color="inherit" /> : <SendOutlined sx={{ fontSize: 14 }} />}
+          sx={{ borderRadius: 2, textTransform: "none", fontSize: "0.75rem" }}
+        >
+          {sending ? t("common.sending") : t("chat.sendEmailBtn")}
+        </Button>
+      </Box>
+    </Paper>
   );
 }
 
@@ -183,6 +237,7 @@ function ResumeUploadCard({
   onUpload: (file: File, jobId: string) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState(defaultJobId || "");
   const [uploading, setUploading] = useState(false);
@@ -192,18 +247,35 @@ function ResumeUploadCard({
 
   if (status === "uploaded" && uploadedCandidate) {
     return (
-      <div className="mt-2 rounded-xl border border-green-200 bg-green-50 p-4">
-        <div className="flex items-center gap-2 text-green-700"><Check className="h-5 w-5" /><span className="font-medium">Resume uploaded!</span></div>
-        <div className="mt-2 space-y-1 text-sm text-green-700">
-          <p><span className="font-medium">Name:</span> {uploadedCandidate.name}</p>
-          {uploadedCandidate.current_title && <p><span className="font-medium">Title:</span> {uploadedCandidate.current_title}</p>}
-          {uploadedCandidate.skills.length > 0 && <p><span className="font-medium">Skills:</span> {uploadedCandidate.skills.slice(0, 5).join(", ")}</p>}
-        </div>
-      </div>
+      <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "success.light", bgcolor: "#f0fdf4" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "success.dark" }}>
+          <CheckCircleOutline sx={{ fontSize: 20 }} />
+          <Typography variant="body2" fontWeight={500}>{t("chat.resumeUploaded")}</Typography>
+        </Box>
+        <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
+          <Typography variant="body2" sx={{ color: "success.dark" }}>
+            <Box component="span" fontWeight={500}>{t("chat.nameLabel")}</Box> {uploadedCandidate.name}
+          </Typography>
+          {uploadedCandidate.current_title && (
+            <Typography variant="body2" sx={{ color: "success.dark" }}>
+              <Box component="span" fontWeight={500}>{t("chat.titleLabel")}</Box> {uploadedCandidate.current_title}
+            </Typography>
+          )}
+          {uploadedCandidate.skills.length > 0 && (
+            <Typography variant="body2" sx={{ color: "success.dark" }}>
+              <Box component="span" fontWeight={500}>{t("chat.skillsLabel")}</Box> {uploadedCandidate.skills.slice(0, 5).join(", ")}
+            </Typography>
+          )}
+        </Box>
+      </Paper>
     );
   }
   if (status === "cancelled") {
-    return <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-3"><p className="text-sm italic text-gray-500">Upload cancelled.</p></div>;
+    return (
+      <Paper sx={{ mt: 1, p: 1.5, borderRadius: 3, border: "1px solid", borderColor: "grey.200", bgcolor: "grey.50" }}>
+        <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>{t("chat.uploadCancelled")}</Typography>
+      </Paper>
+    );
   }
 
   const handleUpload = async () => {
@@ -212,43 +284,64 @@ function ResumeUploadCard({
     try { await onUpload(file, jobId); }
     catch (err: unknown) {
       const axiosErr = err as { response?: { status?: number } };
-      setError(axiosErr?.response?.status === 409 ? "Duplicate candidate." : (err instanceof Error ? err.message : "Upload failed"));
+      setError(axiosErr?.response?.status === 409 ? t("chat.duplicateCandidate") : (err instanceof Error ? err.message : t("chat.uploadFailed")));
     } finally { setUploading(false); }
   };
 
   return (
-    <div className="mt-2 space-y-3 rounded-xl border border-purple-200 bg-purple-50/50 p-4">
-      <div className="flex items-center gap-2 text-sm font-medium text-purple-700"><Upload className="h-4 w-4" /> Resume Upload</div>
-      <div>
-        <input ref={fileRef} type="file" accept=".pdf,.docx,.doc,.txt" onChange={(e) => { setFile(e.target.files?.[0] || null); setError(""); }} className="hidden" />
-        <button onClick={() => fileRef.current?.click()}
-          className="flex w-full items-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white px-4 py-3 text-sm text-gray-500 hover:border-purple-400 hover:text-purple-600">
-          <FileText className="h-4 w-4" /> {file ? file.name : "Click to select a resume (PDF, DOCX, TXT)"}
-        </button>
-      </div>
+    <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "#c4b5fd", bgcolor: "#f5f3ff80", display: "flex", flexDirection: "column", gap: 1.5 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#6d28d9" }}>
+        <CloudUpload sx={{ fontSize: 16 }} />
+        <Typography variant="body2" fontWeight={500}>{t("chat.resumeUpload")}</Typography>
+      </Box>
+      <Box>
+        <input ref={fileRef} type="file" accept=".pdf,.docx,.doc,.txt" onChange={(e) => { setFile(e.target.files?.[0] || null); setError(""); }} style={{ display: "none" }} />
+        <Button
+          fullWidth variant="outlined" color="inherit"
+          onClick={() => fileRef.current?.click()}
+          startIcon={<DescriptionOutlined sx={{ fontSize: 16 }} />}
+          sx={{
+            borderRadius: 2, borderStyle: "dashed", borderColor: "grey.300", bgcolor: "white",
+            justifyContent: "flex-start", textTransform: "none", color: "text.secondary",
+            "&:hover": { borderColor: "#7c3aed", color: "#7c3aed" }, py: 1.5,
+          }}
+        >
+          {file ? file.name : t("chat.clickToSelectResume")}
+        </Button>
+      </Box>
       {jobs && jobs.length > 0 && (
-        <div>
-          <label className="mb-1 block text-xs text-gray-500">Associate with job (optional)</label>
-          <select value={jobId} onChange={(e) => setJobId(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500">
-            <option value="">No specific job</option>
-            {jobs.map((j: Job) => <option key={j.id} value={j.id}>{j.title} — {j.company}</option>)}
-          </select>
-        </div>
+        <FormControl fullWidth size="small">
+          <InputLabel sx={{ fontSize: "0.75rem" }}>{t("chat.associateWithJob")}</InputLabel>
+          <Select
+            value={jobId} onChange={(e) => setJobId(e.target.value as string)}
+            label={t("chat.associateWithJob")}
+            sx={{ borderRadius: 2, bgcolor: "white" }}
+          >
+            <MenuItem value="">{t("chat.noSpecificJob")}</MenuItem>
+            {jobs.map((j: Job) => <MenuItem key={j.id} value={j.id}>{j.title} — {j.company}</MenuItem>)}
+          </Select>
+        </FormControl>
       )}
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <button onClick={onCancel} disabled={uploading}
-          className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-          <X className="h-3.5 w-3.5" /> Cancel
-        </button>
-        <button onClick={handleUpload} disabled={uploading || !file}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50">
-          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-          {uploading ? "Uploading..." : "Upload Resume"}
-        </button>
-      </div>
-    </div>
+      {error && <Typography variant="body2" color="error">{error}</Typography>}
+      <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
+        <Button
+          size="small" variant="outlined" color="inherit" disabled={uploading}
+          onClick={onCancel}
+          startIcon={<Close sx={{ fontSize: 14 }} />}
+          sx={{ borderRadius: 2, textTransform: "none", fontSize: "0.75rem", color: "text.secondary" }}
+        >
+          {t("common.cancel")}
+        </Button>
+        <Button
+          size="small" variant="contained" disabled={uploading || !file}
+          onClick={handleUpload}
+          startIcon={uploading ? <CircularProgress size={14} color="inherit" /> : <CloudUpload sx={{ fontSize: 14 }} />}
+          sx={{ borderRadius: 2, textTransform: "none", fontSize: "0.75rem", bgcolor: "#7c3aed", "&:hover": { bgcolor: "#6d28d9" } }}
+        >
+          {uploading ? t("chat.uploading") : t("chat.uploadResumeBtn")}
+        </Button>
+      </Box>
+    </Paper>
   );
 }
 
@@ -262,6 +355,7 @@ function JdUploadCard({
   onUpload: (file: File) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -269,18 +363,35 @@ function JdUploadCard({
 
   if (status === "uploaded" && uploadedJob) {
     return (
-      <div className="mt-2 rounded-xl border border-green-200 bg-green-50 p-4">
-        <div className="flex items-center gap-2 text-green-700"><Check className="h-5 w-5" /><span className="font-medium">JD uploaded!</span></div>
-        <div className="mt-2 space-y-1 text-sm text-green-700">
-          <p><span className="font-medium">Title:</span> {uploadedJob.title}</p>
-          {uploadedJob.company && <p><span className="font-medium">Company:</span> {uploadedJob.company}</p>}
-          {uploadedJob.required_skills?.length > 0 && <p><span className="font-medium">Skills:</span> {uploadedJob.required_skills.slice(0, 5).join(", ")}</p>}
-        </div>
-      </div>
+      <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "success.light", bgcolor: "#f0fdf4" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "success.dark" }}>
+          <CheckCircleOutline sx={{ fontSize: 20 }} />
+          <Typography variant="body2" fontWeight={500}>{t("chat.jdUploaded")}</Typography>
+        </Box>
+        <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
+          <Typography variant="body2" sx={{ color: "success.dark" }}>
+            <Box component="span" fontWeight={500}>{t("chat.titleLabel")}</Box> {uploadedJob.title}
+          </Typography>
+          {uploadedJob.company && (
+            <Typography variant="body2" sx={{ color: "success.dark" }}>
+              <Box component="span" fontWeight={500}>{t("chat.companyLabel")}</Box> {uploadedJob.company}
+            </Typography>
+          )}
+          {uploadedJob.required_skills?.length > 0 && (
+            <Typography variant="body2" sx={{ color: "success.dark" }}>
+              <Box component="span" fontWeight={500}>{t("chat.skillsLabel")}</Box> {uploadedJob.required_skills.slice(0, 5).join(", ")}
+            </Typography>
+          )}
+        </Box>
+      </Paper>
     );
   }
   if (status === "cancelled") {
-    return <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-3"><p className="text-sm italic text-gray-500">Upload cancelled.</p></div>;
+    return (
+      <Paper sx={{ mt: 1, p: 1.5, borderRadius: 3, border: "1px solid", borderColor: "grey.200", bgcolor: "grey.50" }}>
+        <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>{t("chat.uploadCancelled")}</Typography>
+      </Paper>
+    );
   }
 
   const handleUpload = async () => {
@@ -292,91 +403,148 @@ function JdUploadCard({
   };
 
   return (
-    <div className="mt-2 space-y-3 rounded-xl border border-orange-200 bg-orange-50/50 p-4">
-      <div className="flex items-center gap-2 text-sm font-medium text-orange-700"><FileText className="h-4 w-4" /> Job Description Upload</div>
-      <div>
-        <input ref={fileRef} type="file" accept=".pdf,.docx,.doc,.txt" onChange={(e) => { setFile(e.target.files?.[0] || null); setError(""); }} className="hidden" />
-        <button onClick={() => fileRef.current?.click()}
-          className="flex w-full items-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white px-4 py-3 text-sm text-gray-500 hover:border-orange-400 hover:text-orange-600">
-          <FileText className="h-4 w-4" /> {file ? file.name : "Click to select a JD file (PDF, DOCX, TXT)"}
-        </button>
-      </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <button onClick={onCancel} disabled={uploading}
-          className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-          <X className="h-3.5 w-3.5" /> Cancel
-        </button>
-        <button onClick={handleUpload} disabled={uploading || !file}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-50">
-          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-          {uploading ? "Uploading..." : "Upload JD"}
-        </button>
-      </div>
-    </div>
+    <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "#fdba74", bgcolor: "#fff7ed80", display: "flex", flexDirection: "column", gap: 1.5 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#c2410c" }}>
+        <DescriptionOutlined sx={{ fontSize: 16 }} />
+        <Typography variant="body2" fontWeight={500}>{t("chat.jdUpload")}</Typography>
+      </Box>
+      <Box>
+        <input ref={fileRef} type="file" accept=".pdf,.docx,.doc,.txt" onChange={(e) => { setFile(e.target.files?.[0] || null); setError(""); }} style={{ display: "none" }} />
+        <Button
+          fullWidth variant="outlined" color="inherit"
+          onClick={() => fileRef.current?.click()}
+          startIcon={<DescriptionOutlined sx={{ fontSize: 16 }} />}
+          sx={{
+            borderRadius: 2, borderStyle: "dashed", borderColor: "grey.300", bgcolor: "white",
+            justifyContent: "flex-start", textTransform: "none", color: "text.secondary",
+            "&:hover": { borderColor: "#ea580c", color: "#ea580c" }, py: 1.5,
+          }}
+        >
+          {file ? file.name : t("chat.clickToSelectJd")}
+        </Button>
+      </Box>
+      {error && <Typography variant="body2" color="error">{error}</Typography>}
+      <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
+        <Button
+          size="small" variant="outlined" color="inherit" disabled={uploading}
+          onClick={onCancel}
+          startIcon={<Close sx={{ fontSize: 14 }} />}
+          sx={{ borderRadius: 2, textTransform: "none", fontSize: "0.75rem", color: "text.secondary" }}
+        >
+          {t("common.cancel")}
+        </Button>
+        <Button
+          size="small" variant="contained" disabled={uploading || !file}
+          onClick={handleUpload}
+          startIcon={uploading ? <CircularProgress size={14} color="inherit" /> : <CloudUpload sx={{ fontSize: 14 }} />}
+          sx={{ borderRadius: 2, textTransform: "none", fontSize: "0.75rem", bgcolor: "#ea580c", "&:hover": { bgcolor: "#c2410c" } }}
+        >
+          {uploading ? t("chat.uploading") : t("chat.uploadJdBtn")}
+        </Button>
+      </Box>
+    </Paper>
   );
 }
 
 /* ── Inline Job Created Card ───────────────────────────────────────────── */
 
 function JobCreatedCard({ job }: { job: Job }) {
+  const { t } = useTranslation();
   return (
-    <div className="mt-2 rounded-xl border border-green-200 bg-green-50 p-4">
-      <div className="flex items-center gap-2 text-green-700">
-        <Briefcase className="h-5 w-5" />
-        <span className="font-medium">Job created!</span>
-      </div>
-      <div className="mt-2 space-y-1 text-sm text-green-700">
-        <p><span className="font-medium">Title:</span> {job.title}</p>
-        {job.company && <p><span className="font-medium">Company:</span> {job.company}</p>}
-        {job.location && <p><span className="font-medium">Location:</span> {job.location}{job.remote ? " (Remote)" : ""}</p>}
-        {job.salary_range && <p><span className="font-medium">Salary:</span> {job.salary_range}</p>}
-        {job.required_skills?.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-1">
-            {job.required_skills.slice(0, 8).map((s: string) => (
-              <span key={s} className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">{s}</span>
-            ))}
-          </div>
+    <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "success.light", bgcolor: "#f0fdf4" }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "success.dark" }}>
+        <WorkOutline sx={{ fontSize: 20 }} />
+        <Typography variant="body2" fontWeight={500}>{t("chat.jobCreated")}</Typography>
+      </Box>
+      <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
+        <Typography variant="body2" sx={{ color: "success.dark" }}>
+          <Box component="span" fontWeight={500}>{t("chat.titleLabel")}</Box> {job.title}
+        </Typography>
+        {job.company && (
+          <Typography variant="body2" sx={{ color: "success.dark" }}>
+            <Box component="span" fontWeight={500}>{t("chat.companyLabel")}</Box> {job.company}
+          </Typography>
         )}
-        {job.summary && <p className="pt-1 text-xs text-green-600">{job.summary}</p>}
-      </div>
-    </div>
+        {job.location && (
+          <Typography variant="body2" sx={{ color: "success.dark" }}>
+            <Box component="span" fontWeight={500}>{t("chat.locationLabel")}</Box> {job.location}{job.remote ? ` (${t("common.remote")})` : ""}
+          </Typography>
+        )}
+        {job.salary_range && (
+          <Typography variant="body2" sx={{ color: "success.dark" }}>
+            <Box component="span" fontWeight={500}>{t("chat.salaryLabel")}</Box> {job.salary_range}
+          </Typography>
+        )}
+        {job.required_skills?.length > 0 && (
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, pt: 0.5 }}>
+            {job.required_skills.slice(0, 8).map((s: string) => (
+              <Chip key={s} label={s} size="small" sx={{ bgcolor: "#dcfce7", color: "success.dark", fontSize: "0.7rem", height: 22 }} />
+            ))}
+          </Box>
+        )}
+        {job.summary && (
+          <Typography variant="caption" sx={{ pt: 0.5, color: "success.main" }}>{job.summary}</Typography>
+        )}
+      </Box>
+    </Paper>
   );
 }
 
 /* ── Inline Candidate Created Card ────────────────────────────────────── */
 
 function CandidateCreatedCard({ candidate }: { candidate: Candidate }) {
+  const { t } = useTranslation();
   return (
-    <div className="mt-2 rounded-xl border border-green-200 bg-green-50 p-4">
-      <div className="flex items-center gap-2 text-green-700">
-        <UserPlus className="h-5 w-5" />
-        <span className="font-medium">Candidate added!</span>
-      </div>
-      <div className="mt-2 space-y-1 text-sm text-green-700">
-        <p><span className="font-medium">Name:</span> {candidate.name}</p>
-        {candidate.current_title && <p><span className="font-medium">Title:</span> {candidate.current_title}{candidate.current_company ? ` at ${candidate.current_company}` : ""}</p>}
-        {candidate.email && <p><span className="font-medium">Email:</span> {candidate.email}</p>}
-        {candidate.experience_years && <p><span className="font-medium">Experience:</span> {candidate.experience_years} years</p>}
+    <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "success.light", bgcolor: "#f0fdf4" }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "success.dark" }}>
+        <PersonAddOutlined sx={{ fontSize: 20 }} />
+        <Typography variant="body2" fontWeight={500}>{t("chat.candidateAdded")}</Typography>
+      </Box>
+      <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
+        <Typography variant="body2" sx={{ color: "success.dark" }}>
+          <Box component="span" fontWeight={500}>{t("chat.nameLabel")}</Box> {candidate.name}
+        </Typography>
+        {candidate.current_title && (
+          <Typography variant="body2" sx={{ color: "success.dark" }}>
+            <Box component="span" fontWeight={500}>{t("chat.titleLabel")}</Box> {candidate.current_title}{candidate.current_company ? ` at ${candidate.current_company}` : ""}
+          </Typography>
+        )}
+        {candidate.email && (
+          <Typography variant="body2" sx={{ color: "success.dark" }}>
+            <Box component="span" fontWeight={500}>{t("chat.emailLabel")}</Box> {candidate.email}
+          </Typography>
+        )}
+        {candidate.experience_years && (
+          <Typography variant="body2" sx={{ color: "success.dark" }}>
+            <Box component="span" fontWeight={500}>{t("chat.experienceLabel")}</Box> {candidate.experience_years} years
+          </Typography>
+        )}
         {candidate.skills?.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-1">
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, pt: 0.5 }}>
             {candidate.skills.slice(0, 8).map((s: string) => (
-              <span key={s} className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">{s}</span>
+              <Chip key={s} label={s} size="small" sx={{ bgcolor: "#dcfce7", color: "success.dark", fontSize: "0.7rem", height: 22 }} />
             ))}
-          </div>
+          </Box>
         )}
         {candidate.match_score > 0 && (
-          <p className="pt-1 text-xs text-green-600">Match score: {Math.round(candidate.match_score * 100)}%</p>
+          <Typography variant="caption" sx={{ pt: 0.5, color: "success.main" }}>
+            {t("chat.matchScore", { percent: Math.round(candidate.match_score * 100) })}
+          </Typography>
         )}
-      </div>
-    </div>
+      </Box>
+    </Paper>
   );
 }
 
+/* ── Market Report Card ────────────────────────────────────────────────── */
+
 function MarketReportCard({ report }: { report: MarketReport }) {
-  const demandColor = report.market_demand === "high" ? "text-green-700 bg-green-100"
-    : report.market_demand === "medium" ? "text-yellow-700 bg-yellow-100"
-    : "text-red-700 bg-red-100";
+  const { t } = useTranslation();
+  const demandColor = report.market_demand === "high"
+    ? { color: "success.dark", bgcolor: "#dcfce7" }
+    : report.market_demand === "medium"
+    ? { color: "#854d0e", bgcolor: "#fef9c3" }
+    : { color: "error.dark", bgcolor: "#fecaca" };
 
   const fmt = (n: number) => {
     const currency = report.salary_range?.currency || "USD";
@@ -386,81 +554,91 @@ function MarketReportCard({ report }: { report: MarketReport }) {
   const sr = report.salary_range || {} as MarketReport["salary_range"];
 
   return (
-    <div className="mt-2 rounded-xl border border-blue-200 bg-blue-50 p-4">
-      <div className="flex items-center gap-2 text-blue-700">
-        <TrendingUp className="h-5 w-5" />
-        <span className="font-medium">Market Report: {report.role}</span>
-        {report.location && <span className="text-xs text-blue-500">({report.location})</span>}
-      </div>
+    <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "#93c5fd", bgcolor: "#eff6ff" }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#1d4ed8" }}>
+        <TrendingUpOutlined sx={{ fontSize: 20 }} />
+        <Typography variant="body2" fontWeight={500}>{t("chat.marketReport", { role: report.role })}</Typography>
+        {report.location && (
+          <Typography variant="caption" sx={{ color: "#3b82f6" }}>({report.location})</Typography>
+        )}
+      </Box>
 
       {/* Salary Range */}
       {sr.min != null && sr.max != null && (
-        <div className="mt-3 rounded-lg bg-white/60 p-3">
-          <div className="flex items-center gap-1 text-xs font-medium text-blue-600 mb-2">
-            <DollarSign className="h-3.5 w-3.5" />
-            Salary Range
-          </div>
-          <div className="flex items-end gap-4 text-sm">
-            <div><span className="text-xs text-gray-500">Min</span><br /><span className="font-medium">{fmt(sr.min)}</span></div>
-            <div><span className="text-xs text-gray-500">Median</span><br /><span className="font-semibold text-blue-700">{fmt(sr.median)}</span></div>
-            <div><span className="text-xs text-gray-500">Max</span><br /><span className="font-medium">{fmt(sr.max)}</span></div>
-          </div>
+        <Paper elevation={0} sx={{ mt: 1.5, p: 1.5, borderRadius: 2, bgcolor: "rgba(255,255,255,0.6)" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
+            <AttachMoneyOutlined sx={{ fontSize: 14, color: "#2563eb" }} />
+            <Typography variant="caption" fontWeight={500} sx={{ color: "#2563eb" }}>{t("chat.salaryRange")}</Typography>
+          </Box>
+          <Box sx={{ display: "flex", alignItems: "flex-end", gap: 4 }}>
+            <Box>
+              <Typography variant="caption" color="text.secondary">{t("chat.min")}</Typography>
+              <Typography variant="body2" fontWeight={500} display="block">{fmt(sr.min)}</Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">{t("chat.median")}</Typography>
+              <Typography variant="body2" fontWeight={600} display="block" sx={{ color: "#1d4ed8" }}>{fmt(sr.median)}</Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">{t("chat.max")}</Typography>
+              <Typography variant="body2" fontWeight={500} display="block">{fmt(sr.max)}</Typography>
+            </Box>
+          </Box>
           {/* Simple bar */}
-          <div className="mt-2 h-2 w-full rounded-full bg-gray-200 relative">
-            <div className="absolute h-2 rounded-full bg-blue-400" style={{
-              left: "0%", width: "100%",
-            }} />
+          <Box sx={{ mt: 1, height: 8, width: "100%", borderRadius: 4, bgcolor: "grey.200", position: "relative" }}>
+            <Box sx={{ position: "absolute", height: 8, borderRadius: 4, bgcolor: "#60a5fa", left: "0%", width: "100%" }} />
             {sr.max > sr.min && (
-              <div className="absolute top-0 h-2 w-1 bg-blue-700 rounded-full" style={{
+              <Box sx={{
+                position: "absolute", top: 0, height: 8, width: 4, bgcolor: "#1d4ed8", borderRadius: 4,
                 left: `${((sr.median - sr.min) / (sr.max - sr.min)) * 100}%`,
               }} />
             )}
-          </div>
-        </div>
+          </Box>
+        </Paper>
       )}
 
       {/* Demand badge */}
-      <div className="mt-3 flex items-center gap-2">
-        <span className="text-xs text-gray-500">Market Demand:</span>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${demandColor}`}>
-          {report.market_demand}
-        </span>
-      </div>
+      <Box sx={{ mt: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
+        <Typography variant="caption" color="text.secondary">{t("chat.marketDemand")}</Typography>
+        <Chip label={report.market_demand} size="small" sx={{ ...demandColor, fontSize: "0.7rem", fontWeight: 500, height: 22 }} />
+      </Box>
 
       {/* Key Factors */}
       {report.key_factors?.length > 0 && (
-        <div className="mt-2">
-          <span className="text-xs font-medium text-blue-600">Key Factors</span>
-          <div className="mt-1 flex flex-wrap gap-1">
+        <Box sx={{ mt: 1 }}>
+          <Typography variant="caption" fontWeight={500} sx={{ color: "#2563eb" }}>{t("chat.keyFactors")}</Typography>
+          <Box sx={{ mt: 0.5, display: "flex", flexWrap: "wrap", gap: 0.5 }}>
             {report.key_factors.map((f: string, i: number) => (
-              <span key={i} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{f}</span>
+              <Chip key={i} label={f} size="small" sx={{ bgcolor: "#dbeafe", color: "#1d4ed8", fontSize: "0.7rem", height: 22 }} />
             ))}
-          </div>
-        </div>
+          </Box>
+        </Box>
       )}
 
       {/* Comparable Titles */}
       {report.comparable_titles?.length > 0 && (
-        <div className="mt-2">
-          <span className="text-xs font-medium text-blue-600">Comparable Titles</span>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {report.comparable_titles.map((t: string, i: number) => (
-              <span key={i} className="rounded-full bg-white/80 px-2 py-0.5 text-xs text-blue-600 border border-blue-200">{t}</span>
+        <Box sx={{ mt: 1 }}>
+          <Typography variant="caption" fontWeight={500} sx={{ color: "#2563eb" }}>{t("chat.comparableTitles")}</Typography>
+          <Box sx={{ mt: 0.5, display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+            {report.comparable_titles.map((title: string, i: number) => (
+              <Chip key={i} label={title} size="small" variant="outlined"
+                sx={{ bgcolor: "rgba(255,255,255,0.8)", color: "#2563eb", borderColor: "#93c5fd", fontSize: "0.7rem", height: 22 }}
+              />
             ))}
-          </div>
-        </div>
+          </Box>
+        </Box>
       )}
 
       {/* Regional Notes */}
       {report.regional_notes && (
-        <p className="mt-2 text-xs text-blue-600">{report.regional_notes}</p>
+        <Typography variant="caption" sx={{ mt: 1, display: "block", color: "#2563eb" }}>{report.regional_notes}</Typography>
       )}
 
       {/* Summary */}
       {report.summary && (
-        <p className="mt-2 text-sm text-blue-700">{report.summary}</p>
+        <Typography variant="body2" sx={{ mt: 1, color: "#1d4ed8" }}>{report.summary}</Typography>
       )}
-    </div>
+    </Paper>
   );
 }
 
@@ -475,56 +653,83 @@ function SessionSidebar({
   onDelete: (id: string, e: React.MouseEvent) => void;
   onNewChat: () => void;
 }) {
+  const { t } = useTranslation();
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return "Today";
-    if (diffDays === 1) return "Yesterday";
-    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffDays === 0) return t("common.today");
+    if (diffDays === 1) return t("common.yesterday");
+    if (diffDays < 7) return t("common.daysAgo", { count: diffDays });
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
   return (
-    <div className="flex w-56 flex-col rounded-xl border border-gray-200 bg-white">
-      <div className="border-b border-gray-100 p-2.5">
-        <button onClick={onNewChat}
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-3 py-2 text-xs font-medium text-white hover:opacity-90">
-          <Plus className="h-3.5 w-3.5" /> New Chat
-        </button>
-      </div>
-      <div className="flex-1 overflow-y-auto p-1.5">
+    <Paper
+      variant="outlined"
+      sx={{ display: "flex", flexDirection: "column", width: 224, borderRadius: 3, overflow: "hidden" }}
+    >
+      <Box sx={{ borderBottom: "1px solid", borderColor: "grey.100", p: 1.25 }}>
+        <Button
+          fullWidth variant="contained" size="small"
+          onClick={onNewChat}
+          startIcon={<Add sx={{ fontSize: 14 }} />}
+          sx={{
+            borderRadius: 2, textTransform: "none", fontSize: "0.75rem", fontWeight: 500,
+            background: "linear-gradient(to right, #2563eb, #7c3aed)", "&:hover": { opacity: 0.9 },
+          }}
+        >
+          {t("chat.newChat")}
+        </Button>
+      </Box>
+      <Box sx={{ flex: 1, overflowY: "auto", p: 0.75 }}>
         {sessions.length === 0 ? (
-          <p className="px-2 py-4 text-center text-xs text-gray-400">No conversations yet</p>
+          <Typography variant="caption" sx={{ display: "block", px: 1, py: 4, textAlign: "center", color: "text.disabled" }}>
+            {t("chat.noConversations")}
+          </Typography>
         ) : (
-          <div className="space-y-0.5">
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
             {sessions.map((s) => (
-              <button key={s.id} onClick={() => onSelect(s)}
-                className={`group flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors ${
-                  activeSessionId === s.id ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
-                }`}>
-                <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{s.title}</p>
-                  <p className="text-[10px] text-gray-400">{formatDate(s.updated_at)}</p>
-                </div>
-                <button onClick={(e) => onDelete(s.id, e)}
-                  className="mt-0.5 hidden shrink-0 rounded p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600 group-hover:block"
-                  title="Delete">
-                  <X className="h-3 w-3" />
-                </button>
-              </button>
+              <Box
+                key={s.id}
+                onClick={() => onSelect(s)}
+                sx={{
+                  display: "flex", alignItems: "flex-start", gap: 1, borderRadius: 2,
+                  px: 1.25, py: 1, textAlign: "left", cursor: "pointer",
+                  bgcolor: activeSessionId === s.id ? "#eff6ff" : "transparent",
+                  color: activeSessionId === s.id ? "#1d4ed8" : "text.primary",
+                  "&:hover": { bgcolor: activeSessionId === s.id ? "#eff6ff" : "grey.50" },
+                  "& .delete-btn": { display: "none" },
+                  "&:hover .delete-btn": { display: "block" },
+                }}
+              >
+                <ChatBubbleOutline sx={{ mt: 0.25, fontSize: 14, flexShrink: 0, color: "text.disabled" }} />
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography variant="caption" fontWeight={500} noWrap sx={{ display: "block" }}>{s.title}</Typography>
+                  <Typography variant="caption" sx={{ fontSize: "0.625rem", color: "text.disabled" }}>{formatDate(s.updated_at)}</Typography>
+                </Box>
+                <IconButton
+                  size="small"
+                  className="delete-btn"
+                  onClick={(e) => onDelete(s.id, e)}
+                  title="Delete"
+                  sx={{ mt: 0.25, p: 0.25, flexShrink: 0, color: "text.disabled", "&:hover": { bgcolor: "grey.200", color: "text.secondary" } }}
+                >
+                  <Close sx={{ fontSize: 12 }} />
+                </IconButton>
+              </Box>
             ))}
-          </div>
+          </Box>
         )}
-      </div>
-    </div>
+      </Box>
+    </Paper>
   );
 }
 
 /* ── Control Center (Chat Page) ─────────────────────────────────────────── */
 
 export default function Chat() {
+  const { t } = useTranslation();
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -547,21 +752,21 @@ export default function Chat() {
     if (sessions.length > 0) {
       setActiveSessionId(sessions[0].id);
     } else {
-      setMessages([candidates ? makeBriefing(candidates) : makeSimpleGreeting()]);
+      setMessages([candidates ? makeBriefing(candidates, t) : makeSimpleGreeting(t)]);
     }
-  }, [sessions, candidates]);
+  }, [sessions, candidates, t]);
 
   // Load messages when session changes
   useEffect(() => {
     if (!activeSessionId) return;
     getChatHistory(activeSessionId).then((msgs) => {
       if (msgs.length === 0) {
-        setMessages([candidates ? makeBriefing(candidates) : makeSimpleGreeting()]);
+        setMessages([candidates ? makeBriefing(candidates, t) : makeSimpleGreeting(t)]);
       } else {
         setMessages(msgs);
       }
     });
-  }, [activeSessionId, candidates]);
+  }, [activeSessionId, candidates, t]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -580,8 +785,8 @@ export default function Chat() {
   const suggestions = useMemo(
     () => backendSuggestions.length > 0
       ? backendSuggestions
-      : buildSuggestions(messages, candidates ?? null, lastAction),
-    [messages, candidates, lastAction, backendSuggestions],
+      : buildSuggestions(messages, candidates ?? null, lastAction, t),
+    [messages, candidates, lastAction, backendSuggestions, t],
   );
 
   /* ── Send ──────────────────────────────────────────────────────────────── */
@@ -683,7 +888,7 @@ export default function Chat() {
       setStreamingText("");
       setMessages((prev) => [...prev, {
         id: "error-" + Date.now(), user_id: "", role: "assistant",
-        content: "Sorry, I encountered an error. Please try again.",
+        content: t("chat.errorMessage"),
         created_at: new Date().toISOString(),
       }]);
     } finally {
@@ -715,7 +920,7 @@ export default function Chat() {
       setMessages((prev) => [...prev, { id: "congrats-" + Date.now(), user_id: "", role: "assistant", content, created_at: new Date().toISOString() }]);
       refreshCandidates();
     } catch {
-      const content = "Failed to send the email. Please check your email configuration in Settings.";
+      const content = t("chat.failedToSendEmail");
       if (activeSessionId) saveChatMessage(activeSessionId, content).catch(() => {});
       setMessages((prev) => [...prev, { id: "error-" + Date.now(), user_id: "", role: "assistant", content, created_at: new Date().toISOString() }]);
     }
@@ -782,7 +987,7 @@ export default function Chat() {
 
   const handleNewChat = () => {
     setActiveSessionId(null);
-    setMessages([candidates ? makeBriefing(candidates) : makeSimpleGreeting()]);
+    setMessages([candidates ? makeBriefing(candidates, t) : makeSimpleGreeting(t)]);
     setContextView({ type: "briefing" });
     setPipelineStage(null);
   };
@@ -821,7 +1026,7 @@ export default function Chat() {
   /* ── Render ────────────────────────────────────────────────────────────── */
 
   return (
-    <div className="flex h-full flex-col gap-3">
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", gap: 1.5 }}>
       {/* Pipeline Bar */}
       <PipelineBar candidates={candidates ?? []} activeStage={pipelineStage} onStageClick={handleStageClick} />
 
@@ -837,36 +1042,59 @@ export default function Chat() {
       )}
 
       {/* Main: sessions + chat + context */}
-      <div className="flex min-h-0 flex-1 gap-3">
+      <Box sx={{ display: "flex", minHeight: 0, flex: 1, gap: 1.5 }}>
         {/* Sessions */}
         <SessionSidebar sessions={sessions ?? []} activeSessionId={activeSessionId}
           onSelect={handleSelectSession} onDelete={handleDeleteSession} onNewChat={handleNewChat} />
 
         {/* Chat */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center justify-between pb-2">
-            <div className="flex items-center gap-2">
-              <img src="/ai-chan-avatar.png" alt="Erika Chan" className="h-7 w-7 rounded-full object-cover" />
-              <h2 className="text-sm font-semibold text-gray-800">Erika Chan</h2>
-            </div>
-            <button onClick={handleClearAll}
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-[10px] font-medium text-gray-500 hover:bg-gray-50">
-              <Trash2 className="h-3 w-3" /> Clear
-            </button>
-          </div>
+        <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Avatar
+                src="/ai-chan-avatar.png"
+                alt="Erika Chan"
+                sx={{ width: 28, height: 28 }}
+              />
+              <Typography variant="body2" fontWeight={600} color="text.primary">Erika Chan</Typography>
+            </Box>
+            <Button
+              size="small" variant="outlined" color="inherit"
+              onClick={handleClearAll}
+              startIcon={<DeleteOutline sx={{ fontSize: 12 }} />}
+              sx={{ fontSize: "0.625rem", fontWeight: 500, color: "text.secondary", borderColor: "grey.200", borderRadius: 2, textTransform: "none" }}
+            >
+              {t("chat.clear")}
+            </Button>
+          </Box>
 
-          <div className="flex-1 space-y-3 overflow-y-auto rounded-xl border border-gray-200 bg-white p-4">
+          <Paper
+            variant="outlined"
+            sx={{
+              flex: 1, overflowY: "auto", borderRadius: 3, p: 2,
+              display: "flex", flexDirection: "column", gap: 1.5,
+            }}
+          >
             {messages.map((msg) => (
-              <div key={msg.id} className={`flex gap-2.5 ${msg.role === "user" ? "justify-end" : ""}`}>
+              <Box key={msg.id} sx={{ display: "flex", gap: 1.25, justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
                 {msg.role === "assistant" && (
-                  <img src="/ai-chan-avatar.png" alt="Erika" className="h-6 w-6 shrink-0 rounded-full object-cover" />
+                  <Avatar
+                    src="/ai-chan-avatar.png"
+                    alt="Erika"
+                    sx={{ width: 24, height: 24, flexShrink: 0 }}
+                  />
                 )}
-                <div className="max-w-[85%]">
-                  <div className={`rounded-xl px-3.5 py-2.5 ${
-                    msg.role === "user" ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-800"
-                  }`}>
-                    <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
-                  </div>
+                <Box sx={{ maxWidth: "85%" }}>
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      borderRadius: 3, px: 1.75, py: 1.25,
+                      bgcolor: msg.role === "user" ? "primary.main" : "grey.50",
+                      color: msg.role === "user" ? "white" : "text.primary",
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{msg.content}</Typography>
+                  </Paper>
 
                   {msg.action?.type === "compose_email" && (
                     <EmailComposeCard email={msg.action.email}
@@ -906,46 +1134,86 @@ export default function Chat() {
                       onViewJob={handleViewJob}
                     />
                   )}
-                </div>
-              </div>
+                </Box>
+              </Box>
             ))}
 
             {sending && (
-              <div className="flex gap-2.5">
-                <img src="/ai-chan-avatar.png" alt="Erika" className="h-6 w-6 shrink-0 rounded-full object-cover" />
-                <div className="max-w-[85%]">
-                  <div className="rounded-xl bg-gray-50 px-3.5 py-2.5 text-gray-800">
+              <Box sx={{ display: "flex", gap: 1.25 }}>
+                <Avatar
+                  src="/ai-chan-avatar.png"
+                  alt="Erika"
+                  sx={{ width: 24, height: 24, flexShrink: 0 }}
+                />
+                <Box sx={{ maxWidth: "85%" }}>
+                  <Paper elevation={0} sx={{ borderRadius: 3, px: 1.75, py: 1.25, bgcolor: "grey.50", color: "text.primary" }}>
                     {streamingText ? (
-                      <p className="whitespace-pre-wrap text-sm">{streamingText}<span className="ml-0.5 inline-block h-4 w-1 animate-pulse bg-gray-400" /></p>
+                      <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                        {streamingText}
+                        <Box
+                          component="span"
+                          sx={{
+                            ml: 0.25, display: "inline-block", height: 16, width: 4,
+                            bgcolor: "grey.400", animation: "pulse 1s ease-in-out infinite",
+                            "@keyframes pulse": {
+                              "0%, 100%": { opacity: 1 },
+                              "50%": { opacity: 0.3 },
+                            },
+                          }}
+                        />
+                      </Typography>
                     ) : (
-                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                      <CircularProgress size={16} sx={{ color: "grey.400" }} />
                     )}
-                  </div>
-                </div>
-              </div>
+                  </Paper>
+                </Box>
+              </Box>
             )}
             <div ref={messagesEndRef} />
-          </div>
+          </Paper>
 
           <SmartActionBar suggestions={suggestions} onSelect={(p) => handleSend(p)} />
 
-          <div className="flex gap-2 pt-1">
-            <textarea value={input} onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown} placeholder="Ask Erika anything..." rows={1}
-              className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-            <button onClick={() => handleSend()} disabled={sending || !input.trim()}
-              className="flex items-center justify-center rounded-xl bg-blue-600 px-4 text-white hover:bg-blue-700 disabled:opacity-50">
-              <Send className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+          <Box sx={{ display: "flex", gap: 1, pt: 0.5 }}>
+            <TextField
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={t("chat.askErika")}
+              multiline
+              maxRows={4}
+              fullWidth
+              size="small"
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 3,
+                  "& fieldset": { borderColor: "grey.300" },
+                  "&:hover fieldset": { borderColor: "primary.light" },
+                  "&.Mui-focused fieldset": { borderColor: "primary.main" },
+                },
+                "& .MuiInputBase-input": { fontSize: "0.875rem", py: 1.25, px: 2 },
+              }}
+            />
+            <IconButton
+              onClick={() => handleSend()}
+              disabled={sending || !input.trim()}
+              sx={{
+                bgcolor: "primary.main", color: "white", borderRadius: 3, width: 44,
+                "&:hover": { bgcolor: "primary.dark" },
+                "&.Mui-disabled": { bgcolor: "grey.300", color: "white" },
+              }}
+            >
+              <SendOutlined sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Box>
+        </Box>
 
         {/* Context Panel */}
         <ContextPanel view={contextView}
           onClose={() => { setContextView(null); setPipelineStage(null); }}
           onViewCandidate={handleViewCandidate} onViewJob={handleViewJob}
           onSendPrompt={(p) => handleSend(p)} />
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }

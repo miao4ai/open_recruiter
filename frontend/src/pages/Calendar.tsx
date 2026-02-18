@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  X,
-  Clock,
-  User,
-  Briefcase,
-  Trash2,
-  Edit3,
-} from "lucide-react";
+  ChevronLeftOutlined,
+  ChevronRightOutlined,
+  AddOutlined,
+  CloseOutlined,
+  AccessTimeOutlined,
+  PersonOutline,
+  WorkOutline,
+  DeleteOutline,
+  EditOutlined,
+} from "@mui/icons-material";
 import { useApi } from "../hooks/useApi";
 import {
   listEvents,
@@ -21,13 +22,7 @@ import {
 } from "../lib/api";
 import type { CalendarEvent, EventType, Candidate, Job } from "../types";
 
-/* ── Helpers ──────────────────────────────────────────────────────────── */
-
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/* -- Helpers ---------------------------------------------------------------- */
 
 const EVENT_COLORS: Record<EventType, { dot: string; bg: string; text: string }> = {
   interview: { dot: "bg-purple-500", bg: "bg-purple-50 border-purple-200", text: "text-purple-700" },
@@ -35,14 +30,6 @@ const EVENT_COLORS: Record<EventType, { dot: string; bg: string; text: string }>
   offer: { dot: "bg-green-500", bg: "bg-green-50 border-green-200", text: "text-green-700" },
   screening: { dot: "bg-amber-500", bg: "bg-amber-50 border-amber-200", text: "text-amber-700" },
   other: { dot: "bg-gray-400", bg: "bg-gray-50 border-gray-200", text: "text-gray-600" },
-};
-
-const EVENT_TYPE_LABELS: Record<EventType, string> = {
-  interview: "Interview",
-  follow_up: "Follow-up",
-  offer: "Offer",
-  screening: "Screening",
-  other: "Other",
 };
 
 function pad(n: number) {
@@ -69,7 +56,7 @@ function formatDateShort(iso: string) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-/* ── Calendar grid logic ──────────────────────────────────────────────── */
+/* -- Calendar grid logic ---------------------------------------------------- */
 
 function getCalendarDays(year: number, month: number) {
   const firstDay = new Date(year, month, 1).getDay();
@@ -94,7 +81,7 @@ function getCalendarDays(year: number, month: number) {
   return days;
 }
 
-/* ── Event Modal ──────────────────────────────────────────────────────── */
+/* -- Event Modal ------------------------------------------------------------ */
 
 function EventModal({
   date,
@@ -113,6 +100,7 @@ function EventModal({
   onDelete?: () => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const isEdit = !!event;
   const [title, setTitle] = useState(event?.title ?? "");
   const [startDate, setStartDate] = useState(
@@ -129,6 +117,14 @@ function EventModal({
   const [jobId, setJobId] = useState(event?.job_id ?? "");
   const [notes, setNotes] = useState(event?.notes ?? "");
   const [saving, setSaving] = useState(false);
+
+  const EVENT_TYPE_LABELS: Record<EventType, string> = {
+    interview: t("calendar.eventTypes.interview"),
+    follow_up: t("calendar.eventTypes.follow_up"),
+    offer: t("calendar.eventTypes.offer"),
+    screening: t("calendar.eventTypes.screening"),
+    other: t("calendar.eventTypes.other"),
+  };
 
   const selectedCandidate = candidates.find((c) => c.id === candidateId);
   const selectedJob = jobs.find((j) => j.id === jobId);
@@ -160,28 +156,28 @@ function EventModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b px-6 py-4">
-          <h3 className="text-lg font-semibold">{isEdit ? "Edit Event" : "New Event"}</h3>
+          <h3 className="text-lg font-semibold">{isEdit ? t("calendar.editEvent") : t("calendar.newEvent")}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="h-5 w-5" />
+            <CloseOutlined className="h-5 w-5" />
           </button>
         </div>
 
         {/* Body */}
         <div className="space-y-4 px-6 py-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Title</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">{t("calendar.title")}</label>
             <input
               className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Interview with John Smith"
+              placeholder={t("calendar.titlePlaceholder")}
               autoFocus
             />
           </div>
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Date</label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">{t("calendar.date")}</label>
               <input
                 type="date"
                 className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -190,7 +186,7 @@ function EventModal({
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Start</label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">{t("calendar.start")}</label>
               <input
                 type="time"
                 className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -199,7 +195,7 @@ function EventModal({
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">End</label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">{t("calendar.end")}</label>
               <input
                 type="time"
                 className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -210,19 +206,19 @@ function EventModal({
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Type</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">{t("calendar.type")}</label>
             <div className="flex flex-wrap gap-2">
-              {(Object.keys(EVENT_TYPE_LABELS) as EventType[]).map((t) => (
+              {(Object.keys(EVENT_TYPE_LABELS) as EventType[]).map((typ) => (
                 <button
-                  key={t}
-                  onClick={() => setEventType(t)}
+                  key={typ}
+                  onClick={() => setEventType(typ)}
                   className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                    eventType === t
-                      ? `${EVENT_COLORS[t].bg} ${EVENT_COLORS[t].text} border-current`
+                    eventType === typ
+                      ? `${EVENT_COLORS[typ].bg} ${EVENT_COLORS[typ].text} border-current`
                       : "border-gray-200 text-gray-500 hover:bg-gray-50"
                   }`}
                 >
-                  {EVENT_TYPE_LABELS[t]}
+                  {EVENT_TYPE_LABELS[typ]}
                 </button>
               ))}
             </div>
@@ -230,26 +226,26 @@ function EventModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Candidate</label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">{t("calendar.candidate")}</label>
               <select
                 className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 value={candidateId}
                 onChange={(e) => setCandidateId(e.target.value)}
               >
-                <option value="">None</option>
+                <option value="">{t("common.none")}</option>
                 {candidates.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Job</label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">{t("calendar.job")}</label>
               <select
                 className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 value={jobId}
                 onChange={(e) => setJobId(e.target.value)}
               >
-                <option value="">None</option>
+                <option value="">{t("common.none")}</option>
                 {jobs.map((j) => (
                   <option key={j.id} value={j.id}>{j.title} — {j.company}</option>
                 ))}
@@ -258,13 +254,13 @@ function EventModal({
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Notes</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">{t("calendar.notesLabel")}</label>
             <textarea
               className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               rows={3}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="What needs to happen at this event..."
+              placeholder={t("calendar.notesPlaceholder")}
             />
           </div>
         </div>
@@ -277,8 +273,8 @@ function EventModal({
                 onClick={onDelete}
                 className="flex items-center gap-1 text-sm text-red-500 hover:text-red-700"
               >
-                <Trash2 className="h-4 w-4" />
-                Delete
+                <DeleteOutline className="h-4 w-4" />
+                {t("common.delete")}
               </button>
             )}
           </div>
@@ -287,14 +283,14 @@ function EventModal({
               onClick={onClose}
               className="rounded-lg border px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               onClick={handleSubmit}
               disabled={!title.trim() || !startDate || saving}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              {saving ? "Saving..." : isEdit ? "Update" : "Create"}
+              {saving ? t("common.saving") : isEdit ? t("calendar.update") : t("calendar.create")}
             </button>
           </div>
         </div>
@@ -303,7 +299,7 @@ function EventModal({
   );
 }
 
-/* ── Event Detail Modal ───────────────────────────────────────────────── */
+/* -- Event Detail Modal ----------------------------------------------------- */
 
 function EventDetailModal({
   event,
@@ -316,7 +312,16 @@ function EventDetailModal({
   onDelete: () => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const colors = EVENT_COLORS[event.event_type] || EVENT_COLORS.other;
+
+  const EVENT_TYPE_LABELS: Record<EventType, string> = {
+    interview: t("calendar.eventTypes.interview"),
+    follow_up: t("calendar.eventTypes.follow_up"),
+    offer: t("calendar.eventTypes.offer"),
+    screening: t("calendar.eventTypes.screening"),
+    other: t("calendar.eventTypes.other"),
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
@@ -329,12 +334,12 @@ function EventDetailModal({
           <div className="flex items-start justify-between">
             <div>
               <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colors.text}`}>
-                {EVENT_TYPE_LABELS[event.event_type] || "Other"}
+                {EVENT_TYPE_LABELS[event.event_type] || t("calendar.eventTypes.other")}
               </span>
               <h3 className="mt-1 text-lg font-semibold text-gray-900">{event.title}</h3>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-              <X className="h-5 w-5" />
+              <CloseOutlined className="h-5 w-5" />
             </button>
           </div>
         </div>
@@ -342,7 +347,7 @@ function EventDetailModal({
         {/* Body */}
         <div className="space-y-3 px-6 py-4">
           <div className="flex items-center gap-2 text-sm text-gray-600">
-            <Clock className="h-4 w-4" />
+            <AccessTimeOutlined className="h-4 w-4" />
             <span>
               {formatDateShort(event.start_time)} {formatTime(event.start_time)}
               {event.end_time ? ` — ${formatTime(event.end_time)}` : ""}
@@ -351,14 +356,14 @@ function EventDetailModal({
 
           {event.candidate_name && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <User className="h-4 w-4" />
+              <PersonOutline className="h-4 w-4" />
               <span>{event.candidate_name}</span>
             </div>
           )}
 
           {event.job_title && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Briefcase className="h-4 w-4" />
+              <WorkOutline className="h-4 w-4" />
               <span>{event.job_title}</span>
             </div>
           )}
@@ -376,15 +381,15 @@ function EventDetailModal({
             onClick={onDelete}
             className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
           >
-            <Trash2 className="h-4 w-4" />
-            Delete
+            <DeleteOutline className="h-4 w-4" />
+            {t("common.delete")}
           </button>
           <button
             onClick={onEdit}
             className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
-            <Edit3 className="h-4 w-4" />
-            Edit
+            <EditOutlined className="h-4 w-4" />
+            {t("common.edit")}
           </button>
         </div>
       </div>
@@ -392,13 +397,17 @@ function EventDetailModal({
   );
 }
 
-/* ── Main Calendar Component ──────────────────────────────────────────── */
+/* -- Main Calendar Component ------------------------------------------------ */
 
 export default function Calendar() {
+  const { t } = useTranslation();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const todayStr = toDateStr(today);
+
+  const MONTH_NAMES = t("calendar.months", { returnObjects: true }) as string[];
+  const DAY_NAMES = t("calendar.days", { returnObjects: true }) as string[];
 
   // Modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -534,19 +543,19 @@ export default function Calendar() {
                 onClick={goPrev}
                 className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"
               >
-                <ChevronLeft className="h-5 w-5" />
+                <ChevronLeftOutlined className="h-5 w-5" />
               </button>
               <button
                 onClick={goToday}
                 className="rounded-lg border px-3 py-1 text-sm font-medium text-gray-600 hover:bg-gray-50"
               >
-                Today
+                {t("common.today")}
               </button>
               <button
                 onClick={goNext}
                 className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"
               >
-                <ChevronRight className="h-5 w-5" />
+                <ChevronRightOutlined className="h-5 w-5" />
               </button>
             </div>
           </div>
@@ -554,8 +563,8 @@ export default function Calendar() {
             onClick={() => { setCreateDate(todayStr); setShowCreateModal(true); }}
             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
-            <Plus className="h-4 w-4" />
-            New Event
+            <AddOutlined className="h-4 w-4" />
+            {t("calendar.newEvent")}
           </button>
         </div>
 
@@ -614,7 +623,7 @@ export default function Calendar() {
                   })}
                   {dayEvents.length > 3 && (
                     <span className="block px-1.5 text-xs text-gray-400">
-                      +{dayEvents.length - 3} more
+                      {t("calendar.more", { count: dayEvents.length - 3 })}
                     </span>
                   )}
                 </div>
@@ -626,9 +635,9 @@ export default function Calendar() {
 
       {/* Upcoming sidebar */}
       <div className="w-72 flex-shrink-0 rounded-xl border bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-gray-900">Upcoming (7 days)</h2>
+        <h2 className="mb-3 text-sm font-semibold text-gray-900">{t("calendar.upcoming7Days")}</h2>
         {upcoming.length === 0 ? (
-          <p className="text-sm text-gray-400">No upcoming events</p>
+          <p className="text-sm text-gray-400">{t("calendar.noUpcoming")}</p>
         ) : (
           <div className="space-y-2">
             {upcoming.map((evt) => {
@@ -644,12 +653,12 @@ export default function Calendar() {
                     <span className={`text-sm font-medium ${c.text}`}>{evt.title}</span>
                   </div>
                   <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
-                    <Clock className="h-3 w-3" />
+                    <AccessTimeOutlined className="h-3 w-3" />
                     {formatDateShort(evt.start_time)} {formatTime(evt.start_time)}
                   </div>
                   {evt.candidate_name && (
                     <div className="mt-0.5 flex items-center gap-1 text-xs text-gray-500">
-                      <User className="h-3 w-3" />
+                      <PersonOutline className="h-3 w-3" />
                       {evt.candidate_name}
                     </div>
                   )}

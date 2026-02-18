@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Send, Trash2, Loader2, Plus, MessageSquare, X, Upload,
-} from "lucide-react";
+  SendOutlined, DeleteOutline, AddOutlined, ChatBubbleOutlineOutlined, CloseOutlined, UploadOutlined,
+} from "@mui/icons-material";
+import { CircularProgress } from "@mui/material";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { useApi } from "../hooks/useApi";
 import {
   sendChatMessage,
@@ -29,13 +32,12 @@ function AiChanAvatar({ size = "sm" }: { size?: "sm" | "lg" }) {
 
 /* ── Greeting message ─────────────────────────────────────────────────── */
 
-function makeGreeting(): ChatMessage {
+function makeGreeting(t: TFunction): ChatMessage {
   return {
     id: "greeting-" + Date.now(),
     user_id: "",
     role: "assistant",
-    content:
-      "Hi there! I'm Ai Chan, your Job Seeker Assistant. How can I help you today?\n\nI can help you with things like:\n- Preparing for interviews\n- Reviewing your resume\n- Exploring career options\n- Answering questions about job searching",
+    content: t("jobSeekerHome.greeting"),
     created_at: new Date().toISOString(),
   };
 }
@@ -55,15 +57,17 @@ function SessionSidebar({
   onDelete: (id: string, e: React.MouseEvent) => void;
   onNewChat: () => void;
 }) {
+  const { t } = useTranslation();
+
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
     const now = new Date();
     const diffDays = Math.floor(
       (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24)
     );
-    if (diffDays === 0) return "Today";
-    if (diffDays === 1) return "Yesterday";
-    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffDays === 0) return t("common.today");
+    if (diffDays === 1) return t("common.yesterday");
+    if (diffDays < 7) return t("common.daysAgo", { count: diffDays });
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
@@ -74,14 +78,14 @@ function SessionSidebar({
           onClick={onNewChat}
           className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-pink-500 to-rose-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90"
         >
-          <Plus className="h-4 w-4" />
-          New Chat
+          <AddOutlined className="h-4 w-4" />
+          {t("jobSeekerHome.newChat")}
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-2">
         {sessions.length === 0 ? (
           <p className="px-2 py-4 text-center text-xs text-gray-400">
-            No past conversations
+            {t("jobSeekerHome.noPastConversations")}
           </p>
         ) : (
           <div className="space-y-1">
@@ -95,7 +99,7 @@ function SessionSidebar({
                     : "text-gray-700 hover:bg-gray-50"
                 }`}
               >
-                <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+                <ChatBubbleOutlineOutlined className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{s.title}</p>
                   <p className="text-xs text-gray-400">{formatDate(s.updated_at)}</p>
@@ -103,9 +107,9 @@ function SessionSidebar({
                 <button
                   onClick={(e) => onDelete(s.id, e)}
                   className="mt-0.5 hidden shrink-0 rounded p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600 group-hover:block"
-                  title="Delete session"
+                  title={t("jobSeekerHome.deleteSession")}
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <CloseOutlined className="h-3.5 w-3.5" />
                 </button>
               </button>
             ))}
@@ -119,6 +123,7 @@ function SessionSidebar({
 /* ── Main Chat Page ───────────────────────────────────────────────────── */
 
 export default function JobSeekerHome() {
+  const { t } = useTranslation();
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -149,10 +154,10 @@ export default function JobSeekerHome() {
   useEffect(() => {
     if (!activeSessionId) return;
     getChatHistory(activeSessionId).then((msgs) => {
-      const greeting = makeGreeting();
+      const greeting = makeGreeting(t);
       setMessages([greeting, ...msgs]);
     });
-  }, [activeSessionId]);
+  }, [activeSessionId, t]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -199,7 +204,7 @@ export default function JobSeekerHome() {
           id: "error-" + Date.now(),
           user_id: "",
           role: "assistant",
-          content: "Sorry, something went wrong. Please try again.",
+          content: t("jobSeekerHome.genericError"),
           created_at: new Date().toISOString(),
         },
       ]);
@@ -223,7 +228,7 @@ export default function JobSeekerHome() {
       id: "upload-" + Date.now(),
       user_id: "",
       role: "user",
-      content: `Uploading resume: ${file.name}`,
+      content: t("jobSeekerHome.uploadingResume", { filename: file.name }),
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, tempMsg]);
@@ -235,14 +240,14 @@ export default function JobSeekerHome() {
         user_id: "",
         role: "assistant",
         content:
-          `I've processed your resume and created your profile! Here's what I found:\n\n` +
+          `${t("jobSeekerHome.resumeProcessed")}\n\n` +
           `**Name:** ${profile.name || "N/A"}\n` +
           `**Title:** ${profile.current_title || "N/A"}\n` +
           `**Company:** ${profile.current_company || "N/A"}\n` +
           `**Skills:** ${(profile.skills || []).slice(0, 8).join(", ") || "N/A"}\n` +
           `**Experience:** ${profile.experience_years ?? "N/A"} years\n` +
           `**Location:** ${profile.location || "N/A"}\n\n` +
-          `You can view and edit your full profile from the **My Profile** page in the sidebar.`,
+          t("jobSeekerHome.viewProfile"),
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, successMsg]);
@@ -257,8 +262,7 @@ export default function JobSeekerHome() {
           id: "upload-error-" + Date.now(),
           user_id: "",
           role: "assistant",
-          content:
-            "Sorry, I had trouble processing your resume. Please make sure it's a PDF, DOCX, or TXT file and try again.",
+          content: t("jobSeekerHome.uploadError"),
           created_at: new Date().toISOString(),
         },
       ]);
@@ -272,7 +276,7 @@ export default function JobSeekerHome() {
 
   const handleNewChat = () => {
     setActiveSessionId(null);
-    setMessages([makeGreeting()]);
+    setMessages([makeGreeting(t)]);
     setStarted(true);
   };
 
@@ -316,16 +320,16 @@ export default function JobSeekerHome() {
           <div className="flex flex-col items-center gap-6">
             <AiChanAvatar size="lg" />
             <div className="text-center">
-              <h1 className="text-2xl font-bold text-gray-800">Ai Chan</h1>
+              <h1 className="text-2xl font-bold text-gray-800">{t("jobSeekerHome.aiChan")}</h1>
               <p className="mt-2 text-gray-500">
-                Your Job Seeker Assistant is ready to help
+                {t("jobSeekerHome.assistantReady")}
               </p>
             </div>
             <button
               onClick={handleNewChat}
               className="rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 px-10 py-3.5 text-lg font-semibold text-white shadow-lg transition-all hover:scale-105 hover:shadow-xl active:scale-100"
             >
-              Start Chat
+              {t("jobSeekerHome.startChat")}
             </button>
           </div>
         </div>
@@ -353,13 +357,13 @@ export default function JobSeekerHome() {
         <div className="flex items-center justify-between pb-4">
           <div className="flex items-center gap-2">
             <AiChanAvatar />
-            <h2 className="text-lg font-semibold">Ai Chan</h2>
+            <h2 className="text-lg font-semibold">{t("jobSeekerHome.aiChan")}</h2>
           </div>
           <button
             onClick={handleClearAll}
             className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
           >
-            <Trash2 className="h-3.5 w-3.5" /> Clear All
+            <DeleteOutline className="h-3.5 w-3.5" /> {t("jobSeekerHome.clearAll")}
           </button>
         </div>
 
@@ -389,7 +393,7 @@ export default function JobSeekerHome() {
             <div className="flex gap-3">
               <AiChanAvatar />
               <div className="rounded-xl bg-gray-50 px-4 py-3">
-                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                <CircularProgress size={16} sx={{ color: 'rgb(156 163 175)' }} />
               </div>
             </div>
           )}
@@ -412,19 +416,19 @@ export default function JobSeekerHome() {
               disabled={uploading || sending}
               className="flex items-center justify-center rounded-xl border border-gray-300 px-3
                 text-gray-500 hover:bg-gray-50 hover:text-pink-500 disabled:opacity-50"
-              title="Upload resume"
+              title={t("jobSeekerHome.uploadResumeTitle")}
             >
               {uploading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <CircularProgress size={20} />
               ) : (
-                <Upload className="h-5 w-5" />
+                <UploadOutlined className="h-5 w-5" />
               )}
             </button>
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask Ai Chan anything..."
+              placeholder={t("jobSeekerHome.askAiChan")}
               rows={2}
               className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
             />
@@ -433,11 +437,11 @@ export default function JobSeekerHome() {
               disabled={sending || !input.trim()}
               className="flex h-auto items-center justify-center rounded-xl bg-pink-500 px-4 text-white hover:bg-pink-600 disabled:opacity-50"
             >
-              <Send className="h-5 w-5" />
+              <SendOutlined className="h-5 w-5" />
             </button>
           </div>
           <p className="mt-1 text-center text-xs text-gray-400">
-            Upload your resume or ask Ai Chan anything. Enter to send.
+            {t("jobSeekerHome.inputHint")}
           </p>
         </div>
       </div>

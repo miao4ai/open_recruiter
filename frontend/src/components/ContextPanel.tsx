@@ -1,9 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
-  X, Users, Briefcase, Calendar, Mail, MapPin, Building2,
-  Star, Clock, ChevronRight, FileText, TrendingUp,
-  AlertTriangle, Bell, Sparkles, ArrowRight,
-} from "lucide-react";
+  CloseOutlined,
+  PeopleOutlined,
+  WorkOutline,
+  CalendarTodayOutlined,
+  MailOutline,
+  LocationOnOutlined,
+  BusinessOutlined,
+  Star as StarIcon,
+  AccessTimeOutlined,
+  ChevronRightOutlined,
+  DescriptionOutlined,
+  TrendingUpOutlined,
+  WarningAmberOutlined,
+  NotificationsOutlined,
+  AutoAwesomeOutlined,
+  ArrowForwardOutlined,
+} from "@mui/icons-material";
 import {
   DndContext,
   DragEndEvent,
@@ -32,6 +46,7 @@ interface Props {
 }
 
 export default function ContextPanel({ view, onClose, onViewCandidate, onViewJob, onSendPrompt }: Props) {
+  const { t } = useTranslation();
   if (!view) return null;
 
   return (
@@ -39,18 +54,18 @@ export default function ContextPanel({ view, onClose, onViewCandidate, onViewJob
       {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
         <h3 className="text-sm font-semibold text-gray-800">
-          {view.type === "briefing" && "Daily Briefing"}
-          {view.type === "candidate" && "Candidate"}
-          {view.type === "job" && "Job Details"}
-          {view.type === "pipeline_stage" && "Pipeline Stage"}
-          {view.type === "events" && "Upcoming Events"}
-          {view.type === "comparison" && "Compare Candidates"}
+          {view.type === "briefing" && t("contextPanel.dailyBriefing")}
+          {view.type === "candidate" && t("contextPanel.candidate")}
+          {view.type === "job" && t("contextPanel.jobDetails")}
+          {view.type === "pipeline_stage" && t("contextPanel.pipelineStage")}
+          {view.type === "events" && t("contextPanel.upcomingEvents")}
+          {view.type === "comparison" && t("contextPanel.compareCandidates")}
         </h3>
         <button
           onClick={onClose}
           className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
         >
-          <X className="h-4 w-4" />
+          <CloseOutlined sx={{ fontSize: 16 }} />
         </button>
       </div>
 
@@ -88,6 +103,7 @@ function BriefingView({
   onViewCandidate: (id: string) => void;
   onSendPrompt: (prompt: string) => void;
 }) {
+  const { t } = useTranslation();
   const { data: candidates } = useApi(useCallback(() => listCandidates(), []));
   const { data: emails } = useApi(useCallback(() => listEmails(), []));
   const { data: events } = useApi(useCallback(() => listEvents(), []));
@@ -124,17 +140,17 @@ function BriefingView({
     <div className="space-y-4">
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-2">
-        <StatCard icon={<Users className="h-4 w-4" />} label="Candidates" value={stats.total} color="blue" />
-        <StatCard icon={<Briefcase className="h-4 w-4" />} label="Active Jobs" value={stats.jobCount} color="purple" />
-        <StatCard icon={<Mail className="h-4 w-4" />} label="Pending Emails" value={stats.pendingEmails.length} color="amber" />
-        <StatCard icon={<Calendar className="h-4 w-4" />} label="Today's Events" value={stats.todayEvents.length} color="green" />
+        <StatCard icon={<PeopleOutlined sx={{ fontSize: 16 }} />} label={t("contextPanel.candidates")} value={stats.total} color="blue" />
+        <StatCard icon={<WorkOutline sx={{ fontSize: 16 }} />} label={t("contextPanel.activeJobs")} value={stats.jobCount} color="purple" />
+        <StatCard icon={<MailOutline sx={{ fontSize: 16 }} />} label={t("contextPanel.pendingEmails")} value={stats.pendingEmails.length} color="amber" />
+        <StatCard icon={<CalendarTodayOutlined sx={{ fontSize: 16 }} />} label={t("contextPanel.todaysEvents")} value={stats.todayEvents.length} color="green" />
       </div>
 
       {/* Proactive Notifications */}
       {notifications.length > 0 && (
         <div>
           <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            <Bell className="h-3.5 w-3.5" /> Alerts ({notifications.length})
+            <NotificationsOutlined sx={{ fontSize: 14 }} /> {t("contextPanel.alerts", { count: notifications.length })}
           </h4>
           <div className="space-y-1.5">
             {notifications.slice(0, 5).map((n) => (
@@ -148,7 +164,7 @@ function BriefingView({
       {stats.contacted.length > 0 && (
         <div>
           <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            <Clock className="h-3.5 w-3.5" /> Awaiting Reply ({stats.contacted.length})
+            <AccessTimeOutlined sx={{ fontSize: 14 }} /> {t("contextPanel.awaitingReply", { count: stats.contacted.length })}
           </h4>
           <div className="space-y-1.5">
             {stats.contacted.slice(0, 5).map((c) => (
@@ -170,7 +186,7 @@ function BriefingView({
       {stats.todayEvents.length > 0 && (
         <div>
           <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            <Calendar className="h-3.5 w-3.5" /> Today
+            <CalendarTodayOutlined sx={{ fontSize: 14 }} /> {t("contextPanel.today")}
           </h4>
           <div className="space-y-1.5">
             {stats.todayEvents.map((e: CalendarEvent) => (
@@ -191,9 +207,9 @@ function BriefingView({
           onClick={() => onSendPrompt("Review the new candidates in the pipeline")}
           className="flex w-full items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 hover:bg-blue-100"
         >
-          <TrendingUp className="h-4 w-4" />
-          {stats.newCount} new candidate{stats.newCount !== 1 ? "s" : ""} to review
-          <ChevronRight className="ml-auto h-4 w-4" />
+          <TrendingUpOutlined sx={{ fontSize: 16 }} />
+          {t("contextPanel.newCandidatesToReview", { count: stats.newCount })}
+          <ChevronRightOutlined className="ml-auto" sx={{ fontSize: 16 }} />
         </button>
       )}
     </div>
@@ -211,6 +227,7 @@ function CandidateView({
   onViewJob: (id: string) => void;
   onSendPrompt: (prompt: string) => void;
 }) {
+  const { t } = useTranslation();
   const { data: candidate } = useApi(useCallback(() => getCandidate(id), [id]));
   const { data: emails } = useApi(useCallback(() => listEmails(id), [id]));
 
@@ -226,7 +243,7 @@ function CandidateView({
         {candidate.current_title && (
           <p className="text-sm text-gray-500">
             {candidate.current_title}
-            {candidate.current_company && ` at ${candidate.current_company}`}
+            {candidate.current_company && ` ${t("contextPanel.atCompany", { company: candidate.current_company })}`}
           </p>
         )}
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -235,8 +252,8 @@ function CandidateView({
           </span>
           {candidate.match_score > 0 && (
             <span className="flex items-center gap-1 text-xs text-amber-600">
-              <Star className="h-3 w-3" fill="currentColor" />
-              {Math.round(candidate.match_score * 100)}% match
+              <StarIcon sx={{ fontSize: 12 }} />
+              {t("contextPanel.matchPercent", { percent: Math.round(candidate.match_score * 100) })}
             </span>
           )}
         </div>
@@ -246,17 +263,17 @@ function CandidateView({
       <div className="space-y-1.5 text-sm">
         {candidate.email && (
           <div className="flex items-center gap-2 text-gray-600">
-            <Mail className="h-3.5 w-3.5 text-gray-400" /> {candidate.email}
+            <MailOutline className="text-gray-400" sx={{ fontSize: 14 }} /> {candidate.email}
           </div>
         )}
         {candidate.location && (
           <div className="flex items-center gap-2 text-gray-600">
-            <MapPin className="h-3.5 w-3.5 text-gray-400" /> {candidate.location}
+            <LocationOnOutlined className="text-gray-400" sx={{ fontSize: 14 }} /> {candidate.location}
           </div>
         )}
         {candidate.experience_years != null && (
           <div className="flex items-center gap-2 text-gray-600">
-            <Building2 className="h-3.5 w-3.5 text-gray-400" /> {candidate.experience_years}+ years
+            <BusinessOutlined className="text-gray-400" sx={{ fontSize: 14 }} /> {t("contextPanel.yearsPlus", { years: candidate.experience_years })}
           </div>
         )}
       </div>
@@ -279,7 +296,7 @@ function CandidateView({
       {candidate.resume_summary && (
         <div>
           <h5 className="mb-1 flex items-center gap-1 text-xs font-semibold text-gray-500">
-            <FileText className="h-3 w-3" /> Resume Summary
+            <DescriptionOutlined sx={{ fontSize: 12 }} /> {t("contextPanel.resumeSummary")}
           </h5>
           <p className="text-xs leading-relaxed text-gray-600">{candidate.resume_summary}</p>
         </div>
@@ -288,7 +305,7 @@ function CandidateView({
       {/* Top jobs */}
       {candidate.top_jobs && candidate.top_jobs.length > 0 && (
         <div>
-          <h5 className="mb-1 text-xs font-semibold text-gray-500">Top Matching Jobs</h5>
+          <h5 className="mb-1 text-xs font-semibold text-gray-500">{t("contextPanel.topMatchingJobs")}</h5>
           <div className="space-y-1">
             {candidate.top_jobs.slice(0, 3).map((tj) => (
               <button
@@ -312,14 +329,14 @@ function CandidateView({
       {emails && emails.length > 0 && (
         <div>
           <h5 className="mb-1 text-xs font-semibold text-gray-500">
-            Email History ({emails.length})
+            {t("contextPanel.emailHistory", { count: emails.length })}
           </h5>
           <div className="space-y-1">
             {emails.slice(0, 3).map((e) => (
               <div key={e.id} className="rounded border border-gray-100 px-2 py-1.5">
                 <p className="truncate text-xs font-medium text-gray-700">{e.subject}</p>
                 <p className="text-[10px] text-gray-400">
-                  {e.sent ? "Sent" : e.approved ? "Approved" : "Draft"} • {e.email_type}
+                  {e.sent ? t("contextPanel.sent") : e.approved ? t("contextPanel.approved") : t("contextPanel.draft")} • {e.email_type}
                 </p>
               </div>
             ))}
@@ -334,13 +351,13 @@ function CandidateView({
             onClick={() => onSendPrompt(`Draft an outreach email to ${candidate.name}`)}
             className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
           >
-            Draft Email
+            {t("contextPanel.draftEmail")}
           </button>
           <button
             onClick={() => onSendPrompt(`What jobs match ${candidate.name}?`)}
             className="rounded-lg bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100"
           >
-            Match Jobs
+            {t("contextPanel.matchJobs")}
           </button>
         </div>
 
@@ -356,13 +373,13 @@ function CandidateView({
             onClick={() => onSendPrompt(`Schedule an interview with ${candidate.name}`)}
             className="rounded-lg bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100"
           >
-            Schedule Interview
+            {t("contextPanel.scheduleInterview")}
           </button>
           <button
             onClick={() => onSendPrompt(`Show the match report for ${candidate.name}`)}
             className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
           >
-            Match Report
+            {t("contextPanel.matchReport")}
           </button>
         </div>
       </div>
@@ -379,6 +396,7 @@ function StageSelector({
   currentStatus: string;
   onSelect: (stage: string) => void;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const stages = PIPELINE_COLUMNS.filter((p) => p.key !== currentStatus);
 
@@ -389,10 +407,10 @@ function StageSelector({
         className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
       >
         <span className="flex items-center gap-1.5">
-          <ArrowRight className="h-3 w-3" />
-          Move to Stage...
+          <ArrowForwardOutlined sx={{ fontSize: 12 }} />
+          {t("contextPanel.moveToStage")}
         </span>
-        <ChevronRight className={`h-3 w-3 transition-transform ${open ? "rotate-90" : ""}`} />
+        <ChevronRightOutlined className={`transition-transform ${open ? "rotate-90" : ""}`} sx={{ fontSize: 12 }} />
       </button>
       {open && (
         <div className="absolute left-0 right-0 z-10 mt-1 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
@@ -403,7 +421,7 @@ function StageSelector({
               className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
             >
               <span className={`h-1.5 w-1.5 rounded-full ${STATUS_COLORS[s.key]?.split(" ")[0] || "bg-gray-300"}`} />
-              {s.label}
+              {t(s.labelKey)}
             </button>
           ))}
         </div>
@@ -423,6 +441,7 @@ function JobView({
   onViewCandidate: (id: string) => void;
   onSendPrompt: (prompt: string) => void;
 }) {
+  const { t } = useTranslation();
   const { data: job } = useApi(useCallback(() => getJob(id), [id]));
   const { data: allCandidates } = useApi(useCallback(() => listCandidates(), []));
 
@@ -440,9 +459,9 @@ function JobView({
         <p className="text-sm text-gray-500">{job.company}</p>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
           {job.location && (
-            <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {job.location}</span>
+            <span className="flex items-center gap-1"><LocationOnOutlined sx={{ fontSize: 12 }} /> {job.location}</span>
           )}
-          {job.remote && <span className="rounded bg-green-50 px-1.5 py-0.5 text-green-700">Remote</span>}
+          {job.remote && <span className="rounded bg-green-50 px-1.5 py-0.5 text-green-700">{t("contextPanel.remote")}</span>}
           {job.salary_range && <span>{job.salary_range}</span>}
         </div>
       </div>
@@ -450,7 +469,7 @@ function JobView({
       {/* Skills */}
       {job.required_skills.length > 0 && (
         <div>
-          <h5 className="mb-1 text-xs font-semibold text-gray-500">Required Skills</h5>
+          <h5 className="mb-1 text-xs font-semibold text-gray-500">{t("contextPanel.requiredSkills")}</h5>
           <div className="flex flex-wrap gap-1">
             {job.required_skills.map((s) => (
               <span key={s} className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{s}</span>
@@ -462,7 +481,7 @@ function JobView({
       {/* Summary */}
       {job.summary && (
         <div>
-          <h5 className="mb-1 text-xs font-semibold text-gray-500">Summary</h5>
+          <h5 className="mb-1 text-xs font-semibold text-gray-500">{t("contextPanel.summary")}</h5>
           <p className="text-xs leading-relaxed text-gray-600">{job.summary}</p>
         </div>
       )}
@@ -470,7 +489,7 @@ function JobView({
       {/* Candidates */}
       <div>
         <h5 className="mb-1 text-xs font-semibold text-gray-500">
-          Candidates ({jobCandidates.length})
+          {t("contextPanel.candidatesCount", { count: jobCandidates.length })}
         </h5>
         {jobCandidates.length > 0 ? (
           <div className="space-y-1">
@@ -488,7 +507,7 @@ function JobView({
             ))}
           </div>
         ) : (
-          <p className="text-xs text-gray-400">No candidates yet</p>
+          <p className="text-xs text-gray-400">{t("contextPanel.noCandidatesYet")}</p>
         )}
       </div>
 
@@ -498,19 +517,19 @@ function JobView({
           onClick={() => onSendPrompt(`Upload a resume for the ${job.title} position`)}
           className="rounded-lg bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100"
         >
-          Upload Resume
+          {t("contextPanel.uploadResume")}
         </button>
         <button
           onClick={() => onSendPrompt(`Find top candidates for the ${job.title} role`)}
           className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
         >
-          Find Candidates
+          {t("contextPanel.findCandidates")}
         </button>
         <button
           onClick={() => onSendPrompt(`Generate a summary for the ${job.title} job description`)}
           className="rounded-lg bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100"
         >
-          JD Summary
+          {t("contextPanel.jdSummary")}
         </button>
       </div>
     </div>
@@ -553,7 +572,10 @@ function PipelineStageView({
     [allCandidates, stage]
   );
 
-  const stageLabel = PIPELINE_COLUMNS.find((p) => p.key === stage)?.label || stage;
+  const { t } = useTranslation();
+  const stageLabel = PIPELINE_COLUMNS.find((p) => p.key === stage)?.labelKey
+    ? t(PIPELINE_COLUMNS.find((p) => p.key === stage)!.labelKey)
+    : stage;
   const targetStages = PIPELINE_COLUMNS.filter((p) => p.key !== stage);
 
   const sensors = useSensors(
@@ -601,7 +623,7 @@ function PipelineStageView({
   return (
     <div className="space-y-3">
       <p className="text-sm text-gray-500">
-        {stageCandidates.length} candidate{stageCandidates.length !== 1 ? "s" : ""} in{" "}
+        {t("pipeline.candidatesInStage", { count: stageCandidates.length })}{" "}
         <span className="font-semibold text-gray-700">{stageLabel}</span>
       </p>
 
@@ -622,18 +644,18 @@ function PipelineStageView({
             ))}
           </div>
         ) : (
-          <p className="py-6 text-center text-sm text-gray-400">No candidates in this stage</p>
+          <p className="py-6 text-center text-sm text-gray-400">{t("pipeline.noCandidatesInStage")}</p>
         )}
 
         {/* Drop zone: stage targets (visible during drag) */}
         {activeDragId && (
           <div className="mt-4 space-y-1.5">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-              Drop to move to...
+              {t("pipeline.dropToMove")}
             </p>
             <div className="grid grid-cols-2 gap-1.5">
-              {targetStages.map((t) => (
-                <StageDropTarget key={t.key} stageKey={t.key} label={t.label} />
+              {targetStages.map((s) => (
+                <StageDropTarget key={s.key} stageKey={s.key} label={t(s.labelKey)} />
               ))}
             </div>
           </div>
@@ -657,7 +679,7 @@ function PipelineStageView({
             onClick={() => onSendPrompt("Send outreach emails to all new candidates")}
             className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
           >
-            Outreach All New
+            {t("pipeline.outreachAllNew")}
           </button>
         )}
         {stage === "contacted" && stageCandidates.length > 0 && (
@@ -665,7 +687,7 @@ function PipelineStageView({
             onClick={() => onSendPrompt("Follow up with stale contacted candidates")}
             className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
           >
-            Follow-up Stale
+            {t("pipeline.followUpStale")}
           </button>
         )}
       </div>
@@ -676,6 +698,7 @@ function PipelineStageView({
 /* ── Events View ─────────────────────────────────────────────────────────── */
 
 function EventsView({ onSendPrompt }: { onSendPrompt: (prompt: string) => void }) {
+  const { t } = useTranslation();
   const { data: events } = useApi(useCallback(() => listEvents(), []));
 
   const upcoming = useMemo(() => {
@@ -695,7 +718,7 @@ function EventsView({ onSendPrompt }: { onSendPrompt: (prompt: string) => void }
   return (
     <div className="space-y-3">
       <p className="text-sm text-gray-500">
-        {upcoming.length} event{upcoming.length !== 1 ? "s" : ""} in the next 7 days
+        {t("contextPanel.eventsInNext7Days", { count: upcoming.length })}
       </p>
 
       {upcoming.length > 0 ? (
@@ -718,26 +741,26 @@ function EventsView({ onSendPrompt }: { onSendPrompt: (prompt: string) => void }
                   {dateStr} {timeStr && `at ${timeStr}`}
                 </p>
                 {e.candidate_name && (
-                  <p className="text-xs text-gray-400">with {e.candidate_name}</p>
+                  <p className="text-xs text-gray-400">{t("contextPanel.with", { name: e.candidate_name })}</p>
                 )}
                 <div className="mt-2 flex gap-2">
                   <button
                     onClick={() => onSendPrompt(`Reschedule the ${e.event_type.replace("_", " ")} with ${who}`)}
                     className="text-[10px] font-medium text-blue-600 hover:underline"
                   >
-                    Reschedule
+                    {t("contextPanel.reschedule")}
                   </button>
                   <button
                     onClick={() => onSendPrompt(`Send a reminder about the ${e.event_type.replace("_", " ")} with ${who}`)}
                     className="text-[10px] font-medium text-green-600 hover:underline"
                   >
-                    Remind
+                    {t("contextPanel.remind")}
                   </button>
                   <button
                     onClick={() => onSendPrompt(`Cancel the ${e.event_type.replace("_", " ")} with ${who}`)}
                     className="text-[10px] font-medium text-red-500 hover:underline"
                   >
-                    Cancel
+                    {t("contextPanel.cancel")}
                   </button>
                 </div>
               </div>
@@ -746,13 +769,13 @@ function EventsView({ onSendPrompt }: { onSendPrompt: (prompt: string) => void }
         </div>
       ) : (
         <div className="py-6 text-center">
-          <Calendar className="mx-auto h-8 w-8 text-gray-300" />
-          <p className="mt-2 text-sm text-gray-400">No upcoming events</p>
+          <CalendarTodayOutlined className="mx-auto text-gray-300" sx={{ fontSize: 32 }} />
+          <p className="mt-2 text-sm text-gray-400">{t("contextPanel.noUpcomingEvents")}</p>
           <button
             onClick={() => onSendPrompt("Schedule an interview")}
             className="mt-2 text-xs text-blue-600 hover:underline"
           >
-            Schedule one
+            {t("contextPanel.scheduleOne")}
           </button>
         </div>
       )}
@@ -771,6 +794,7 @@ function ComparisonView({
   onViewCandidate: (id: string) => void;
   onSendPrompt: (prompt: string) => void;
 }) {
+  const { t } = useTranslation();
   const { data: c1 } = useApi(useCallback(() => getCandidate(candidateIds[0]), [candidateIds[0]]));
   const { data: c2 } = useApi(useCallback(() => getCandidate(candidateIds[1]), [candidateIds[1]]));
 
@@ -812,7 +836,7 @@ function ComparisonView({
       {/* Skills comparison */}
       {shared.length > 0 && (
         <div>
-          <h5 className="mb-1 text-xs font-semibold text-gray-500">Shared Skills ({shared.length})</h5>
+          <h5 className="mb-1 text-xs font-semibold text-gray-500">{t("contextPanel.sharedSkills", { count: shared.length })}</h5>
           <div className="flex flex-wrap gap-1">
             {shared.slice(0, 6).map((s) => (
               <span key={s} className="rounded-full bg-green-50 px-2 py-0.5 text-[10px] text-green-700">{s}</span>
@@ -823,7 +847,7 @@ function ComparisonView({
 
       {only1.length > 0 && (
         <div>
-          <h5 className="mb-1 text-xs font-semibold text-gray-500">{c1.name} only</h5>
+          <h5 className="mb-1 text-xs font-semibold text-gray-500">{t("contextPanel.onlySkills", { name: c1.name })}</h5>
           <div className="flex flex-wrap gap-1">
             {only1.slice(0, 4).map((s) => (
               <span key={s} className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700">{s}</span>
@@ -834,7 +858,7 @@ function ComparisonView({
 
       {only2.length > 0 && (
         <div>
-          <h5 className="mb-1 text-xs font-semibold text-gray-500">{c2.name} only</h5>
+          <h5 className="mb-1 text-xs font-semibold text-gray-500">{t("contextPanel.onlySkills", { name: c2.name })}</h5>
           <div className="flex flex-wrap gap-1">
             {only2.slice(0, 4).map((s) => (
               <span key={s} className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] text-purple-700">{s}</span>
@@ -845,18 +869,18 @@ function ComparisonView({
 
       {/* Quick comparison */}
       <div className="rounded-lg border border-gray-100 p-3">
-        <h5 className="mb-2 text-xs font-semibold text-gray-500">Quick Comparison</h5>
+        <h5 className="mb-2 text-xs font-semibold text-gray-500">{t("contextPanel.quickComparison")}</h5>
         <div className="space-y-1">
           <CompareRow
-            label="Match"
-            v1={c1.match_score > 0 ? `${Math.round(c1.match_score * 100)}%` : "N/A"}
-            v2={c2.match_score > 0 ? `${Math.round(c2.match_score * 100)}%` : "N/A"}
+            label={t("contextPanel.matchLabel")}
+            v1={c1.match_score > 0 ? `${Math.round(c1.match_score * 100)}%` : t("common.na")}
+            v2={c2.match_score > 0 ? `${Math.round(c2.match_score * 100)}%` : t("common.na")}
             winner={c1.match_score > c2.match_score ? 1 : c2.match_score > c1.match_score ? 2 : 0}
           />
           <CompareRow
-            label="Experience"
-            v1={c1.experience_years != null ? `${c1.experience_years} yrs` : "N/A"}
-            v2={c2.experience_years != null ? `${c2.experience_years} yrs` : "N/A"}
+            label={t("contextPanel.experienceLabel")}
+            v1={c1.experience_years != null ? `${c1.experience_years} yrs` : t("common.na")}
+            v2={c2.experience_years != null ? `${c2.experience_years} yrs` : t("common.na")}
             winner={
               c1.experience_years != null && c2.experience_years != null
                 ? c1.experience_years > c2.experience_years ? 1 : c2.experience_years > c1.experience_years ? 2 : 0
@@ -864,7 +888,7 @@ function ComparisonView({
             }
           />
           <CompareRow
-            label="Skills"
+            label={t("contextPanel.skillsLabel")}
             v1={`${c1.skills.length}`}
             v2={`${c2.skills.length}`}
             winner={c1.skills.length > c2.skills.length ? 1 : c2.skills.length > c1.skills.length ? 2 : 0}
@@ -914,6 +938,7 @@ function NotificationCard({
   onAction: (prompt: string) => void;
   onViewCandidate: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const severityStyles = {
     warning: "border-amber-200 bg-amber-50",
     success: "border-green-200 bg-green-50",
@@ -924,13 +949,13 @@ function NotificationCard({
     success: "text-green-500",
     info: "text-blue-500",
   };
-  const SeverityIcon = n.severity === "warning" ? AlertTriangle
-    : n.severity === "success" ? Sparkles : Bell;
+  const SeverityIcon = n.severity === "warning" ? WarningAmberOutlined
+    : n.severity === "success" ? AutoAwesomeOutlined : NotificationsOutlined;
 
   return (
     <div className={`rounded-lg border p-2.5 ${severityStyles[n.severity]}`}>
       <div className="flex items-start gap-2">
-        <SeverityIcon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${iconStyles[n.severity]}`} />
+        <SeverityIcon className={`mt-0.5 shrink-0 ${iconStyles[n.severity]}`} sx={{ fontSize: 14 }} />
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-gray-800">{n.title}</p>
           <p className="mt-0.5 text-[10px] text-gray-500">{n.description}</p>
@@ -946,7 +971,7 @@ function NotificationCard({
                 onClick={() => onViewCandidate(n.candidate_id!)}
                 className="text-[10px] text-gray-400 hover:text-gray-600"
               >
-                View profile
+                {t("contextPanel.viewProfile")}
               </button>
             )}
           </div>

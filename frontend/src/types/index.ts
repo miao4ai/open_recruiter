@@ -4,7 +4,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: UserRole;
+  role?: UserRole;
   created_at: string;
 }
 
@@ -53,6 +53,21 @@ export interface TopJob {
   score: number;
 }
 
+export interface CandidateJobMatch {
+  id: string;
+  candidate_id: string;
+  job_id: string;
+  job_title: string;
+  job_company: string;
+  match_score: number;
+  match_reasoning: string;
+  strengths: string[];
+  gaps: string[];
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Candidate {
   id: string;
   name: string;
@@ -66,11 +81,14 @@ export interface Candidate {
   resume_path: string;
   resume_summary: string;
   status: CandidateStatus;
+  date_of_birth: string;
+  notes: string;
+  job_matches: CandidateJobMatch[];
+  // Backward compat — populated when listing candidates for a specific job
   match_score: number;
   match_reasoning: string;
   strengths: string[];
   gaps: string[];
-  notes: string;
   job_id: string;
   top_jobs?: TopJob[];
   created_at: string;
@@ -123,6 +141,7 @@ export interface Settings {
   llm_model: string;
   anthropic_api_key: string;
   openai_api_key: string;
+  gemini_api_key: string;
   email_backend: string;
   sendgrid_api_key: string;
   email_from: string;
@@ -232,14 +251,15 @@ export interface CalendarEvent {
 }
 
 // Pipeline columns for Kanban board
-export const PIPELINE_COLUMNS: { key: CandidateStatus; label: string }[] = [
-  { key: "new", label: "New" },
-  { key: "contacted", label: "Contacted" },
-  { key: "replied", label: "Replied" },
-  { key: "screening", label: "Screening" },
-  { key: "interview_scheduled", label: "Interview" },
-  { key: "offer_sent", label: "Offer" },
-  { key: "hired", label: "Hired" },
+// `labelKey` is resolved via t() at render time for i18n support
+export const PIPELINE_COLUMNS: { key: CandidateStatus; labelKey: string }[] = [
+  { key: "new", labelKey: "pipeline.new" },
+  { key: "contacted", labelKey: "pipeline.contacted" },
+  { key: "replied", labelKey: "pipeline.replied" },
+  { key: "screening", labelKey: "pipeline.screening" },
+  { key: "interview_scheduled", labelKey: "pipeline.interview" },
+  { key: "offer_sent", labelKey: "pipeline.offer" },
+  { key: "hired", labelKey: "pipeline.hired" },
 ];
 
 // ── Control Center types ─────────────────────────────────────────────────
@@ -293,8 +313,6 @@ export interface ApprovalBlock {
 }
 
 export type MessageBlock = MatchReportBlock | ApprovalBlock;
-
-// ── Notifications ───────────────────────────────────────────────────────
 
 // ── Workflow Types ──────────────────────────────────────────────────────
 

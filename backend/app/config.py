@@ -5,9 +5,14 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from backend/ dir first, then fall back to project root
+_backend_dir = Path(__file__).resolve().parent.parent
+load_dotenv(_backend_dir / ".env")
+load_dotenv(_backend_dir.parent / ".env")
 
 
 @dataclass
@@ -16,6 +21,7 @@ class Config:
     llm_model: str = ""
     anthropic_api_key: str = ""
     openai_api_key: str = ""
+    gemini_api_key: str = ""
 
     email_backend: str = "console"
     sendgrid_api_key: str = ""
@@ -45,7 +51,8 @@ class Config:
         if not self.llm_model:
             self.llm_model = {
                 "anthropic": "claude-sonnet-4-20250514",
-                "openai": "gpt-4o",
+                "openai": "gpt-5.1",
+                "gemini": "gemini-2.5-flash",
             }.get(self.llm_provider, "claude-sonnet-4-20250514")
 
 
@@ -56,6 +63,7 @@ def load_config_from_env() -> Config:
         llm_model=os.getenv("LLM_MODEL", ""),
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
+        gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
         email_backend=os.getenv("EMAIL_BACKEND", "console"),
         sendgrid_api_key=os.getenv("SENDGRID_API_KEY", ""),
         email_from=os.getenv("EMAIL_FROM", "recruiter@example.com"),

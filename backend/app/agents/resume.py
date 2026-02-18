@@ -37,6 +37,7 @@ def parse_resume_text(cfg: Config, raw_text: str) -> dict:
         "skills": data.get("skills", []),
         "experience_years": _safe_int(data.get("experience_years")),
         "location": data.get("location", ""),
+        "date_of_birth": data.get("date_of_birth", ""),
         "resume_summary": data.get("resume_summary", ""),
     }
 

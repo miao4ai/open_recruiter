@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { ChevronRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { ChevronRightOutlined } from "@mui/icons-material";
 import type { Candidate, CandidateStatus } from "../types";
 import { PIPELINE_COLUMNS } from "../types";
 
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export default function PipelineBar({ candidates, activeStage, onStageClick }: Props) {
+  const { t } = useTranslation();
   const counts = useMemo(() => {
     const c: Partial<Record<CandidateStatus, number>> = {};
     for (const cand of candidates) {
@@ -33,7 +35,7 @@ export default function PipelineBar({ candidates, activeStage, onStageClick }: P
   return (
     <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3 py-2">
       <span className="mr-2 text-xs font-medium text-gray-400">
-        Pipeline
+        {t("pipeline.label")}
         <span className="ml-1 text-gray-300">({total})</span>
       </span>
       {PIPELINE_COLUMNS.map((col, i) => {
@@ -43,7 +45,7 @@ export default function PipelineBar({ candidates, activeStage, onStageClick }: P
 
         return (
           <div key={col.key} className="flex items-center">
-            {i > 0 && <ChevronRight className="mx-0.5 h-3 w-3 text-gray-300" />}
+            {i > 0 && <ChevronRightOutlined sx={{ fontSize: 12 }} className="mx-0.5 text-gray-300" />}
             <button
               onClick={() => onStageClick(col.key)}
               className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
@@ -53,7 +55,7 @@ export default function PipelineBar({ candidates, activeStage, onStageClick }: P
               }`}
             >
               <span className={`h-1.5 w-1.5 rounded-full ${colors.dot}`} />
-              {col.label}
+              {t(col.labelKey)}
               <span
                 className={`min-w-[1.25rem] rounded-full px-1 py-0.5 text-center text-[10px] font-bold leading-none ${
                   count > 0

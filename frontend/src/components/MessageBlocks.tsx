@@ -1,4 +1,4 @@
-import { Briefcase, Check, ChevronRight, Star, TrendingUp, AlertTriangle, X } from "lucide-react";
+import { WorkOutline, CheckOutlined, ChevronRightOutlined, StarOutlined, TrendingUpOutlined, WarningAmberOutlined, CloseOutlined } from "@mui/icons-material";
 import type { MessageBlock, MatchRanking, ApprovalBlock } from "../types";
 
 interface Props {
@@ -56,7 +56,7 @@ function MatchReportCard({
     <div className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50/80 to-white p-4">
       {/* Header */}
       <div className="mb-3 flex items-center gap-2">
-        <TrendingUp className="h-4 w-4 text-indigo-600" />
+        <TrendingUpOutlined sx={{ fontSize: 16 }} className="text-indigo-600" />
         <span className="text-sm font-semibold text-indigo-900">
           Match Report — {candidate.name}
         </span>
@@ -129,7 +129,7 @@ function ApprovalBlockCard({
     <div className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50/80 to-white p-4">
       <div className="mb-2 flex items-center gap-2">
         <div className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100">
-          <AlertTriangle className="h-3 w-3 text-amber-600" />
+          <WarningAmberOutlined sx={{ fontSize: 12 }} className="text-amber-600" />
         </div>
         <span className="text-sm font-semibold text-amber-900">{block.title}</span>
       </div>
@@ -157,14 +157,14 @@ function ApprovalBlockCard({
           onClick={() => onSendPrompt("approve")}
           className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
         >
-          <Check className="h-3.5 w-3.5" />
+          <CheckOutlined sx={{ fontSize: 14 }} />
           {block.approve_label}
         </button>
         <button
           onClick={() => onSendPrompt("cancel workflow")}
           className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
         >
-          <X className="h-3.5 w-3.5" />
+          <CloseOutlined sx={{ fontSize: 14 }} />
           {block.cancel_label}
         </button>
       </div>
@@ -208,7 +208,7 @@ function RankingRow({
               onClick={() => onViewJob?.(ranking.job_id)}
               className="truncate text-sm font-semibold text-gray-900 hover:text-indigo-700"
             >
-              <Briefcase className="mr-1 inline h-3.5 w-3.5 text-gray-400" />
+              <WorkOutline sx={{ fontSize: 14 }} className="mr-1 inline text-gray-400" />
               {ranking.title}
             </button>
             <span className="shrink-0 text-xs text-gray-400">
@@ -227,7 +227,7 @@ function RankingRow({
                 key={s}
                 className="inline-flex items-center gap-0.5 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-medium text-green-700"
               >
-                <Star className="h-2.5 w-2.5" fill="currentColor" />
+                <StarOutlined sx={{ fontSize: 10 }} />
                 {s}
               </span>
             ))}
@@ -236,7 +236,7 @@ function RankingRow({
                 key={g}
                 className="inline-flex items-center gap-0.5 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-600"
               >
-                <AlertTriangle className="h-2.5 w-2.5" />
+                <WarningAmberOutlined sx={{ fontSize: 10 }} />
                 {g}
               </span>
             ))}
@@ -254,7 +254,7 @@ function RankingRow({
             onClick={onDraftEmail}
             className="hidden items-center gap-0.5 text-[10px] text-indigo-600 hover:underline group-hover:flex"
           >
-            Draft email <ChevronRight className="h-3 w-3" />
+            Draft email <ChevronRightOutlined sx={{ fontSize: 12 }} />
           </button>
         </div>
       </div>

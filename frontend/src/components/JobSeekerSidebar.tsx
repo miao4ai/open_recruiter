@@ -1,14 +1,17 @@
 import { NavLink } from "react-router-dom";
-import { MessageSquare, UserCircle, Briefcase } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { ChatBubbleOutline, AccountCircleOutlined, WorkOutline } from "@mui/icons-material";
 import clsx from "clsx";
 
-const NAV_ITEMS = [
-  { to: "/", icon: MessageSquare, label: "Ai Chan" },
-  { to: "/jobs", icon: Briefcase, label: "My Jobs" },
-  { to: "/profile", icon: UserCircle, label: "My Profile" },
-];
-
 export default function JobSeekerSidebar() {
+  const { t } = useTranslation();
+
+  const NAV_ITEMS = [
+    { to: "/", icon: ChatBubbleOutline, label: t("jobSeekerSidebar.aiChan") },
+    { to: "/jobs", icon: WorkOutline, label: t("jobSeekerSidebar.myJobs") },
+    { to: "/profile", icon: AccountCircleOutlined, label: t("jobSeekerSidebar.myProfile") },
+  ];
+
   return (
     <aside className="flex w-60 flex-col bg-gradient-to-b from-rose-900 to-pink-900 text-white">
       {/* Logo */}
@@ -19,7 +22,7 @@ export default function JobSeekerSidebar() {
           className="h-7 w-7 rounded-full object-cover"
         />
         <span className="text-lg font-semibold tracking-tight">
-          Open Recruiter
+          {t("common.appName")}
         </span>
       </div>
 
@@ -39,7 +42,7 @@ export default function JobSeekerSidebar() {
               )
             }
           >
-            <Icon className="h-5 w-5" />
+            <Icon sx={{ fontSize: 20 }} />
             {label}
           </NavLink>
         ))}
@@ -47,7 +50,7 @@ export default function JobSeekerSidebar() {
 
       {/* Footer */}
       <div className="border-t border-pink-800 px-5 py-4 text-xs text-pink-400">
-        v0.1.0
+        {t("common.version")}
       </div>
     </aside>
   );
