@@ -1,4 +1,5 @@
 import { useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
@@ -7,34 +8,36 @@ import Box from "@mui/material/Box";
 import LogoutOutlined from "@mui/icons-material/LogoutOutlined";
 import type { User } from "../types";
 
-const PAGE_TITLES: Record<string, string> = {
-  "/": "Erika Chan",
-  "/dashboard": "Dashboard",
-  "/jobs": "Jobs",
-  "/candidates": "Candidates",
-  "/calendar": "Calendar",
-  "/settings": "Settings",
-  "/profile": "My Profile",
-};
-
-const JOB_SEEKER_TITLES: Record<string, string> = {
-  "/": "Ai Chan",
-  "/jobs": "My Jobs",
-  "/profile": "My Profile",
-};
-
 interface Props {
   user: User;
   onLogout: () => void;
 }
 
 export default function Header({ user, onLogout }: Props) {
+  const { t } = useTranslation();
   const { pathname } = useLocation();
+
+  const PAGE_TITLES: Record<string, string> = {
+    "/": t("header.erikaChan"),
+    "/dashboard": t("header.dashboard"),
+    "/jobs": t("header.jobs"),
+    "/candidates": t("header.candidates"),
+    "/calendar": t("header.calendar"),
+    "/settings": t("header.settings"),
+    "/profile": t("header.myProfile"),
+  };
+
+  const JOB_SEEKER_TITLES: Record<string, string> = {
+    "/": t("header.aiChan"),
+    "/jobs": t("header.myJobs"),
+    "/profile": t("header.myProfile"),
+  };
+
   const titles = user.role === "job_seeker" ? JOB_SEEKER_TITLES : PAGE_TITLES;
   const title =
     titles[pathname] ??
     PAGE_TITLES[pathname] ??
-    (pathname.startsWith("/candidates/") ? "Candidate Detail" : "Open Recruiter");
+    (pathname.startsWith("/candidates/") ? t("header.candidateDetail") : t("common.appName"));
 
   return (
     <AppBar position="static" color="inherit" elevation={0} sx={{ borderBottom: 1, borderColor: "divider" }}>
@@ -53,7 +56,7 @@ export default function Header({ user, onLogout }: Props) {
             onClick={onLogout}
             sx={{ color: "text.secondary" }}
           >
-            Logout
+            {t("common.logout")}
           </Button>
         </Box>
       </Toolbar>

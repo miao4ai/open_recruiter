@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import MailOutline from "@mui/icons-material/MailOutline";
 import SendOutlined from "@mui/icons-material/SendOutlined";
 import CheckOutlined from "@mui/icons-material/CheckOutlined";
@@ -125,12 +126,12 @@ Best regards`,
   },
 };
 
-const EMAIL_TYPE_LABELS: Record<EmailType, string> = {
-  outreach: "Outreach",
-  followup: "Follow-up",
-  interview_invite: "Interview Invite",
-  rejection: "Rejection",
-  recommendation: "Recommendation",
+const EMAIL_TYPE_KEYS: Record<EmailType, string> = {
+  outreach: "outreach.emailTypes.outreach",
+  followup: "outreach.emailTypes.followup",
+  interview_invite: "outreach.emailTypes.interviewInvite",
+  rejection: "outreach.emailTypes.rejection",
+  recommendation: "outreach.emailTypes.recommendation",
 };
 
 // ── Compose / Edit Modal ─────────────────────────────────────────────────
@@ -142,6 +143,7 @@ interface ComposeModalProps {
 }
 
 function ComposeModal({ draft, onClose, onDone }: ComposeModalProps) {
+  const { t } = useTranslation();
   const isEdit = !!draft;
 
   const [emailType, setEmailType] = useState<EmailType>(
@@ -168,7 +170,7 @@ function ComposeModal({ draft, onClose, onDone }: ComposeModalProps) {
 
   const handleSave = async (andSend: boolean) => {
     if (!toEmail.trim()) {
-      setError("Recipient email is required");
+      setError(t("outreach.recipientRequired"));
       return;
     }
     setError("");
@@ -197,7 +199,7 @@ function ComposeModal({ draft, onClose, onDone }: ComposeModalProps) {
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail || "Failed to save email";
+          ?.detail || t("outreach.failedToSave");
       setError(msg);
     } finally {
       setSaving(false);
@@ -215,7 +217,7 @@ function ComposeModal({ draft, onClose, onDone }: ComposeModalProps) {
         }}
       >
         <Typography variant="h6" component="span">
-          {isEdit ? "Edit Draft" : "Compose Email"}
+          {isEdit ? t("outreach.editDraft") : t("outreach.composeEmail")}
         </Typography>
         <IconButton onClick={onClose} size="small">
           <CloseOutlined />
@@ -229,7 +231,7 @@ function ComposeModal({ draft, onClose, onDone }: ComposeModalProps) {
           {/* Email Type */}
           <Box>
             <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
-              Template
+              {t("outreach.template")}
             </Typography>
             <ToggleButtonGroup
               value={emailType}
@@ -239,9 +241,9 @@ function ComposeModal({ draft, onClose, onDone }: ComposeModalProps) {
                 if (val !== null) handleTypeChange(val as EmailType);
               }}
             >
-              {(Object.keys(EMAIL_TYPE_LABELS) as EmailType[]).map((type) => (
+              {(Object.keys(EMAIL_TYPE_KEYS) as EmailType[]).map((type) => (
                 <ToggleButton key={type} value={type}>
-                  {EMAIL_TYPE_LABELS[type]}
+                  {t(EMAIL_TYPE_KEYS[type])}
                 </ToggleButton>
               ))}
             </ToggleButtonGroup>
@@ -249,7 +251,7 @@ function ComposeModal({ draft, onClose, onDone }: ComposeModalProps) {
 
           {/* To */}
           <TextField
-            label="To"
+            label={t("outreach.to")}
             type="email"
             value={toEmail}
             onChange={(e) => setToEmail(e.target.value)}
@@ -260,7 +262,7 @@ function ComposeModal({ draft, onClose, onDone }: ComposeModalProps) {
 
           {/* Subject */}
           <TextField
-            label="Subject"
+            label={t("outreach.subject")}
             type="text"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
@@ -270,7 +272,7 @@ function ComposeModal({ draft, onClose, onDone }: ComposeModalProps) {
 
           {/* Body */}
           <TextField
-            label="Body"
+            label={t("outreach.body")}
             value={body}
             onChange={(e) => setBody(e.target.value)}
             multiline
@@ -282,7 +284,7 @@ function ComposeModal({ draft, onClose, onDone }: ComposeModalProps) {
 
       <DialogActions sx={{ px: 3, py: 2 }}>
         <Button onClick={onClose} variant="outlined" color="inherit">
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button
           onClick={() => handleSave(false)}
@@ -290,7 +292,7 @@ function ComposeModal({ draft, onClose, onDone }: ComposeModalProps) {
           variant="outlined"
           color="inherit"
         >
-          {isEdit ? "Save Draft" : "Save as Draft"}
+          {isEdit ? t("outreach.saveDraft") : t("outreach.saveAsDraft")}
         </Button>
         <Button
           onClick={() => handleSave(true)}
@@ -298,7 +300,7 @@ function ComposeModal({ draft, onClose, onDone }: ComposeModalProps) {
           variant="contained"
           startIcon={<SendOutlined />}
         >
-          {saving ? "Sending..." : "Send Now"}
+          {saving ? t("common.sending") : t("outreach.sendNow")}
         </Button>
       </DialogActions>
     </Dialog>
@@ -308,6 +310,7 @@ function ComposeModal({ draft, onClose, onDone }: ComposeModalProps) {
 // ── Main Page ────────────────────────────────────────────────────────────
 
 export default function Outreach() {
+  const { t } = useTranslation();
   const { data: emails, refresh } = useApi(
     useCallback(() => listEmails(), [])
   );
@@ -330,7 +333,7 @@ export default function Outreach() {
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail || "Failed to send";
+          ?.detail || t("outreach.failedToSend");
       alert(msg);
     }
   };
@@ -354,14 +357,14 @@ export default function Outreach() {
       const res = await checkReplies();
       setCheckResult(
         res.replies_found > 0
-          ? `Found ${res.replies_found} new ${res.replies_found === 1 ? "reply" : "replies"}!`
-          : "No new replies found."
+          ? t("outreach.foundReplies", { count: res.replies_found })
+          : t("outreach.noNewReplies")
       );
       refresh();
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail || "Failed to check replies";
+          ?.detail || t("outreach.failedToCheck");
       setCheckResult(msg);
     } finally {
       setChecking(false);
@@ -400,14 +403,14 @@ export default function Outreach() {
           startIcon={<AddOutlined />}
           onClick={() => setComposeMode({ open: true })}
         >
-          Compose Email
+          {t("outreach.composeEmail")}
         </Button>
       </Box>
 
       {/* Pending queue */}
       <Box>
         <Typography variant="h6" sx={{ mb: 1.5 }}>
-          Pending{" "}
+          {t("outreach.pending")}{" "}
           <Typography
             component="span"
             variant="body2"
@@ -442,10 +445,10 @@ export default function Outreach() {
                         {e.subject}
                       </Typography>
                       {!e.approved && (
-                        <Chip label="Draft" color="warning" size="small" />
+                        <Chip label={t("outreach.draftChip")} color="warning" size="small" />
                       )}
                       {e.approved && (
-                        <Chip label="Approved" color="success" size="small" />
+                        <Chip label={t("outreach.approvedChip")} color="success" size="small" />
                       )}
                     </Stack>
                     <Typography
@@ -469,7 +472,7 @@ export default function Outreach() {
                         setComposeMode({ open: true, draft: e })
                       }
                     >
-                      Edit
+                      {t("common.edit")}
                     </Button>
                     {!e.approved && (
                       <Button
@@ -479,7 +482,7 @@ export default function Outreach() {
                         startIcon={<CheckOutlined />}
                         onClick={() => handleApprove(e.id)}
                       >
-                        Approve
+                        {t("outreach.approve")}
                       </Button>
                     )}
                     <Button
@@ -488,7 +491,7 @@ export default function Outreach() {
                       startIcon={<SendOutlined />}
                       onClick={() => handleSend(e.id)}
                     >
-                      Send
+                      {t("common.send")}
                     </Button>
                     <Button
                       size="small"
@@ -529,7 +532,7 @@ export default function Outreach() {
           >
             <MailOutline sx={{ fontSize: 32, color: "grey.400", mx: "auto" }} />
             <Typography variant="body2" sx={{ color: "text.secondary", mt: 1 }}>
-              No pending emails. Click "Compose Email" to create one.
+              {t("outreach.noPending")}
             </Typography>
           </Paper>
         )}
@@ -546,7 +549,7 @@ export default function Outreach() {
           }}
         >
           <Typography variant="h6">
-            Sent{" "}
+            {t("outreach.sent")}{" "}
             <Typography
               component="span"
               variant="body2"
@@ -575,7 +578,7 @@ export default function Outreach() {
                 )
               }
             >
-              {checking ? "Checking..." : "Check for Replies"}
+              {checking ? t("outreach.checking") : t("outreach.checkForReplies")}
             </Button>
           </Stack>
         </Box>
@@ -643,7 +646,7 @@ export default function Outreach() {
                           : ""}
                       </Typography>
                       {e.reply_received ? (
-                        <Chip label="Replied" color="success" size="small" />
+                        <Chip label={t("outreach.repliedChip")} color="success" size="small" />
                       ) : (
                         <Button
                           size="small"
@@ -656,7 +659,7 @@ export default function Outreach() {
                           }}
                           sx={{ textTransform: "none", fontSize: "0.75rem" }}
                         >
-                          Mark Replied
+                          {t("outreach.markReplied")}
                         </Button>
                       )}
                     </Stack>
@@ -701,7 +704,7 @@ export default function Outreach() {
                                 variant="caption"
                                 sx={{ fontWeight: 600, color: "success.main" }}
                               >
-                                Reply received
+                                {t("outreach.replyReceived")}
                               </Typography>
                               {e.replied_at && (
                                 <Typography
@@ -726,7 +729,7 @@ export default function Outreach() {
                           <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
                             <ChatBubbleOutline sx={{ fontSize: 14, color: "success.main" }} />
                             <Typography variant="caption" sx={{ color: "success.main" }}>
-                              Reply received (manually marked)
+                              {t("outreach.replyManual")}
                             </Typography>
                             {e.replied_at && (
                               <Typography variant="caption" sx={{ color: "success.dark" }}>
@@ -744,7 +747,7 @@ export default function Outreach() {
           </Stack>
         ) : (
           <Typography variant="body2" sx={{ color: "text.secondary" }}>
-            No sent emails yet.
+            {t("outreach.noSent")}
           </Typography>
         )}
       </Box>

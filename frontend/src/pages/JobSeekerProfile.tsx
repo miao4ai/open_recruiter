@@ -3,6 +3,7 @@ import {
   SaveOutlined, UploadOutlined, DescriptionOutlined, CheckOutlined, CloseOutlined, AddOutlined,
 } from "@mui/icons-material";
 import { CircularProgress } from "@mui/material";
+import { useTranslation } from "react-i18next";
 import { useApi } from "../hooks/useApi";
 import { getMyProfile, updateMyProfile, uploadResumeForProfile } from "../lib/api";
 import type { JobSeekerProfile } from "../types";
@@ -42,6 +43,7 @@ function Field({
 /* ── Main page ─────────────────────────────────────────────────────────── */
 
 export default function JobSeekerProfilePage() {
+  const { t } = useTranslation();
   const { data: profile, loading, refresh } = useApi(
     useCallback(() => getMyProfile(), []),
   );
@@ -126,7 +128,7 @@ export default function JobSeekerProfilePage() {
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">My Profile</h1>
+        <h1 className="text-2xl font-bold text-gray-800">{t("jobSeekerProfile.myProfile")}</h1>
         <div className="flex gap-2">
           <input
             ref={fileRef}
@@ -148,10 +150,10 @@ export default function JobSeekerProfilePage() {
               <UploadOutlined className="h-4 w-4" />
             )}
             {uploading
-              ? "Parsing..."
+              ? t("jobSeekerProfile.parsing")
               : hasProfile
-                ? "Re-upload Resume"
-                : "Upload Resume"}
+                ? t("jobSeekerProfile.reUploadResume")
+                : t("jobSeekerProfile.uploadResume")}
           </button>
           <button
             onClick={handleSave}
@@ -166,7 +168,7 @@ export default function JobSeekerProfilePage() {
             ) : (
               <SaveOutlined className="h-4 w-4" />
             )}
-            {saving ? "Saving..." : saved ? "Saved!" : "Save Changes"}
+            {saving ? t("common.saving") : saved ? t("jobSeekerProfile.saved") : t("jobSeekerProfile.saveChanges")}
           </button>
         </div>
       </div>
@@ -176,11 +178,10 @@ export default function JobSeekerProfilePage() {
         <div className="rounded-xl border border-pink-200 bg-pink-50 p-6 text-center">
           <DescriptionOutlined className="mx-auto h-10 w-10 text-pink-400" />
           <h2 className="mt-3 text-lg font-semibold text-gray-700">
-            No profile yet
+            {t("jobSeekerProfile.noProfileYet")}
           </h2>
           <p className="mt-1 text-sm text-gray-500">
-            Upload your resume to auto-generate your profile, or fill in the
-            fields below manually.
+            {t("jobSeekerProfile.noProfileHint")}
           </p>
         </div>
       )}
@@ -188,47 +189,47 @@ export default function JobSeekerProfilePage() {
       {/* Basic info */}
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6">
         <h2 className="text-lg font-semibold text-gray-700">
-          Basic Information
+          {t("jobSeekerProfile.basicInfo")}
         </h2>
         <div className="grid grid-cols-2 gap-4">
           <Field
-            label="Name"
+            label={t("jobSeekerProfile.fieldName")}
             value={merged.name ?? ""}
             onChange={(v) => handleChange("name", v)}
-            placeholder="Your full name"
+            placeholder={t("jobSeekerProfile.namePlaceholder")}
           />
           <Field
-            label="Email"
+            label={t("jobSeekerProfile.fieldEmail")}
             value={merged.email ?? ""}
             onChange={(v) => handleChange("email", v)}
-            placeholder="your@email.com"
+            placeholder={t("jobSeekerProfile.emailPlaceholder")}
           />
           <Field
-            label="Phone"
+            label={t("jobSeekerProfile.fieldPhone")}
             value={merged.phone ?? ""}
             onChange={(v) => handleChange("phone", v)}
-            placeholder="+1 (555) 000-0000"
+            placeholder={t("jobSeekerProfile.phonePlaceholder")}
           />
           <Field
-            label="Location"
+            label={t("jobSeekerProfile.fieldLocation")}
             value={merged.location ?? ""}
             onChange={(v) => handleChange("location", v)}
-            placeholder="City, State"
+            placeholder={t("jobSeekerProfile.locationPlaceholder")}
           />
           <Field
-            label="Current Title"
+            label={t("jobSeekerProfile.fieldTitle")}
             value={merged.current_title ?? ""}
             onChange={(v) => handleChange("current_title", v)}
-            placeholder="Software Engineer"
+            placeholder={t("jobSeekerProfile.titlePlaceholder")}
           />
           <Field
-            label="Current Company"
+            label={t("jobSeekerProfile.fieldCompany")}
             value={merged.current_company ?? ""}
             onChange={(v) => handleChange("current_company", v)}
-            placeholder="Acme Inc."
+            placeholder={t("jobSeekerProfile.companyPlaceholder")}
           />
           <Field
-            label="Years of Experience"
+            label={t("jobSeekerProfile.fieldExperience")}
             value={merged.experience_years ?? ""}
             onChange={(v) =>
               handleChange(
@@ -237,14 +238,14 @@ export default function JobSeekerProfilePage() {
               )
             }
             type="number"
-            placeholder="5"
+            placeholder={t("jobSeekerProfile.experiencePlaceholder")}
           />
         </div>
       </div>
 
       {/* Skills */}
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="text-lg font-semibold text-gray-700">Skills</h2>
+        <h2 className="text-lg font-semibold text-gray-700">{t("jobSeekerProfile.skills")}</h2>
         <div className="flex flex-wrap gap-2">
           {((merged.skills as string[]) || []).map((skill, i) => (
             <span
@@ -272,7 +273,7 @@ export default function JobSeekerProfilePage() {
                 handleAddSkill();
               }
             }}
-            placeholder="Add a skill..."
+            placeholder={t("jobSeekerProfile.addSkillPlaceholder")}
             className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm
               focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
           />
@@ -283,7 +284,7 @@ export default function JobSeekerProfilePage() {
               text-sm font-medium text-gray-600 hover:bg-gray-200 disabled:opacity-50"
           >
             <AddOutlined className="h-4 w-4" />
-            Add
+            {t("jobSeekerProfile.add")}
           </button>
         </div>
       </div>
@@ -291,13 +292,13 @@ export default function JobSeekerProfilePage() {
       {/* Summary */}
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6">
         <h2 className="text-lg font-semibold text-gray-700">
-          Professional Summary
+          {t("jobSeekerProfile.professionalSummary")}
         </h2>
         <textarea
           value={merged.resume_summary ?? ""}
           onChange={(e) => handleChange("resume_summary", e.target.value)}
           rows={6}
-          placeholder="A brief summary of your professional background..."
+          placeholder={t("jobSeekerProfile.summaryPlaceholder")}
           className="w-full resize-none rounded-lg border border-gray-300 px-4 py-3 text-sm
             focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
         />

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export default function Login({ onLogin }: Props) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState(0);
   const isRegister = tab === 1;
   const [email, setEmail] = useState("");
@@ -42,7 +44,7 @@ export default function Login({ onLogin }: Props) {
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail || "Something went wrong";
+          ?.detail || t("common.somethingWentWrong");
       setError(msg);
     } finally {
       setLoading(false);
@@ -56,7 +58,7 @@ export default function Login({ onLogin }: Props) {
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, mb: 4 }}>
           <SmartToyOutlined sx={{ fontSize: 32, color: "primary.main" }} />
           <Typography variant="h5" fontWeight={700} letterSpacing="-0.02em">
-            Open Recruiter
+            {t("common.appName")}
           </Typography>
         </Box>
 
@@ -67,8 +69,8 @@ export default function Login({ onLogin }: Props) {
           variant="fullWidth"
           sx={{ mb: 3 }}
         >
-          <Tab label="Login" />
-          <Tab label="Register" />
+          <Tab label={t("login.title")} />
+          <Tab label={t("login.register")} />
         </Tabs>
 
         {error && (
@@ -81,7 +83,7 @@ export default function Login({ onLogin }: Props) {
           {/* Role selector */}
           <Box>
             <Typography variant="body2" fontWeight={500} sx={{ mb: 1 }}>
-              I am a...
+              {t("login.iAmA")}
             </Typography>
             <ToggleButtonGroup
               value={role}
@@ -92,41 +94,41 @@ export default function Login({ onLogin }: Props) {
             >
               <ToggleButton value="recruiter" sx={{ py: 1.5, display: "flex", flexDirection: "column", gap: 0.5 }}>
                 <BusinessCenterOutlined fontSize="small" />
-                <Typography variant="caption">Recruiter</Typography>
+                <Typography variant="caption">{t("login.recruiter")}</Typography>
               </ToggleButton>
               <ToggleButton value="job_seeker" sx={{ py: 1.5, display: "flex", flexDirection: "column", gap: 0.5 }}>
                 <SearchOutlined fontSize="small" />
-                <Typography variant="caption">Job Seeker</Typography>
+                <Typography variant="caption">{t("login.jobSeeker")}</Typography>
               </ToggleButton>
             </ToggleButtonGroup>
           </Box>
 
           {isRegister && (
             <TextField
-              label="Name"
+              label={t("login.name")}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Your name"
+              placeholder={t("login.yourName")}
               fullWidth
             />
           )}
           <TextField
-            label="Email"
+            label={t("login.email")}
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            placeholder="you@company.com"
+            placeholder={t("login.emailPlaceholder")}
             fullWidth
           />
           <TextField
-            label="Password"
+            label={t("login.password")}
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
             inputProps={{ minLength: 6 }}
-            placeholder="At least 6 characters"
+            placeholder={t("login.passwordPlaceholder")}
             fullWidth
           />
           <Button
@@ -136,7 +138,7 @@ export default function Login({ onLogin }: Props) {
             disabled={loading}
             sx={{ py: 1.25, mt: 1 }}
           >
-            {loading ? "Please wait..." : isRegister ? "Create Account" : "Sign In"}
+            {loading ? t("common.pleaseWait") : isRegister ? t("login.createAccount") : t("login.signIn")}
           </Button>
         </Box>
       </Paper>

@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AddOutlined,
   DeleteOutline,
@@ -46,6 +47,7 @@ import type { Job, Candidate } from "../types";
 import SemanticSearchBar, { type SearchResult } from "../components/SemanticSearchBar";
 
 export default function Jobs() {
+  const { t } = useTranslation();
   const { data: jobs, refresh } = useApi(useCallback(() => listJobs(), []));
   const [showForm, setShowForm] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
@@ -129,7 +131,7 @@ export default function Jobs() {
       {/* Header row */}
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          All Jobs{" "}
+          {t("jobs.allJobs")}{" "}
           <Typography component="span" variant="body2" sx={{ fontWeight: 400, color: "grey.500" }}>
             ({jobs?.length ?? 0})
           </Typography>
@@ -140,7 +142,7 @@ export default function Jobs() {
             startIcon={<AddOutlined />}
             onClick={() => { resetForm(); setShowForm(true); }}
           >
-            New Job
+            {t("jobs.newJob")}
           </Button>
         )}
       </Box>
@@ -148,7 +150,7 @@ export default function Jobs() {
       {/* Semantic search */}
       <SemanticSearchBar<Job>
         collection="jobs"
-        placeholder="Search jobs — try 'senior React developer' or 'machine learning startup'..."
+        placeholder={t("searchPlaceholders.jobs")}
         onResults={handleSearchResults}
       />
 
@@ -157,32 +159,32 @@ export default function Jobs() {
         <Paper variant="outlined" sx={{ p: 3 }}>
           <Stack spacing={2.5}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-              {editingJob ? "Edit Job" : "New Job"}
+              {editingJob ? t("jobs.editJob") : t("jobs.newJob")}
             </Typography>
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
-                  label="Job Title"
+                  label={t("jobs.jobTitle")}
                   size="small"
                   fullWidth
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Senior Frontend Engineer"
+                  placeholder={t("jobs.jobTitlePlaceholder")}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
-                  label="Company"
+                  label={t("jobs.company")}
                   size="small"
                   fullWidth
                   value={company}
                   onChange={(e) => setCompany(e.target.value)}
-                  placeholder="e.g. Acme Corp"
+                  placeholder={t("jobs.companyPlaceholder")}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
-                  label="Posted Date"
+                  label={t("jobs.postedDate")}
                   size="small"
                   fullWidth
                   type="date"
@@ -193,13 +195,13 @@ export default function Jobs() {
               </Grid>
             </Grid>
             <TextField
-              label="Job Description"
+              label={t("jobs.jobDescription")}
               fullWidth
               multiline
               rows={8}
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
-              placeholder="Paste the full job description here..."
+              placeholder={t("jobs.jobDescriptionPlaceholder")}
             />
             <Stack direction="row" spacing={1}>
               {editingJob ? (
@@ -210,10 +212,10 @@ export default function Jobs() {
                     onClick={handleUpdate}
                     disabled={submitting}
                   >
-                    {submitting ? "Saving..." : "Save Changes"}
+                    {submitting ? t("common.saving") : t("jobs.saveChanges")}
                   </Button>
                   <Button variant="outlined" onClick={cancelEdit}>
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                 </>
               ) : (
@@ -223,13 +225,13 @@ export default function Jobs() {
                     onClick={handleCreate}
                     disabled={submitting || !rawText.trim()}
                   >
-                    {submitting ? "Creating..." : "Create Job"}
+                    {submitting ? t("common.creating") : t("jobs.createJob")}
                   </Button>
                   <Button
                     variant="outlined"
                     onClick={() => { setShowForm(false); resetForm(); }}
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                 </>
               )}
@@ -256,11 +258,11 @@ export default function Jobs() {
                   <Box>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "grey.900" }}>
-                        {job.title || "Untitled"}
+                        {job.title || t("jobs.untitled")}
                       </Typography>
                       {(job as any)._score != null && (
                         <Chip
-                          label={`${Math.round((job as any)._score * 100)}% match`}
+                          label={t("jobs.match", { percent: Math.round((job as any)._score * 100) })}
                           size="small"
                           sx={{
                             fontSize: 10,
@@ -279,7 +281,7 @@ export default function Jobs() {
                     )}
                     {job.posted_date && (
                       <Typography variant="caption" sx={{ mt: 0.25, display: "block", color: "grey.500" }}>
-                        Posted: {job.posted_date}
+                        {t("jobs.posted", { date: job.posted_date })}
                       </Typography>
                     )}
                   </Box>
@@ -287,7 +289,7 @@ export default function Jobs() {
                     data-job-actions
                     sx={{ display: "inline-flex", gap: 0.25, opacity: 0, transition: "opacity 0.2s" }}
                   >
-                    <Tooltip title="Send Email to Company">
+                    <Tooltip title={t("jobs.sendEmailToCompany")}>
                       <IconButton
                         size="small"
                         onClick={() => setEmailJob(job)}
@@ -296,7 +298,7 @@ export default function Jobs() {
                         <MailOutline fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Edit">
+                    <Tooltip title={t("common.edit")}>
                       <IconButton
                         size="small"
                         onClick={() => startEdit(job)}
@@ -305,7 +307,7 @@ export default function Jobs() {
                         <EditOutlined fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Delete">
+                    <Tooltip title={t("common.delete")}>
                       <IconButton
                         size="small"
                         onClick={() => handleDelete(job.id)}
@@ -336,8 +338,7 @@ export default function Jobs() {
                 <Stack direction="row" spacing={0.5} sx={{ mt: 1.5, alignItems: "center" }}>
                   <PeopleOutline sx={{ fontSize: 16, color: "grey.500" }} />
                   <Typography variant="caption" sx={{ color: "grey.500" }}>
-                    {job.candidate_count} matched candidate
-                    {job.candidate_count !== 1 ? "s" : ""}
+                    {t("jobs.matchedCandidates", { count: job.candidate_count })}
                   </Typography>
                 </Stack>
               </CardContent>
@@ -359,8 +360,8 @@ export default function Jobs() {
           <WorkOutline sx={{ fontSize: 40, color: "grey.400", mx: "auto", display: "block" }} />
           <Typography variant="body2" sx={{ mt: 1.5, color: "grey.600" }}>
             {searchResults
-              ? "No jobs match your search."
-              : <>No jobs yet. Click <strong>New Job</strong> to add one.</>}
+              ? t("jobs.noJobsMatch")
+              : <span dangerouslySetInnerHTML={{ __html: t("jobs.noJobsYet") }} />}
           </Typography>
         </Paper>
       )}
@@ -379,6 +380,7 @@ export default function Jobs() {
 /* -- Job Email Modal -------------------------------------------------------- */
 
 function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
+  const { t } = useTranslation();
   // Load all candidates ranked by vector similarity to this job
   const { data: candidates } = useApi(
     useCallback(() => getRankedCandidates(job.id), [job.id])
@@ -438,7 +440,7 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          Send Email to Company — {job.title}
+          {t("jobs.sendEmailTitle", { title: job.title })}
         </Typography>
         <IconButton size="small" onClick={onClose} sx={{ color: "grey.500" }}>
           <CloseOutlined />
@@ -448,7 +450,7 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
       {sent ? (
         <DialogContent sx={{ py: 6, textAlign: "center" }}>
           <Typography variant="body2" sx={{ fontWeight: 500, color: "success.main" }}>
-            Email saved successfully!
+            {t("jobs.emailSavedSuccess")}
           </Typography>
         </DialogContent>
       ) : (
@@ -457,7 +459,7 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
             <Stack spacing={2.5}>
               {/* To */}
               <TextField
-                label="Company Email"
+                label={t("jobs.companyEmail")}
                 size="small"
                 fullWidth
                 type="email"
@@ -468,14 +470,14 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
 
               {/* Candidate selector */}
               <TextField
-                label="Select Candidate (optional)"
+                label={t("jobs.selectCandidate")}
                 size="small"
                 fullWidth
                 select
                 value={selectedCandidateId}
                 onChange={(e) => handleCandidateChange(e.target.value)}
               >
-                <MenuItem value="">— None —</MenuItem>
+                <MenuItem value="">{t("jobs.noneOption")}</MenuItem>
                 {candidates?.map((c) => (
                   <MenuItem key={c.id} value={c.id}>
                     {c.name} — {c.current_title || "N/A"} ({Math.round(c.match_score * 100)}% match)
@@ -501,7 +503,7 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
                       label={
                         <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
                           <AttachFileOutlined sx={{ fontSize: 16, color: "grey.500" }} />
-                          <Typography variant="body2">Attach candidate's resume</Typography>
+                          <Typography variant="body2">{t("jobs.attachResume")}</Typography>
                         </Stack>
                       }
                     />
@@ -514,7 +516,7 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
                       startIcon={<AttachFileOutlined />}
                       sx={{ textTransform: "none" }}
                     >
-                      {attachment ? attachment.name : "Upload PDF"}
+                      {attachment ? attachment.name : t("jobs.uploadPdf")}
                       <input
                         ref={fileRef}
                         type="file"
@@ -539,7 +541,7 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
                           if (fileRef.current) fileRef.current.value = "";
                         }}
                       >
-                        Remove
+                        {t("jobs.remove")}
                       </Button>
                     )}
                   </Stack>
@@ -548,7 +550,7 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
 
               {/* Subject */}
               <TextField
-                label="Subject"
+                label={t("jobs.subject")}
                 size="small"
                 fullWidth
                 value={subject}
@@ -557,7 +559,7 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
 
               {/* Body */}
               <TextField
-                label="Body"
+                label={t("jobs.body")}
                 fullWidth
                 multiline
                 rows={8}
@@ -573,7 +575,7 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
               onClick={() => handleSend(true)}
               disabled={sending || !toEmail.trim()}
             >
-              {sending ? "Saving..." : "Save as Draft"}
+              {sending ? t("common.saving") : t("jobs.saveAsDraft")}
             </Button>
             <Button
               variant="contained"
@@ -581,7 +583,7 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
               onClick={() => handleSend(false)}
               disabled={sending || !toEmail.trim()}
             >
-              {sending ? "Sending..." : "Send Now"}
+              {sending ? t("common.sending") : t("jobs.sendNow")}
             </Button>
           </DialogActions>
         </>

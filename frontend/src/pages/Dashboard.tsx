@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   WorkOutline,
   PeopleOutline,
@@ -28,6 +29,7 @@ import { useApi } from "../hooks/useApi";
 import { listJobs, listCandidates, listEmails, listEvents } from "../lib/api";
 import type { Job, Candidate, Email, CalendarEvent, EventType } from "../types";
 import { PIPELINE_COLUMNS } from "../types";
+import type { TFunction } from "i18next";
 
 /* ── StatCard ──────────────────────────────────────────────────────────── */
 
@@ -99,10 +101,12 @@ function RecentActivity({
   jobs,
   candidates,
   emails,
+  t,
 }: {
   jobs: Job[] | null;
   candidates: Candidate[] | null;
   emails: Email[] | null;
+  t: TFunction;
 }) {
   const items = useMemo(() => {
     const all: ActivityItem[] = [];
@@ -113,7 +117,7 @@ function RecentActivity({
         icon: AddOutlined,
         iconBg: "#dbeafe",
         iconFg: "#2563eb",
-        title: `Job created: ${j.title}`,
+        title: t("dashboard.jobCreated", { title: j.title }),
         detail: j.company || "",
         time: j.created_at,
       });
@@ -125,9 +129,9 @@ function RecentActivity({
         icon: UploadOutlined,
         iconBg: "#d1fae5",
         iconFg: "#059669",
-        title: `Candidate added: ${c.name || "Unnamed"}`,
+        title: t("dashboard.candidateAdded", { name: c.name || t("common.unnamed") }),
         detail: c.current_title
-          ? `${c.current_title}${c.current_company ? ` at ${c.current_company}` : ""}`
+          ? `${c.current_title}${c.current_company ? ` ${t("dashboard.at", { company: c.current_company })}` : ""}`
           : "",
         time: c.created_at,
       });
@@ -140,8 +144,8 @@ function RecentActivity({
         icon: e.sent ? SendOutlined : MailOutline,
         iconBg: e.sent ? "#dcfce7" : "#fef3c7",
         iconFg: e.sent ? "#16a34a" : "#d97706",
-        title: `Email ${status}: ${e.subject}`,
-        detail: `To: ${e.to_email}${e.candidate_name ? ` (${e.candidate_name})` : ""}`,
+        title: t("dashboard.emailStatus", { status, subject: e.subject }),
+        detail: `${t("dashboard.to", { email: e.to_email })}${e.candidate_name ? ` (${e.candidate_name})` : ""}`,
         time: e.sent_at || e.created_at,
       });
     }
@@ -149,7 +153,7 @@ function RecentActivity({
     // Sort by time descending, take latest 15
     all.sort((a, b) => (b.time ?? "").localeCompare(a.time ?? ""));
     return all.slice(0, 15);
-  }, [jobs, candidates, emails]);
+  }, [jobs, candidates, emails, t]);
 
   if (items.length === 0) {
     return (
@@ -162,7 +166,7 @@ function RecentActivity({
         }}
       >
         <Typography variant="body2" sx={{ color: "grey.400" }}>
-          No activity yet. Create a job and add candidates to get started.
+          {t("dashboard.noActivity")}
         </Typography>
       </Paper>
     );
@@ -234,7 +238,7 @@ function RecentActivity({
             variant="caption"
             sx={{ flexShrink: 0, color: "grey.400" }}
           >
-            {formatRelativeTime(item.time)}
+            {formatRelativeTime(item.time, t)}
           </Typography>
         </Box>
       ))}
@@ -244,19 +248,19 @@ function RecentActivity({
 
 /* ── Helper functions ──────────────────────────────────────────────────── */
 
-function formatRelativeTime(isoStr: string): string {
+function formatRelativeTime(isoStr: string, t: TFunction): string {
   if (!isoStr) return "";
   const date = new Date(isoStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
 
-  if (diffMin < 1) return "Just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffMin < 1) return t("common.justNow");
+  if (diffMin < 60) return t("common.minutesAgo", { count: diffMin });
   const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffHr < 24) return t("common.hoursAgo", { count: diffHr });
   const diffDay = Math.floor(diffHr / 24);
-  if (diffDay < 7) return `${diffDay}d ago`;
+  if (diffDay < 7) return t("common.daysAgo", { count: diffDay });
   return date.toLocaleDateString();
 }
 
@@ -282,8 +286,6 @@ function formatTimeShort(iso: string) {
 
 /* ── Weekly Calendar Strip ─────────────────────────────────────────────── */
 
-const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
 const EVENT_DOT_COLORS: Record<EventType, string> = {
   interview: "#a855f7",
   follow_up: "#3b82f6",
@@ -304,6 +306,9 @@ const EVENT_PILL_COLORS: Record<
 };
 
 function WeeklyCalendar({ events }: { events: CalendarEvent[] | null }) {
+  const { t } = useTranslation();
+  const DAY_NAMES_SHORT = t("calendar.days", { returnObjects: true }) as string[];
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayStr = toDateKey(today);
@@ -358,7 +363,7 @@ function WeeklyCalendar({ events }: { events: CalendarEvent[] | null }) {
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Typography variant="body2" sx={{ fontWeight: 600, color: "grey.900" }}>
-            This Week
+            {t("dashboard.thisWeek")}
           </Typography>
           <Typography variant="caption" sx={{ color: "grey.400" }}>
             {weekLabel}
@@ -390,7 +395,7 @@ function WeeklyCalendar({ events }: { events: CalendarEvent[] | null }) {
               "&:hover": { bgcolor: "grey.50" },
             }}
           >
-            Today
+            {t("common.today")}
           </Button>
           <IconButton
             size="small"
@@ -410,7 +415,7 @@ function WeeklyCalendar({ events }: { events: CalendarEvent[] | null }) {
               "&:hover": { color: "primary.dark" },
             }}
           >
-            Full calendar
+            {t("dashboard.fullCalendar")}
           </Typography>
         </Box>
       </Box>
@@ -504,7 +509,7 @@ function WeeklyCalendar({ events }: { events: CalendarEvent[] | null }) {
               color: "grey.400",
             }}
           >
-            No events on this day
+            {t("dashboard.noEventsOnDay")}
           </Typography>
         ) : (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -584,6 +589,7 @@ function WeeklyCalendar({ events }: { events: CalendarEvent[] | null }) {
 /* ── Dashboard ─────────────────────────────────────────────────────────── */
 
 export default function Dashboard() {
+  const { t } = useTranslation();
   const { data: jobs } = useApi(useCallback(() => listJobs(), []));
   const { data: candidates } = useApi(
     useCallback(() => listCandidates(), []),
@@ -611,7 +617,7 @@ export default function Dashboard() {
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <StatCard
             icon={WorkOutline}
-            label="Active Jobs"
+            label={t("dashboard.activeJobs")}
             value={totalJobs}
             color="#3b82f6"
           />
@@ -619,7 +625,7 @@ export default function Dashboard() {
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <StatCard
             icon={PeopleOutline}
-            label="Candidates"
+            label={t("dashboard.candidates")}
             value={totalCandidates}
             color="#10b981"
           />
@@ -627,7 +633,7 @@ export default function Dashboard() {
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <StatCard
             icon={MailOutline}
-            label="Pending Emails"
+            label={t("dashboard.pendingEmails")}
             value={pendingEmails}
             color="#f59e0b"
           />
@@ -635,7 +641,7 @@ export default function Dashboard() {
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <StatCard
             icon={CalendarTodayOutlined}
-            label="Interviews"
+            label={t("dashboard.interviews")}
             value={interviews}
             color="#8b5cf6"
           />
@@ -648,7 +654,7 @@ export default function Dashboard() {
       {/* Pipeline Kanban */}
       <Box>
         <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-          Pipeline
+          {t("dashboard.pipeline")}
         </Typography>
         <Box
           sx={{
@@ -680,7 +686,7 @@ export default function Dashboard() {
                   variant="body2"
                   sx={{ fontWeight: 500, color: "grey.700" }}
                 >
-                  {col.label}
+                  {t(col.labelKey)}
                   <Typography
                     component="span"
                     variant="caption"
@@ -711,10 +717,10 @@ export default function Dashboard() {
                       }}
                     >
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {c.name || "Unnamed"}
+                        {c.name || t("common.unnamed")}
                       </Typography>
                       <Typography variant="caption" sx={{ color: "grey.500" }}>
-                        Score:{" "}
+                        {t("dashboard.score")}:{" "}
                         {c.match_score
                           ? `${Math.round(c.match_score * 100)}%`
                           : "\u2014"}
@@ -731,7 +737,7 @@ export default function Dashboard() {
                       color: "grey.400",
                     }}
                   >
-                    No candidates
+                    {t("dashboard.noCandidates")}
                   </Typography>
                 )}
               </Box>
@@ -743,9 +749,9 @@ export default function Dashboard() {
       {/* Recent Activity */}
       <Box>
         <Typography variant="h6" sx={{ fontWeight: 600, mb: 1.5 }}>
-          Recent Activity
+          {t("dashboard.recentActivity")}
         </Typography>
-        <RecentActivity jobs={jobs} candidates={candidates} emails={emails} />
+        <RecentActivity jobs={jobs} candidates={candidates} emails={emails} t={t} />
       </Box>
     </Box>
   );

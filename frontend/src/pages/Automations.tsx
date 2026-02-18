@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   BoltOutlined,
   PlayArrowOutlined,
@@ -32,17 +33,20 @@ import type {
   AutomationLog,
 } from "../types";
 
-const RULE_TYPE_META: Record<
+const RULE_TYPE_ICONS: Record<
   AutomationRuleType,
-  { label: string; icon: React.ElementType; color: string }
+  { icon: React.ElementType; color: string }
 > = {
-  auto_match: { label: "Auto-Match", icon: AutoAwesomeOutlined, color: "blue" },
-  inbox_scan: { label: "Inbox Scanner", icon: MailOutline, color: "green" },
-  auto_followup: { label: "Auto Follow-Up", icon: ReplyOutlined, color: "amber" },
-  pipeline_cleanup: { label: "Pipeline Cleanup", icon: DeleteOutlined, color: "red" },
+  auto_match: { icon: AutoAwesomeOutlined, color: "blue" },
+  inbox_scan: { icon: MailOutline, color: "green" },
+  auto_followup: { icon: ReplyOutlined, color: "amber" },
+  pipeline_cleanup: { icon: DeleteOutlined, color: "red" },
 };
 
-function describeSchedule(rule: AutomationRule): string {
+function describeSchedule(
+  rule: AutomationRule,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
   try {
     const s = JSON.parse(rule.schedule_value || "{}");
     if (rule.trigger_type === "interval") {
@@ -50,7 +54,7 @@ function describeSchedule(rule: AutomationRule): string {
       if (s.days) parts.push(`${s.days}d`);
       if (s.hours) parts.push(`${s.hours}h`);
       if (s.minutes) parts.push(`${s.minutes}m`);
-      return parts.length ? `Every ${parts.join(" ")}` : "Every 30m";
+      return parts.length ? t("automations.every", { schedule: parts.join(" ") }) : t("automations.every", { schedule: "30m" });
     }
     if (rule.trigger_type === "cron") {
       const parts: string[] = [];
@@ -66,19 +70,23 @@ function describeSchedule(rule: AutomationRule): string {
   return rule.trigger_type;
 }
 
-function formatRelativeTime(iso: string | null): string {
-  if (!iso) return "Never";
+function formatRelativeTime(
+  iso: string | null,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (!iso) return t("common.never");
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t("common.justNow");
+  if (mins < 60) return t("common.minutesAgo", { count: mins });
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return t("common.hoursAgo", { count: hrs });
   const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+  return t("common.daysAgo", { count: days });
 }
 
 export default function Automations() {
+  const { t } = useTranslation();
   const {
     data: rules,
     refresh: refreshRules,
@@ -90,6 +98,13 @@ export default function Automations() {
   const { data: status } = useApi(
     useCallback(() => getSchedulerStatus(), [])
   );
+
+  const RULE_TYPE_LABELS: Record<AutomationRuleType, string> = {
+    auto_match: t("automations.ruleTypes.auto_match"),
+    inbox_scan: t("automations.ruleTypes.inbox_scan"),
+    auto_followup: t("automations.ruleTypes.auto_followup"),
+    pipeline_cleanup: t("automations.ruleTypes.pipeline_cleanup"),
+  };
 
   const [runningId, setRunningId] = useState<string | null>(null);
   const [editRule, setEditRule] = useState<AutomationRule | null>(null);
@@ -112,7 +127,7 @@ export default function Automations() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this automation rule?")) return;
+    if (!confirm(t("automations.confirmDelete"))) return;
     await deleteAutomationRule(id);
     refreshRules();
   };
@@ -122,7 +137,7 @@ export default function Automations() {
       {/* Scheduler Status */}
       <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-3">
         <BoltOutlined className="h-5 w-5 text-amber-500" />
-        <span className="font-semibold text-sm">Background Scheduler</span>
+        <span className="font-semibold text-sm">{t("automations.backgroundScheduler")}</span>
         <span
           className={`ml-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
             status?.running
@@ -135,31 +150,31 @@ export default function Automations() {
               status?.running ? "bg-green-500" : "bg-gray-400"
             }`}
           />
-          {status?.running ? "Running" : "Stopped"}
+          {status?.running ? t("automations.running") : t("automations.stopped")}
         </span>
         <span className="ml-auto text-xs text-gray-500">
-          {status?.active_jobs ?? 0} active jobs
+          {t("automations.activeJobs", { count: status?.active_jobs ?? 0 })}
         </span>
       </div>
 
       {/* Rules */}
       <div className="rounded-xl border border-gray-200 bg-white p-5">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-semibold">Automation Rules</h3>
+          <h3 className="font-semibold">{t("automations.automationRules")}</h3>
           <button
             onClick={() => setShowCreate(true)}
             className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
           >
-            <AddOutlined className="h-3.5 w-3.5" /> Add Rule
+            <AddOutlined className="h-3.5 w-3.5" /> {t("automations.addRule")}
           </button>
         </div>
 
         {!rules || rules.length === 0 ? (
-          <p className="text-sm text-gray-400">No automation rules yet.</p>
+          <p className="text-sm text-gray-400">{t("automations.noRules")}</p>
         ) : (
           <div className="space-y-3">
             {rules.map((rule) => {
-              const meta = RULE_TYPE_META[rule.rule_type] ?? RULE_TYPE_META.auto_match;
+              const meta = RULE_TYPE_ICONS[rule.rule_type] ?? RULE_TYPE_ICONS.auto_match;
               const Icon = meta.icon;
               return (
                 <div
@@ -175,18 +190,18 @@ export default function Automations() {
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-medium bg-${meta.color}-100 text-${meta.color}-700`}
                       >
-                        {meta.label}
+                        {RULE_TYPE_LABELS[rule.rule_type]}
                       </span>
                     </div>
                     <div className="mt-0.5 flex items-center gap-3 text-xs text-gray-400">
-                      <span>{describeSchedule(rule)}</span>
-                      <span>Runs: {rule.run_count}</span>
+                      <span>{describeSchedule(rule, t)}</span>
+                      <span>{t("automations.runs", { count: rule.run_count })}</span>
                       {rule.error_count > 0 && (
                         <span className="text-red-400">
-                          Errors: {rule.error_count}
+                          {t("automations.errors", { count: rule.error_count })}
                         </span>
                       )}
-                      <span>Last: {formatRelativeTime(rule.last_run_at)}</span>
+                      <span>{t("automations.last", { time: formatRelativeTime(rule.last_run_at, t) })}</span>
                     </div>
                   </div>
 
@@ -194,7 +209,7 @@ export default function Automations() {
                   <button
                     onClick={() => handleRunNow(rule.id)}
                     disabled={runningId === rule.id}
-                    title="Run Now"
+                    title={t("automations.runNow")}
                     className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
                   >
                     {runningId === rule.id ? (
@@ -205,14 +220,14 @@ export default function Automations() {
                   </button>
                   <button
                     onClick={() => setEditRule(rule)}
-                    title="Edit"
+                    title={t("common.edit")}
                     className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                   >
                     <EditOutlined className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(rule.id)}
-                    title="Delete"
+                    title={t("common.delete")}
                     className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-red-500"
                   >
                     <DeleteOutline className="h-4 w-4" />
@@ -239,21 +254,21 @@ export default function Automations() {
 
       {/* Execution Logs */}
       <div className="rounded-xl border border-gray-200 bg-white p-5">
-        <h3 className="mb-4 font-semibold">Execution History</h3>
+        <h3 className="mb-4 font-semibold">{t("automations.executionHistory")}</h3>
         {!logs || logs.length === 0 ? (
           <p className="text-sm text-gray-400">
-            No executions yet. Enable a rule or click "Run Now".
+            {t("automations.noExecutions")}
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs font-medium text-gray-500">
-                  <th className="pb-2 pr-3">Time</th>
-                  <th className="pb-2 pr-3">Rule</th>
-                  <th className="pb-2 pr-3">Status</th>
-                  <th className="pb-2 pr-3">Duration</th>
-                  <th className="pb-2">Summary</th>
+                  <th className="pb-2 pr-3">{t("automations.time")}</th>
+                  <th className="pb-2 pr-3">{t("automations.rule")}</th>
+                  <th className="pb-2 pr-3">{t("automations.status")}</th>
+                  <th className="pb-2 pr-3">{t("automations.duration")}</th>
+                  <th className="pb-2">{t("automations.summary")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -286,6 +301,7 @@ export default function Automations() {
 }
 
 function LogRow({ log }: { log: AutomationLog }) {
+  const { t } = useTranslation();
   const statusIcon = {
     success: <CheckCircleOutlined className="h-3.5 w-3.5 text-green-500" />,
     error: <CancelOutlined className="h-3.5 w-3.5 text-red-500" />,
@@ -296,7 +312,7 @@ function LogRow({ log }: { log: AutomationLog }) {
   return (
     <tr className="border-b border-gray-50">
       <td className="py-2 pr-3 text-xs text-gray-500 whitespace-nowrap">
-        {formatRelativeTime(log.started_at)}
+        {formatRelativeTime(log.started_at, t)}
       </td>
       <td className="py-2 pr-3 font-medium whitespace-nowrap">
         {log.rule_name || log.rule_id}
@@ -317,7 +333,7 @@ function LogRow({ log }: { log: AutomationLog }) {
   );
 }
 
-/* ── Rule Create / Edit Modal ────────────────────────────────────────── */
+/* -- Rule Create / Edit Modal ----------------------------------------------- */
 
 function RuleModal({
   rule,
@@ -328,6 +344,7 @@ function RuleModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useTranslation();
   const isEdit = !!rule;
   const [name, setName] = useState(rule?.name ?? "");
   const [description, setDescription] = useState(rule?.description ?? "");
@@ -381,7 +398,7 @@ function RuleModal({
       <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="font-semibold">
-            {isEdit ? "Edit Rule" : "Create Rule"}
+            {isEdit ? t("automations.editRule") : t("automations.createRule")}
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <CloseOutlined className="h-5 w-5" />
@@ -389,24 +406,24 @@ function RuleModal({
         </div>
 
         <div className="space-y-3">
-          <Field label="Name">
+          <Field label={t("automations.name")}>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Auto-Match New Candidates"
+              placeholder={t("automations.namePlaceholder")}
               className="input"
             />
           </Field>
-          <Field label="Description">
+          <Field label={t("automations.description")}>
             <input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does this rule do?"
+              placeholder={t("automations.descriptionPlaceholder")}
               className="input"
             />
           </Field>
           {!isEdit && (
-            <Field label="Rule Type">
+            <Field label={t("automations.ruleType")}>
               <select
                 value={ruleType}
                 onChange={(e) =>
@@ -414,24 +431,24 @@ function RuleModal({
                 }
                 className="input"
               >
-                <option value="auto_match">Auto-Match</option>
-                <option value="inbox_scan">Inbox Scanner</option>
-                <option value="auto_followup">Auto Follow-Up</option>
-                <option value="pipeline_cleanup">Pipeline Cleanup</option>
+                <option value="auto_match">{t("automations.ruleTypes.auto_match")}</option>
+                <option value="inbox_scan">{t("automations.ruleTypes.inbox_scan")}</option>
+                <option value="auto_followup">{t("automations.ruleTypes.auto_followup")}</option>
+                <option value="pipeline_cleanup">{t("automations.ruleTypes.pipeline_cleanup")}</option>
               </select>
             </Field>
           )}
-          <Field label="Trigger Type">
+          <Field label={t("automations.triggerType")}>
             <select
               value={triggerType}
               onChange={(e) => setTriggerType(e.target.value as "interval" | "cron")}
               className="input"
             >
-              <option value="interval">Interval</option>
-              <option value="cron">Cron</option>
+              <option value="interval">{t("automations.interval")}</option>
+              <option value="cron">{t("automations.cron")}</option>
             </select>
           </Field>
-          <Field label="Schedule (JSON)">
+          <Field label={t("automations.scheduleJson")}>
             <input
               value={scheduleValue}
               onChange={(e) => setScheduleValue(e.target.value)}
@@ -442,7 +459,7 @@ function RuleModal({
               Interval: {`{"minutes":30}`} | Cron: {`{"hour":9,"minute":0,"day_of_week":"mon"}`}
             </p>
           </Field>
-          <Field label="Conditions (JSON)">
+          <Field label={t("automations.conditionsJson")}>
             <textarea
               value={conditionsJson}
               onChange={(e) => setConditionsJson(e.target.value)}
@@ -450,7 +467,7 @@ function RuleModal({
               className="input font-mono text-xs"
             />
           </Field>
-          <Field label="Actions (JSON)">
+          <Field label={t("automations.actionsJson")}>
             <textarea
               value={actionsJson}
               onChange={(e) => setActionsJson(e.target.value)}
@@ -465,14 +482,14 @@ function RuleModal({
             onClick={onClose}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             onClick={handleSave}
             disabled={saving || !name}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {saving ? "Saving..." : isEdit ? "Update" : "Create"}
+            {saving ? t("common.saving") : isEdit ? t("automations.update") : t("automations.create")}
           </button>
         </div>
       </div>

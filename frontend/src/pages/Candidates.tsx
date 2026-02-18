@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   Alert,
   Box,
@@ -30,13 +31,6 @@ import { listCandidates, listJobs, uploadResume, deleteCandidate } from "../lib/
 import type { Candidate, CandidateStatus } from "../types";
 import SemanticSearchBar, { type SearchResult } from "../components/SemanticSearchBar";
 
-const UPLOAD_STEPS = [
-  "Uploading file",
-  "Extracting text",
-  "AI parsing resume",
-  "Saving candidate",
-];
-
 function UploadProgressDialog({
   open,
   done,
@@ -48,7 +42,15 @@ function UploadProgressDialog({
   error: string;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [activeStep, setActiveStep] = useState(0);
+
+  const UPLOAD_STEPS = [
+    t("candidates.uploadSteps.uploading"),
+    t("candidates.uploadSteps.extracting"),
+    t("candidates.uploadSteps.parsing"),
+    t("candidates.uploadSteps.saving"),
+  ];
 
   // Auto-advance steps while waiting for API response
   useEffect(() => {
@@ -105,7 +107,7 @@ function UploadProgressDialog({
           <Box sx={{ mt: 3, textAlign: "center" }}>
             <CheckCircleOutline sx={{ fontSize: 36, color: "success.main" }} />
             <Typography variant="body2" sx={{ mt: 1, fontWeight: 500, color: "success.main" }}>
-              Resume imported successfully!
+              {t("candidates.resumeImported")}
             </Typography>
           </Box>
         )}
@@ -117,7 +119,7 @@ function UploadProgressDialog({
               {error}
             </Typography>
             <Button onClick={onClose} size="small" sx={{ mt: 1.5 }}>
-              Close
+              {t("common.close")}
             </Button>
           </Box>
         )}
@@ -147,6 +149,7 @@ function ScoreCell({
 }: {
   jobMatches: { job_id: string; job_title: string; job_company: string; match_score: number; match_reasoning: string; strengths: string[]; gaps: string[] }[];
 }) {
+  const { t } = useTranslation();
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
   const scored = (jobMatches ?? []).filter((m) => m.match_score > 0);
@@ -229,7 +232,7 @@ function ScoreCell({
                     {m.strengths?.length > 0 && (
                       <Box sx={{ mb: 0.5 }}>
                         <Typography variant="caption" sx={{ fontWeight: 600, color: "success.main", textTransform: "uppercase" }}>
-                          Strengths
+                          {t("candidates.strengths")}
                         </Typography>
                         {m.strengths.map((s, i) => (
                           <Typography key={i} variant="body2" sx={{ color: "success.dark", pl: 1, fontSize: 12 }}>
@@ -241,7 +244,7 @@ function ScoreCell({
                     {m.gaps?.length > 0 && (
                       <Box>
                         <Typography variant="caption" sx={{ fontWeight: 600, color: "error.main", textTransform: "uppercase" }}>
-                          Gaps
+                          {t("candidates.gaps")}
                         </Typography>
                         {m.gaps.map((g, i) => (
                           <Typography key={i} variant="body2" sx={{ color: "error.dark", pl: 1, fontSize: 12 }}>
@@ -253,7 +256,7 @@ function ScoreCell({
                   </>
                 ) : (
                   <Typography variant="caption" color="text.secondary">
-                    Vector similarity only. Generate Analysis for details.
+                    {t("candidates.vectorOnly")}
                   </Typography>
                 )}
                 {idx < scored.length - 1 && (
@@ -397,6 +400,7 @@ function JobsCell({ matches }: { matches: { job_id: string; job_title: string; j
 }
 
 export default function Candidates() {
+  const { t } = useTranslation();
   const { data: candidates, refresh } = useApi(
     useCallback(() => listCandidates(), [])
   );
@@ -431,7 +435,7 @@ export default function Candidates() {
       if (err?.response?.status === 409 && detail) {
         setUploadError(detail);
       } else {
-        setUploadError("Upload failed. Please try again.");
+        setUploadError(t("candidates.uploadFailed"));
       }
     } finally {
       if (fileRef.current) fileRef.current.value = "";
@@ -445,7 +449,7 @@ export default function Candidates() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this candidate?")) return;
+    if (!confirm(t("candidates.confirmDelete"))) return;
     await deleteCandidate(id);
     refresh();
   };
@@ -453,7 +457,7 @@ export default function Candidates() {
   const columns: GridColDef[] = [
     {
       field: "name",
-      headerName: "Name",
+      headerName: t("candidates.colName"),
       flex: 1,
       minWidth: 150,
       renderCell: (params) => (
@@ -461,13 +465,13 @@ export default function Candidates() {
           to={`/candidates/${params.row.id}`}
           style={{ color: "#1976d2", textDecoration: "none", fontWeight: 500 }}
         >
-          {params.value || "Unnamed"}
+          {params.value || t("common.unnamed")}
         </Link>
       ),
     },
     {
       field: "email",
-      headerName: "Email",
+      headerName: t("candidates.colEmail"),
       flex: 1,
       minWidth: 180,
       renderCell: (params) => (
@@ -478,7 +482,7 @@ export default function Candidates() {
     },
     {
       field: "current_title",
-      headerName: "Title",
+      headerName: t("candidates.colTitle"),
       flex: 1,
       minWidth: 150,
       renderCell: (params) => (
@@ -489,7 +493,7 @@ export default function Candidates() {
     },
     {
       field: "job_matches",
-      headerName: "Jobs",
+      headerName: t("candidates.colJobs"),
       flex: 1,
       minWidth: 160,
       sortable: false,
@@ -497,7 +501,7 @@ export default function Candidates() {
     },
     {
       field: "match_score",
-      headerName: "Score",
+      headerName: t("candidates.colScore"),
       width: 160,
       renderCell: (params) => (
         <ScoreCell jobMatches={params.row.job_matches ?? []} />
@@ -505,7 +509,7 @@ export default function Candidates() {
     },
     {
       field: "status",
-      headerName: "Status",
+      headerName: t("candidates.colStatus"),
       width: 150,
       renderCell: (params) => (
         <Chip
@@ -517,7 +521,7 @@ export default function Candidates() {
     },
     {
       field: "skills",
-      headerName: "Skills",
+      headerName: t("candidates.colSkills"),
       flex: 1,
       minWidth: 200,
       sortable: false,
@@ -531,7 +535,7 @@ export default function Candidates() {
       filterable: false,
       disableColumnMenu: true,
       renderCell: (params) => (
-        <Tooltip title="Delete">
+        <Tooltip title={t("common.delete")}>
           <IconButton
             size="small"
             onClick={(e) => {
@@ -566,7 +570,7 @@ export default function Candidates() {
         }}
       >
         <Typography variant="h6">
-          All Candidates{" "}
+          {t("candidates.allCandidates")}{" "}
           <Typography
             component="span"
             variant="body2"
@@ -584,7 +588,7 @@ export default function Candidates() {
             onChange={(e) => setSelectedJobId(e.target.value)}
             sx={{ minWidth: 220 }}
           >
-            <MenuItem value="">Link to Job (optional)</MenuItem>
+            <MenuItem value="">{t("candidates.linkToJob")}</MenuItem>
             {jobs?.map((j) => (
               <MenuItem key={j.id} value={j.id}>
                 {j.title} — {j.company}
@@ -598,7 +602,7 @@ export default function Candidates() {
             startIcon={<UploadOutlined />}
             disabled={uploading}
           >
-            Import Resume
+            {t("candidates.importResume")}
             <input
               ref={fileRef}
               type="file"
@@ -613,7 +617,7 @@ export default function Candidates() {
       {/* Semantic search */}
       <SemanticSearchBar<Candidate>
         collection="candidates"
-        placeholder="Search candidates — try 'Python backend with 5 years experience' or 'React developer'..."
+        placeholder={t("searchPlaceholders.candidates")}
         onResults={handleSearchResults}
       />
 
@@ -647,8 +651,8 @@ export default function Candidates() {
           />
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
             {searchResults
-              ? "No candidates match your search."
-              : <>No candidates yet. Click <strong>Import Resume</strong> to add one.</>}
+              ? t("candidates.noCandidatesMatch")
+              : <span dangerouslySetInnerHTML={{ __html: t("candidates.noCandidatesYet") }} />}
           </Typography>
         </Paper>
       )}

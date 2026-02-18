@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
@@ -55,7 +57,7 @@ import type {
 
 /* ── Greeting / Daily Briefing ──────────────────────────────────────────── */
 
-function makeBriefing(candidates: Candidate[]): ChatMessage {
+function makeBriefing(candidates: Candidate[], t: TFunction): ChatMessage {
   const dateStr = new Date().toLocaleDateString("en-US", {
     year: "numeric", month: "long", day: "numeric",
   });
@@ -64,16 +66,16 @@ function makeBriefing(candidates: Candidate[]): ChatMessage {
   const contacted = candidates.filter((c) => c.status === "contacted");
   const interviews = candidates.filter((c) => c.status === "interview_scheduled");
 
-  const lines = [`Good morning! Today is ${dateStr}. Here's your recruiting brief:\n`];
+  const lines = [t("chat.briefingIntro", { date: dateStr })];
 
-  lines.push(`**Pipeline**: ${total} candidate${total !== 1 ? "s" : ""} total`);
-  if (newCount > 0) lines.push(`  • ${newCount} new — ready for review`);
+  lines.push(t("chat.briefingPipeline", { count: total }));
+  if (newCount > 0) lines.push(t("chat.briefingNew", { count: newCount }));
   if (contacted.length > 0)
-    lines.push(`  • ${contacted.length} awaiting reply (${contacted.slice(0, 3).map((c) => c.name).join(", ")}${contacted.length > 3 ? "..." : ""})`);
+    lines.push(t("chat.briefingContacted", { count: contacted.length, names: contacted.slice(0, 3).map((c) => c.name).join(", "), more: contacted.length > 3 ? "..." : "" }));
   if (interviews.length > 0)
-    lines.push(`  • ${interviews.length} interview${interviews.length !== 1 ? "s" : ""} scheduled`);
+    lines.push(t("chat.briefingInterviews", { count: interviews.length }));
 
-  lines.push("\nHow can I help you today?");
+  lines.push("\n" + t("chat.briefingHelp"));
 
   return {
     id: "briefing-" + Date.now(),
@@ -84,12 +86,12 @@ function makeBriefing(candidates: Candidate[]): ChatMessage {
   };
 }
 
-function makeSimpleGreeting(): ChatMessage {
+function makeSimpleGreeting(t: TFunction): ChatMessage {
   return {
     id: "greeting-" + Date.now(),
     user_id: "",
     role: "assistant",
-    content: `Hi! Welcome to Open Recruiter — I'm Erika, your recruiting assistant. How can I help you today?`,
+    content: t("chat.simpleGreeting"),
     created_at: new Date().toISOString(),
   };
 }
@@ -100,6 +102,7 @@ function buildSuggestions(
   messages: ChatMessage[],
   candidates: Candidate[] | null,
   lastAction?: ChatMessage["action"],
+  t?: TFunction,
 ): Suggestion[] {
   const result: Suggestion[] = [];
 
@@ -112,21 +115,21 @@ function buildSuggestions(
     const newOnes = candidates.filter((c) => c.status === "new");
 
     if (contacted.length > 0) {
-      result.push({ label: "Check for replies", prompt: "Have any contacted candidates replied?", icon: "📩" });
+      result.push({ label: t ? t("chat.checkForReplies") : "Check for replies", prompt: "Have any contacted candidates replied?", icon: "📩" });
     }
     if (newOnes.length > 0 && newOnes.length <= 5) {
-      result.push({ label: `Review ${newOnes[0].name}`, prompt: `What jobs match ${newOnes[0].name}?`, icon: "📊" });
+      result.push({ label: t ? t("chat.review", { name: newOnes[0].name }) : `Review ${newOnes[0].name}`, prompt: `What jobs match ${newOnes[0].name}?`, icon: "📊" });
     }
   }
 
   if (messages.length <= 2) {
-    result.push({ label: "Upload resume", prompt: "Upload a resume", icon: "📄" });
-    result.push({ label: "Upload JD", prompt: "Upload a job description", icon: "📋" });
+    result.push({ label: t ? t("chat.uploadResume") : "Upload resume", prompt: "Upload a resume", icon: "📄" });
+    result.push({ label: t ? t("chat.uploadJD") : "Upload JD", prompt: "Upload a job description", icon: "📋" });
   }
 
   if (result.length === 0) {
-    result.push({ label: "Pipeline status", prompt: "What's the pipeline status today?", icon: "📊" });
-    result.push({ label: "Upload resume", prompt: "Upload a resume", icon: "📄" });
+    result.push({ label: t ? t("chat.pipelineStatus") : "Pipeline status", prompt: "What's the pipeline status today?", icon: "📊" });
+    result.push({ label: t ? t("chat.uploadResume") : "Upload resume", prompt: "Upload a resume", icon: "📄" });
   }
 
   return result.slice(0, 4);
@@ -143,6 +146,7 @@ function EmailComposeCard({
   onCancel: (emailId: string) => void;
   onUpdateField: (emailId: string, field: string, value: string) => void;
 }) {
+  const { t } = useTranslation();
   const [sending, setSending] = useState(false);
 
   if (status === "sent") {
@@ -150,10 +154,10 @@ function EmailComposeCard({
       <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "success.light", bgcolor: "success.50", backgroundColor: "#f0fdf4" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "success.dark" }}>
           <CheckCircleOutline sx={{ fontSize: 20 }} />
-          <Typography variant="body2" fontWeight={500}>Email sent!</Typography>
+          <Typography variant="body2" fontWeight={500}>{t("chat.emailSent")}</Typography>
         </Box>
         <Typography variant="body2" sx={{ mt: 0.5, color: "success.main" }}>
-          Sent to {email.to_email} ({email.candidate_name})
+          {t("chat.sentTo", { email: email.to_email, name: email.candidate_name })}
         </Typography>
       </Paper>
     );
@@ -161,7 +165,7 @@ function EmailComposeCard({
   if (status === "cancelled") {
     return (
       <Paper sx={{ mt: 1, p: 1.5, borderRadius: 3, border: "1px solid", borderColor: "grey.200", bgcolor: "grey.50" }}>
-        <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>Email draft cancelled.</Typography>
+        <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>{t("chat.emailCancelled")}</Typography>
       </Paper>
     );
   }
@@ -175,7 +179,7 @@ function EmailComposeCard({
     <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "#93c5fd", bgcolor: "#eff6ff80", display: "flex", flexDirection: "column", gap: 1.5 }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#1d4ed8" }}>
         <MailOutline sx={{ fontSize: 16 }} />
-        <Typography variant="body2" fontWeight={500}>Email Draft</Typography>
+        <Typography variant="body2" fontWeight={500}>{t("chat.emailDraft")}</Typography>
       </Box>
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
         <Typography variant="body2" color="text.secondary">To:</Typography>
@@ -185,7 +189,7 @@ function EmailComposeCard({
         )}
       </Box>
       <Box>
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>Subject</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>{t("outreach.subject")}</Typography>
         <TextField
           fullWidth size="small" value={email.subject}
           onChange={(e) => onUpdateField(email.id, "subject", e.target.value)}
@@ -193,7 +197,7 @@ function EmailComposeCard({
         />
       </Box>
       <Box>
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>Body</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>{t("outreach.body")}</Typography>
         <TextField
           fullWidth multiline rows={8} size="small" value={email.body}
           onChange={(e) => onUpdateField(email.id, "body", e.target.value)}
@@ -207,7 +211,7 @@ function EmailComposeCard({
           startIcon={<Close sx={{ fontSize: 14 }} />}
           sx={{ borderRadius: 2, textTransform: "none", fontSize: "0.75rem", color: "text.secondary" }}
         >
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button
           size="small" variant="contained" disabled={sending}
@@ -215,7 +219,7 @@ function EmailComposeCard({
           startIcon={sending ? <CircularProgress size={14} color="inherit" /> : <SendOutlined sx={{ fontSize: 14 }} />}
           sx={{ borderRadius: 2, textTransform: "none", fontSize: "0.75rem" }}
         >
-          {sending ? "Sending..." : "Send Email"}
+          {sending ? t("common.sending") : t("chat.sendEmailBtn")}
         </Button>
       </Box>
     </Paper>
@@ -233,6 +237,7 @@ function ResumeUploadCard({
   onUpload: (file: File, jobId: string) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState(defaultJobId || "");
   const [uploading, setUploading] = useState(false);
@@ -245,20 +250,20 @@ function ResumeUploadCard({
       <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "success.light", bgcolor: "#f0fdf4" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "success.dark" }}>
           <CheckCircleOutline sx={{ fontSize: 20 }} />
-          <Typography variant="body2" fontWeight={500}>Resume uploaded!</Typography>
+          <Typography variant="body2" fontWeight={500}>{t("chat.resumeUploaded")}</Typography>
         </Box>
         <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
           <Typography variant="body2" sx={{ color: "success.dark" }}>
-            <Box component="span" fontWeight={500}>Name:</Box> {uploadedCandidate.name}
+            <Box component="span" fontWeight={500}>{t("chat.nameLabel")}</Box> {uploadedCandidate.name}
           </Typography>
           {uploadedCandidate.current_title && (
             <Typography variant="body2" sx={{ color: "success.dark" }}>
-              <Box component="span" fontWeight={500}>Title:</Box> {uploadedCandidate.current_title}
+              <Box component="span" fontWeight={500}>{t("chat.titleLabel")}</Box> {uploadedCandidate.current_title}
             </Typography>
           )}
           {uploadedCandidate.skills.length > 0 && (
             <Typography variant="body2" sx={{ color: "success.dark" }}>
-              <Box component="span" fontWeight={500}>Skills:</Box> {uploadedCandidate.skills.slice(0, 5).join(", ")}
+              <Box component="span" fontWeight={500}>{t("chat.skillsLabel")}</Box> {uploadedCandidate.skills.slice(0, 5).join(", ")}
             </Typography>
           )}
         </Box>
@@ -268,7 +273,7 @@ function ResumeUploadCard({
   if (status === "cancelled") {
     return (
       <Paper sx={{ mt: 1, p: 1.5, borderRadius: 3, border: "1px solid", borderColor: "grey.200", bgcolor: "grey.50" }}>
-        <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>Upload cancelled.</Typography>
+        <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>{t("chat.uploadCancelled")}</Typography>
       </Paper>
     );
   }
@@ -279,7 +284,7 @@ function ResumeUploadCard({
     try { await onUpload(file, jobId); }
     catch (err: unknown) {
       const axiosErr = err as { response?: { status?: number } };
-      setError(axiosErr?.response?.status === 409 ? "Duplicate candidate." : (err instanceof Error ? err.message : "Upload failed"));
+      setError(axiosErr?.response?.status === 409 ? t("chat.duplicateCandidate") : (err instanceof Error ? err.message : t("chat.uploadFailed")));
     } finally { setUploading(false); }
   };
 
@@ -287,7 +292,7 @@ function ResumeUploadCard({
     <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "#c4b5fd", bgcolor: "#f5f3ff80", display: "flex", flexDirection: "column", gap: 1.5 }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#6d28d9" }}>
         <CloudUpload sx={{ fontSize: 16 }} />
-        <Typography variant="body2" fontWeight={500}>Resume Upload</Typography>
+        <Typography variant="body2" fontWeight={500}>{t("chat.resumeUpload")}</Typography>
       </Box>
       <Box>
         <input ref={fileRef} type="file" accept=".pdf,.docx,.doc,.txt" onChange={(e) => { setFile(e.target.files?.[0] || null); setError(""); }} style={{ display: "none" }} />
@@ -301,18 +306,18 @@ function ResumeUploadCard({
             "&:hover": { borderColor: "#7c3aed", color: "#7c3aed" }, py: 1.5,
           }}
         >
-          {file ? file.name : "Click to select a resume (PDF, DOCX, TXT)"}
+          {file ? file.name : t("chat.clickToSelectResume")}
         </Button>
       </Box>
       {jobs && jobs.length > 0 && (
         <FormControl fullWidth size="small">
-          <InputLabel sx={{ fontSize: "0.75rem" }}>Associate with job (optional)</InputLabel>
+          <InputLabel sx={{ fontSize: "0.75rem" }}>{t("chat.associateWithJob")}</InputLabel>
           <Select
             value={jobId} onChange={(e) => setJobId(e.target.value as string)}
-            label="Associate with job (optional)"
+            label={t("chat.associateWithJob")}
             sx={{ borderRadius: 2, bgcolor: "white" }}
           >
-            <MenuItem value="">No specific job</MenuItem>
+            <MenuItem value="">{t("chat.noSpecificJob")}</MenuItem>
             {jobs.map((j: Job) => <MenuItem key={j.id} value={j.id}>{j.title} — {j.company}</MenuItem>)}
           </Select>
         </FormControl>
@@ -325,7 +330,7 @@ function ResumeUploadCard({
           startIcon={<Close sx={{ fontSize: 14 }} />}
           sx={{ borderRadius: 2, textTransform: "none", fontSize: "0.75rem", color: "text.secondary" }}
         >
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button
           size="small" variant="contained" disabled={uploading || !file}
@@ -333,7 +338,7 @@ function ResumeUploadCard({
           startIcon={uploading ? <CircularProgress size={14} color="inherit" /> : <CloudUpload sx={{ fontSize: 14 }} />}
           sx={{ borderRadius: 2, textTransform: "none", fontSize: "0.75rem", bgcolor: "#7c3aed", "&:hover": { bgcolor: "#6d28d9" } }}
         >
-          {uploading ? "Uploading..." : "Upload Resume"}
+          {uploading ? t("chat.uploading") : t("chat.uploadResumeBtn")}
         </Button>
       </Box>
     </Paper>
@@ -350,6 +355,7 @@ function JdUploadCard({
   onUpload: (file: File) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -360,20 +366,20 @@ function JdUploadCard({
       <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "success.light", bgcolor: "#f0fdf4" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "success.dark" }}>
           <CheckCircleOutline sx={{ fontSize: 20 }} />
-          <Typography variant="body2" fontWeight={500}>JD uploaded!</Typography>
+          <Typography variant="body2" fontWeight={500}>{t("chat.jdUploaded")}</Typography>
         </Box>
         <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
           <Typography variant="body2" sx={{ color: "success.dark" }}>
-            <Box component="span" fontWeight={500}>Title:</Box> {uploadedJob.title}
+            <Box component="span" fontWeight={500}>{t("chat.titleLabel")}</Box> {uploadedJob.title}
           </Typography>
           {uploadedJob.company && (
             <Typography variant="body2" sx={{ color: "success.dark" }}>
-              <Box component="span" fontWeight={500}>Company:</Box> {uploadedJob.company}
+              <Box component="span" fontWeight={500}>{t("chat.companyLabel")}</Box> {uploadedJob.company}
             </Typography>
           )}
           {uploadedJob.required_skills?.length > 0 && (
             <Typography variant="body2" sx={{ color: "success.dark" }}>
-              <Box component="span" fontWeight={500}>Skills:</Box> {uploadedJob.required_skills.slice(0, 5).join(", ")}
+              <Box component="span" fontWeight={500}>{t("chat.skillsLabel")}</Box> {uploadedJob.required_skills.slice(0, 5).join(", ")}
             </Typography>
           )}
         </Box>
@@ -383,7 +389,7 @@ function JdUploadCard({
   if (status === "cancelled") {
     return (
       <Paper sx={{ mt: 1, p: 1.5, borderRadius: 3, border: "1px solid", borderColor: "grey.200", bgcolor: "grey.50" }}>
-        <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>Upload cancelled.</Typography>
+        <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>{t("chat.uploadCancelled")}</Typography>
       </Paper>
     );
   }
@@ -400,7 +406,7 @@ function JdUploadCard({
     <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "#fdba74", bgcolor: "#fff7ed80", display: "flex", flexDirection: "column", gap: 1.5 }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#c2410c" }}>
         <DescriptionOutlined sx={{ fontSize: 16 }} />
-        <Typography variant="body2" fontWeight={500}>Job Description Upload</Typography>
+        <Typography variant="body2" fontWeight={500}>{t("chat.jdUpload")}</Typography>
       </Box>
       <Box>
         <input ref={fileRef} type="file" accept=".pdf,.docx,.doc,.txt" onChange={(e) => { setFile(e.target.files?.[0] || null); setError(""); }} style={{ display: "none" }} />
@@ -414,7 +420,7 @@ function JdUploadCard({
             "&:hover": { borderColor: "#ea580c", color: "#ea580c" }, py: 1.5,
           }}
         >
-          {file ? file.name : "Click to select a JD file (PDF, DOCX, TXT)"}
+          {file ? file.name : t("chat.clickToSelectJd")}
         </Button>
       </Box>
       {error && <Typography variant="body2" color="error">{error}</Typography>}
@@ -425,7 +431,7 @@ function JdUploadCard({
           startIcon={<Close sx={{ fontSize: 14 }} />}
           sx={{ borderRadius: 2, textTransform: "none", fontSize: "0.75rem", color: "text.secondary" }}
         >
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button
           size="small" variant="contained" disabled={uploading || !file}
@@ -433,7 +439,7 @@ function JdUploadCard({
           startIcon={uploading ? <CircularProgress size={14} color="inherit" /> : <CloudUpload sx={{ fontSize: 14 }} />}
           sx={{ borderRadius: 2, textTransform: "none", fontSize: "0.75rem", bgcolor: "#ea580c", "&:hover": { bgcolor: "#c2410c" } }}
         >
-          {uploading ? "Uploading..." : "Upload JD"}
+          {uploading ? t("chat.uploading") : t("chat.uploadJdBtn")}
         </Button>
       </Box>
     </Paper>
@@ -443,29 +449,30 @@ function JdUploadCard({
 /* ── Inline Job Created Card ───────────────────────────────────────────── */
 
 function JobCreatedCard({ job }: { job: Job }) {
+  const { t } = useTranslation();
   return (
     <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "success.light", bgcolor: "#f0fdf4" }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "success.dark" }}>
         <WorkOutline sx={{ fontSize: 20 }} />
-        <Typography variant="body2" fontWeight={500}>Job created!</Typography>
+        <Typography variant="body2" fontWeight={500}>{t("chat.jobCreated")}</Typography>
       </Box>
       <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
         <Typography variant="body2" sx={{ color: "success.dark" }}>
-          <Box component="span" fontWeight={500}>Title:</Box> {job.title}
+          <Box component="span" fontWeight={500}>{t("chat.titleLabel")}</Box> {job.title}
         </Typography>
         {job.company && (
           <Typography variant="body2" sx={{ color: "success.dark" }}>
-            <Box component="span" fontWeight={500}>Company:</Box> {job.company}
+            <Box component="span" fontWeight={500}>{t("chat.companyLabel")}</Box> {job.company}
           </Typography>
         )}
         {job.location && (
           <Typography variant="body2" sx={{ color: "success.dark" }}>
-            <Box component="span" fontWeight={500}>Location:</Box> {job.location}{job.remote ? " (Remote)" : ""}
+            <Box component="span" fontWeight={500}>{t("chat.locationLabel")}</Box> {job.location}{job.remote ? ` (${t("common.remote")})` : ""}
           </Typography>
         )}
         {job.salary_range && (
           <Typography variant="body2" sx={{ color: "success.dark" }}>
-            <Box component="span" fontWeight={500}>Salary:</Box> {job.salary_range}
+            <Box component="span" fontWeight={500}>{t("chat.salaryLabel")}</Box> {job.salary_range}
           </Typography>
         )}
         {job.required_skills?.length > 0 && (
@@ -486,29 +493,30 @@ function JobCreatedCard({ job }: { job: Job }) {
 /* ── Inline Candidate Created Card ────────────────────────────────────── */
 
 function CandidateCreatedCard({ candidate }: { candidate: Candidate }) {
+  const { t } = useTranslation();
   return (
     <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "success.light", bgcolor: "#f0fdf4" }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "success.dark" }}>
         <PersonAddOutlined sx={{ fontSize: 20 }} />
-        <Typography variant="body2" fontWeight={500}>Candidate added!</Typography>
+        <Typography variant="body2" fontWeight={500}>{t("chat.candidateAdded")}</Typography>
       </Box>
       <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
         <Typography variant="body2" sx={{ color: "success.dark" }}>
-          <Box component="span" fontWeight={500}>Name:</Box> {candidate.name}
+          <Box component="span" fontWeight={500}>{t("chat.nameLabel")}</Box> {candidate.name}
         </Typography>
         {candidate.current_title && (
           <Typography variant="body2" sx={{ color: "success.dark" }}>
-            <Box component="span" fontWeight={500}>Title:</Box> {candidate.current_title}{candidate.current_company ? ` at ${candidate.current_company}` : ""}
+            <Box component="span" fontWeight={500}>{t("chat.titleLabel")}</Box> {candidate.current_title}{candidate.current_company ? ` at ${candidate.current_company}` : ""}
           </Typography>
         )}
         {candidate.email && (
           <Typography variant="body2" sx={{ color: "success.dark" }}>
-            <Box component="span" fontWeight={500}>Email:</Box> {candidate.email}
+            <Box component="span" fontWeight={500}>{t("chat.emailLabel")}</Box> {candidate.email}
           </Typography>
         )}
         {candidate.experience_years && (
           <Typography variant="body2" sx={{ color: "success.dark" }}>
-            <Box component="span" fontWeight={500}>Experience:</Box> {candidate.experience_years} years
+            <Box component="span" fontWeight={500}>{t("chat.experienceLabel")}</Box> {candidate.experience_years} years
           </Typography>
         )}
         {candidate.skills?.length > 0 && (
@@ -520,7 +528,7 @@ function CandidateCreatedCard({ candidate }: { candidate: Candidate }) {
         )}
         {candidate.match_score > 0 && (
           <Typography variant="caption" sx={{ pt: 0.5, color: "success.main" }}>
-            Match score: {Math.round(candidate.match_score * 100)}%
+            {t("chat.matchScore", { percent: Math.round(candidate.match_score * 100) })}
           </Typography>
         )}
       </Box>
@@ -531,6 +539,7 @@ function CandidateCreatedCard({ candidate }: { candidate: Candidate }) {
 /* ── Market Report Card ────────────────────────────────────────────────── */
 
 function MarketReportCard({ report }: { report: MarketReport }) {
+  const { t } = useTranslation();
   const demandColor = report.market_demand === "high"
     ? { color: "success.dark", bgcolor: "#dcfce7" }
     : report.market_demand === "medium"
@@ -548,7 +557,7 @@ function MarketReportCard({ report }: { report: MarketReport }) {
     <Paper sx={{ mt: 1, p: 2, borderRadius: 3, border: "1px solid", borderColor: "#93c5fd", bgcolor: "#eff6ff" }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#1d4ed8" }}>
         <TrendingUpOutlined sx={{ fontSize: 20 }} />
-        <Typography variant="body2" fontWeight={500}>Market Report: {report.role}</Typography>
+        <Typography variant="body2" fontWeight={500}>{t("chat.marketReport", { role: report.role })}</Typography>
         {report.location && (
           <Typography variant="caption" sx={{ color: "#3b82f6" }}>({report.location})</Typography>
         )}
@@ -559,19 +568,19 @@ function MarketReportCard({ report }: { report: MarketReport }) {
         <Paper elevation={0} sx={{ mt: 1.5, p: 1.5, borderRadius: 2, bgcolor: "rgba(255,255,255,0.6)" }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
             <AttachMoneyOutlined sx={{ fontSize: 14, color: "#2563eb" }} />
-            <Typography variant="caption" fontWeight={500} sx={{ color: "#2563eb" }}>Salary Range</Typography>
+            <Typography variant="caption" fontWeight={500} sx={{ color: "#2563eb" }}>{t("chat.salaryRange")}</Typography>
           </Box>
           <Box sx={{ display: "flex", alignItems: "flex-end", gap: 4 }}>
             <Box>
-              <Typography variant="caption" color="text.secondary">Min</Typography>
+              <Typography variant="caption" color="text.secondary">{t("chat.min")}</Typography>
               <Typography variant="body2" fontWeight={500} display="block">{fmt(sr.min)}</Typography>
             </Box>
             <Box>
-              <Typography variant="caption" color="text.secondary">Median</Typography>
+              <Typography variant="caption" color="text.secondary">{t("chat.median")}</Typography>
               <Typography variant="body2" fontWeight={600} display="block" sx={{ color: "#1d4ed8" }}>{fmt(sr.median)}</Typography>
             </Box>
             <Box>
-              <Typography variant="caption" color="text.secondary">Max</Typography>
+              <Typography variant="caption" color="text.secondary">{t("chat.max")}</Typography>
               <Typography variant="body2" fontWeight={500} display="block">{fmt(sr.max)}</Typography>
             </Box>
           </Box>
@@ -590,14 +599,14 @@ function MarketReportCard({ report }: { report: MarketReport }) {
 
       {/* Demand badge */}
       <Box sx={{ mt: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
-        <Typography variant="caption" color="text.secondary">Market Demand:</Typography>
+        <Typography variant="caption" color="text.secondary">{t("chat.marketDemand")}</Typography>
         <Chip label={report.market_demand} size="small" sx={{ ...demandColor, fontSize: "0.7rem", fontWeight: 500, height: 22 }} />
       </Box>
 
       {/* Key Factors */}
       {report.key_factors?.length > 0 && (
         <Box sx={{ mt: 1 }}>
-          <Typography variant="caption" fontWeight={500} sx={{ color: "#2563eb" }}>Key Factors</Typography>
+          <Typography variant="caption" fontWeight={500} sx={{ color: "#2563eb" }}>{t("chat.keyFactors")}</Typography>
           <Box sx={{ mt: 0.5, display: "flex", flexWrap: "wrap", gap: 0.5 }}>
             {report.key_factors.map((f: string, i: number) => (
               <Chip key={i} label={f} size="small" sx={{ bgcolor: "#dbeafe", color: "#1d4ed8", fontSize: "0.7rem", height: 22 }} />
@@ -609,10 +618,10 @@ function MarketReportCard({ report }: { report: MarketReport }) {
       {/* Comparable Titles */}
       {report.comparable_titles?.length > 0 && (
         <Box sx={{ mt: 1 }}>
-          <Typography variant="caption" fontWeight={500} sx={{ color: "#2563eb" }}>Comparable Titles</Typography>
+          <Typography variant="caption" fontWeight={500} sx={{ color: "#2563eb" }}>{t("chat.comparableTitles")}</Typography>
           <Box sx={{ mt: 0.5, display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-            {report.comparable_titles.map((t: string, i: number) => (
-              <Chip key={i} label={t} size="small" variant="outlined"
+            {report.comparable_titles.map((title: string, i: number) => (
+              <Chip key={i} label={title} size="small" variant="outlined"
                 sx={{ bgcolor: "rgba(255,255,255,0.8)", color: "#2563eb", borderColor: "#93c5fd", fontSize: "0.7rem", height: 22 }}
               />
             ))}
@@ -644,13 +653,14 @@ function SessionSidebar({
   onDelete: (id: string, e: React.MouseEvent) => void;
   onNewChat: () => void;
 }) {
+  const { t } = useTranslation();
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return "Today";
-    if (diffDays === 1) return "Yesterday";
-    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffDays === 0) return t("common.today");
+    if (diffDays === 1) return t("common.yesterday");
+    if (diffDays < 7) return t("common.daysAgo", { count: diffDays });
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
@@ -669,13 +679,13 @@ function SessionSidebar({
             background: "linear-gradient(to right, #2563eb, #7c3aed)", "&:hover": { opacity: 0.9 },
           }}
         >
-          New Chat
+          {t("chat.newChat")}
         </Button>
       </Box>
       <Box sx={{ flex: 1, overflowY: "auto", p: 0.75 }}>
         {sessions.length === 0 ? (
           <Typography variant="caption" sx={{ display: "block", px: 1, py: 4, textAlign: "center", color: "text.disabled" }}>
-            No conversations yet
+            {t("chat.noConversations")}
           </Typography>
         ) : (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
@@ -719,6 +729,7 @@ function SessionSidebar({
 /* ── Control Center (Chat Page) ─────────────────────────────────────────── */
 
 export default function Chat() {
+  const { t } = useTranslation();
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -741,21 +752,21 @@ export default function Chat() {
     if (sessions.length > 0) {
       setActiveSessionId(sessions[0].id);
     } else {
-      setMessages([candidates ? makeBriefing(candidates) : makeSimpleGreeting()]);
+      setMessages([candidates ? makeBriefing(candidates, t) : makeSimpleGreeting(t)]);
     }
-  }, [sessions, candidates]);
+  }, [sessions, candidates, t]);
 
   // Load messages when session changes
   useEffect(() => {
     if (!activeSessionId) return;
     getChatHistory(activeSessionId).then((msgs) => {
       if (msgs.length === 0) {
-        setMessages([candidates ? makeBriefing(candidates) : makeSimpleGreeting()]);
+        setMessages([candidates ? makeBriefing(candidates, t) : makeSimpleGreeting(t)]);
       } else {
         setMessages(msgs);
       }
     });
-  }, [activeSessionId, candidates]);
+  }, [activeSessionId, candidates, t]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -774,8 +785,8 @@ export default function Chat() {
   const suggestions = useMemo(
     () => backendSuggestions.length > 0
       ? backendSuggestions
-      : buildSuggestions(messages, candidates ?? null, lastAction),
-    [messages, candidates, lastAction, backendSuggestions],
+      : buildSuggestions(messages, candidates ?? null, lastAction, t),
+    [messages, candidates, lastAction, backendSuggestions, t],
   );
 
   /* ── Send ──────────────────────────────────────────────────────────────── */
@@ -877,7 +888,7 @@ export default function Chat() {
       setStreamingText("");
       setMessages((prev) => [...prev, {
         id: "error-" + Date.now(), user_id: "", role: "assistant",
-        content: "Sorry, I encountered an error. Please try again.",
+        content: t("chat.errorMessage"),
         created_at: new Date().toISOString(),
       }]);
     } finally {
@@ -909,7 +920,7 @@ export default function Chat() {
       setMessages((prev) => [...prev, { id: "congrats-" + Date.now(), user_id: "", role: "assistant", content, created_at: new Date().toISOString() }]);
       refreshCandidates();
     } catch {
-      const content = "Failed to send the email. Please check your email configuration in Settings.";
+      const content = t("chat.failedToSendEmail");
       if (activeSessionId) saveChatMessage(activeSessionId, content).catch(() => {});
       setMessages((prev) => [...prev, { id: "error-" + Date.now(), user_id: "", role: "assistant", content, created_at: new Date().toISOString() }]);
     }
@@ -976,7 +987,7 @@ export default function Chat() {
 
   const handleNewChat = () => {
     setActiveSessionId(null);
-    setMessages([candidates ? makeBriefing(candidates) : makeSimpleGreeting()]);
+    setMessages([candidates ? makeBriefing(candidates, t) : makeSimpleGreeting(t)]);
     setContextView({ type: "briefing" });
     setPipelineStage(null);
   };
@@ -1053,7 +1064,7 @@ export default function Chat() {
               startIcon={<DeleteOutline sx={{ fontSize: 12 }} />}
               sx={{ fontSize: "0.625rem", fontWeight: 500, color: "text.secondary", borderColor: "grey.200", borderRadius: 2, textTransform: "none" }}
             >
-              Clear
+              {t("chat.clear")}
             </Button>
           </Box>
 
@@ -1168,7 +1179,7 @@ export default function Chat() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask Erika anything..."
+              placeholder={t("chat.askErika")}
               multiline
               maxRows={4}
               fullWidth

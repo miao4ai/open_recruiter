@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import Drawer from "@mui/material/Drawer";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
@@ -18,16 +19,18 @@ import SmartToyOutlined from "@mui/icons-material/SmartToyOutlined";
 
 const DRAWER_WIDTH = 240;
 
-const NAV_ITEMS = [
-  { to: "/", icon: <ChatBubbleOutline />, label: "Erika Chan" },
-  { to: "/jobs", icon: <WorkOutline />, label: "Jobs" },
-  { to: "/candidates", icon: <PeopleOutline />, label: "Candidates" },
-  { to: "/calendar", icon: <CalendarMonthOutlined />, label: "Calendar" },
-  { to: "/automations", icon: <BoltOutlined />, label: "Automations" },
-  { to: "/settings", icon: <SettingsOutlined />, label: "Settings" },
-];
-
 export default function Sidebar() {
+  const { t } = useTranslation();
+
+  const NAV_ITEMS = [
+    { to: "/", icon: <ChatBubbleOutline />, label: t("sidebar.erikaChan") },
+    { to: "/jobs", icon: <WorkOutline />, label: t("sidebar.jobs") },
+    { to: "/candidates", icon: <PeopleOutline />, label: t("sidebar.candidates") },
+    { to: "/calendar", icon: <CalendarMonthOutlined />, label: t("sidebar.calendar") },
+    { to: "/automations", icon: <BoltOutlined />, label: t("sidebar.automations") },
+    { to: "/settings", icon: <SettingsOutlined />, label: t("sidebar.settings") },
+  ];
+
   return (
     <Drawer
       variant="permanent"
@@ -46,7 +49,7 @@ export default function Sidebar() {
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 2.5, py: 2.5 }}>
         <SmartToyOutlined sx={{ color: "#60a5fa", fontSize: 28 }} />
         <Typography variant="subtitle1" fontWeight={600} letterSpacing="-0.02em">
-          Open Recruiter
+          {t("common.appName")}
         </Typography>
       </Box>
 
@@ -86,7 +89,7 @@ export default function Sidebar() {
       <Divider sx={{ borderColor: "grey.700" }} />
       <Box sx={{ px: 2.5, py: 2 }}>
         <Typography variant="caption" color="grey.500">
-          v0.1.0
+          {t("common.version")}
         </Typography>
       </Box>
     </Drawer>

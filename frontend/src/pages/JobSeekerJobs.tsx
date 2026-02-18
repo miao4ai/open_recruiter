@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   SearchOutlined, LocationOnOutlined, BusinessOutlined, AttachMoneyOutlined, AccessTimeOutlined, WorkOutline,
   ExpandMoreOutlined, ExpandLessOutlined, CloseOutlined, UploadOutlined, DeleteOutline,
@@ -9,6 +10,7 @@ import { seekerListJobs, seekerUploadJd, seekerDeleteJob } from "../lib/api";
 import type { Job } from "../types";
 
 export default function JobSeekerJobs() {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const { data: jobs, loading, refresh } = useApi(
@@ -55,9 +57,9 @@ export default function JobSeekerJobs() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">My Jobs</h1>
+          <h1 className="text-2xl font-bold text-gray-800">{t("jobSeekerJobs.myJobs")}</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Upload job descriptions to track positions you're interested in
+            {t("jobSeekerJobs.subtitle")}
           </p>
         </div>
         <div>
@@ -79,7 +81,7 @@ export default function JobSeekerJobs() {
             ) : (
               <UploadOutlined className="h-4 w-4" />
             )}
-            {uploading ? "Parsing..." : "Upload JD"}
+            {uploading ? t("jobSeekerJobs.parsing") : t("jobSeekerJobs.uploadJd")}
           </button>
         </div>
       </div>
@@ -92,7 +94,7 @@ export default function JobSeekerJobs() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search by title, company, skills, location..."
+            placeholder={t("jobSeekerJobs.searchPlaceholder")}
             className="w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-9 text-sm
               focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
           />
@@ -110,7 +112,7 @@ export default function JobSeekerJobs() {
           className="rounded-xl bg-pink-500 px-5 py-2.5 text-sm font-medium text-white
             hover:bg-pink-600"
         >
-          Search
+          {t("common.search")}
         </button>
       </div>
 
@@ -124,8 +126,8 @@ export default function JobSeekerJobs() {
       {/* Results count */}
       {!loading && jobs && (
         <p className="text-sm text-gray-500">
-          {jobs.length} job{jobs.length !== 1 ? "s" : ""} saved
-          {searchTerm ? ` matching "${searchTerm}"` : ""}
+          {t("jobSeekerJobs.jobsSaved", { count: jobs.length })}
+          {searchTerm ? ` ${t("jobSeekerJobs.matching", { term: searchTerm })}` : ""}
         </p>
       )}
 
@@ -152,8 +154,8 @@ export default function JobSeekerJobs() {
           <WorkOutline className="mx-auto h-10 w-10 text-gray-300" />
           <p className="mt-3 text-sm text-gray-500">
             {searchTerm
-              ? "No jobs match your search. Try different keywords."
-              : "No jobs yet. Upload a JD to get started!"}
+              ? t("jobSeekerJobs.noMatch")
+              : t("jobSeekerJobs.noJobsYet")}
           </p>
         </div>
       )}
@@ -174,6 +176,8 @@ function JobCard({
   onToggle: () => void;
   onDelete: (id: string, e: React.MouseEvent) => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div className="group rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
       {/* Main row */}
@@ -189,7 +193,7 @@ function JobCard({
         {/* Info */}
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold text-gray-900">
-            {job.title || "Untitled Position"}
+            {job.title || t("jobSeekerJobs.untitledPosition")}
           </h3>
 
           <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
@@ -203,13 +207,13 @@ function JobCard({
               <span className="inline-flex items-center gap-1">
                 <LocationOnOutlined className="h-3.5 w-3.5" />
                 {job.location}
-                {job.remote && " (Remote)"}
+                {job.remote && ` (${t("common.remote")})`}
               </span>
             )}
             {!job.location && job.remote && (
               <span className="inline-flex items-center gap-1">
                 <LocationOnOutlined className="h-3.5 w-3.5" />
-                Remote
+                {t("common.remote")}
               </span>
             )}
             {job.salary_range && (
@@ -252,7 +256,7 @@ function JobCard({
             role="button"
             onClick={(e) => onDelete(job.id, e)}
             className="text-gray-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
-            title="Delete"
+            title={t("common.delete")}
           >
             <DeleteOutline className="h-4 w-4" />
           </span>
@@ -270,7 +274,7 @@ function JobCard({
           {job.summary && (
             <div className="mb-4">
               <h4 className="mb-1 text-sm font-semibold text-gray-700">
-                Summary
+                {t("jobSeekerJobs.summaryLabel")}
               </h4>
               <p className="whitespace-pre-wrap text-sm text-gray-600">
                 {job.summary}
@@ -280,15 +284,14 @@ function JobCard({
 
           {job.experience_years != null && (
             <p className="mb-3 text-sm text-gray-600">
-              <span className="font-medium">Experience:</span>{" "}
-              {job.experience_years}+ years
+              {t("jobSeekerJobs.experience", { years: job.experience_years })}
             </p>
           )}
 
           {job.preferred_skills && job.preferred_skills.length > 0 && (
             <div className="mb-3">
               <h4 className="mb-1 text-sm font-semibold text-gray-700">
-                Nice to have
+                {t("jobSeekerJobs.niceToHave")}
               </h4>
               <div className="flex flex-wrap gap-1.5">
                 {job.preferred_skills.map((s) => (
@@ -306,7 +309,7 @@ function JobCard({
           {job.raw_text && (
             <div>
               <h4 className="mb-1 text-sm font-semibold text-gray-700">
-                Full Description
+                {t("jobSeekerJobs.fullDescription")}
               </h4>
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-600">
                 {job.raw_text}

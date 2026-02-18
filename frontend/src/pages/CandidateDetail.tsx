@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   ArrowBackOutlined,
   MailOutline,
@@ -40,6 +41,7 @@ import {
 import type { Candidate, CandidateJobMatch } from "../types";
 
 export default function CandidateDetail() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
@@ -71,14 +73,14 @@ export default function CandidateDetail() {
   if (loading) {
     return (
       <Typography variant="body2" sx={{ color: "grey.500" }}>
-        Loading...
+        {t("common.loading")}
       </Typography>
     );
   }
   if (!candidate) {
     return (
       <Typography variant="body2" sx={{ color: "error.main" }}>
-        Candidate not found.
+        {t("candidateDetail.candidateNotFound")}
       </Typography>
     );
   }
@@ -134,7 +136,7 @@ export default function CandidateDetail() {
   };
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this candidate?")) return;
+    if (!confirm(t("candidateDetail.confirmDeleteCandidate"))) return;
     await deleteCandidate(id!);
     navigate("/candidates");
   };
@@ -145,7 +147,7 @@ export default function CandidateDetail() {
       await reparseCandidate(id!);
       refresh();
     } catch (err: any) {
-      alert(err?.response?.data?.detail || "Re-parse failed");
+      alert(err?.response?.data?.detail || t("candidateDetail.reparseFailed"));
     } finally {
       setReparsing(false);
     }
@@ -184,7 +186,7 @@ export default function CandidateDetail() {
   };
 
   const handleUnlinkJob = async (jobId: string) => {
-    if (!confirm("Unlink this job?")) return;
+    if (!confirm(t("candidateDetail.unlinkJob"))) return;
     try {
       await unlinkCandidateJob(id!, jobId);
       refresh();
@@ -234,19 +236,19 @@ export default function CandidateDetail() {
           "&:hover": { color: "grey.800", bgcolor: "transparent" },
         }}
       >
-        Back to Candidates
+        {t("candidateDetail.backToCandidates")}
       </Button>
 
       {/* Action toolbar */}
       <Paper variant="outlined" sx={{ px: 2.5, py: 1.5, borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Stack direction="row" spacing={1} alignItems="center">
           <Typography variant="h6" sx={{ fontWeight: 600, mr: 1 }}>
-            {candidate.name || "Unnamed"}
+            {candidate.name || t("common.unnamed")}
           </Typography>
           {candidate.current_title && (
             <Typography variant="body2" sx={{ color: "grey.500" }}>
               {candidate.current_title}
-              {candidate.current_company ? ` at ${candidate.current_company}` : ""}
+              {candidate.current_company ? ` ${t("dashboard.at", { company: candidate.current_company })}` : ""}
             </Typography>
           )}
         </Stack>
@@ -258,7 +260,7 @@ export default function CandidateDetail() {
             startIcon={<MailOutline sx={{ fontSize: 14 }} />}
             sx={{ fontSize: 12, textTransform: "none", px: 1.5, py: 0.75 }}
           >
-            Send Email
+            {t("candidateDetail.sendEmail")}
           </Button>
           <Button
             onClick={handleReparse}
@@ -279,7 +281,7 @@ export default function CandidateDetail() {
               px: 1.5, py: 0.75,
             }}
           >
-            {reparsing ? "Parsing..." : "Re-parse Resume"}
+            {reparsing ? t("candidateDetail.parsing") : t("candidateDetail.reparseResume")}
           </Button>
           {!editing ? (
             <Button
@@ -294,7 +296,7 @@ export default function CandidateDetail() {
                 px: 1, py: 0.75,
               }}
             >
-              Edit
+              {t("common.edit")}
             </Button>
           ) : (
             <Stack direction="row" spacing={0.5}>
@@ -306,7 +308,7 @@ export default function CandidateDetail() {
                 startIcon={<SaveOutlined sx={{ fontSize: 14 }} />}
                 sx={{ fontSize: 12, textTransform: "none", px: 1, py: 0.75 }}
               >
-                {saving ? "..." : "Save"}
+                {saving ? "..." : t("common.save")}
               </Button>
               <Button
                 onClick={() => setEditing(false)}
@@ -335,7 +337,7 @@ export default function CandidateDetail() {
               px: 1.5, py: 0.75,
             }}
           >
-            Delete
+            {t("common.delete")}
           </Button>
         </Stack>
       </Paper>
@@ -346,56 +348,56 @@ export default function CandidateDetail() {
           <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
             <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                Profile
+                {t("candidateDetail.profile")}
               </Typography>
             </Box>
 
             {editing ? (
               <Stack spacing={2} sx={{ mt: 2 }}>
                 <TextField
-                  label="Name"
+                  label={t("candidateDetail.fieldName")}
                   size="small"
                   fullWidth
                   value={form.name ?? ""}
                   onChange={(e) => updateField("name", e.target.value)}
                 />
                 <TextField
-                  label="Email"
+                  label={t("candidateDetail.fieldEmail")}
                   size="small"
                   fullWidth
                   value={form.email ?? ""}
                   onChange={(e) => updateField("email", e.target.value)}
                 />
                 <TextField
-                  label="Phone"
+                  label={t("candidateDetail.fieldPhone")}
                   size="small"
                   fullWidth
                   value={form.phone ?? ""}
                   onChange={(e) => updateField("phone", e.target.value)}
                 />
                 <TextField
-                  label="Title"
+                  label={t("candidateDetail.fieldTitle")}
                   size="small"
                   fullWidth
                   value={form.current_title ?? ""}
                   onChange={(e) => updateField("current_title", e.target.value)}
                 />
                 <TextField
-                  label="Company"
+                  label={t("candidateDetail.fieldCompany")}
                   size="small"
                   fullWidth
                   value={form.current_company ?? ""}
                   onChange={(e) => updateField("current_company", e.target.value)}
                 />
                 <TextField
-                  label="Location"
+                  label={t("candidateDetail.fieldLocation")}
                   size="small"
                   fullWidth
                   value={form.location ?? ""}
                   onChange={(e) => updateField("location", e.target.value)}
                 />
                 <TextField
-                  label="Date of Birth"
+                  label={t("candidateDetail.fieldDateOfBirth")}
                   size="small"
                   fullWidth
                   type="date"
@@ -404,7 +406,7 @@ export default function CandidateDetail() {
                   onChange={(e) => updateField("date_of_birth", e.target.value)}
                 />
                 <TextField
-                  label="Experience (years)"
+                  label={t("candidateDetail.fieldExperience")}
                   size="small"
                   fullWidth
                   type="number"
@@ -417,7 +419,7 @@ export default function CandidateDetail() {
                   }
                 />
                 <TextField
-                  label="Skills (comma separated)"
+                  label={t("candidateDetail.fieldSkills")}
                   size="small"
                   fullWidth
                   value={(form.skills ?? []).join(", ")}
@@ -432,7 +434,7 @@ export default function CandidateDetail() {
                   }
                 />
                 <TextField
-                  label="Notes"
+                  label={t("candidateDetail.fieldNotes")}
                   size="small"
                   fullWidth
                   multiline
@@ -447,7 +449,7 @@ export default function CandidateDetail() {
                   <Typography variant="body2" sx={{ color: "grey.600" }}>
                     {candidate.current_title}
                     {candidate.current_company
-                      ? ` at ${candidate.current_company}`
+                      ? ` ${t("dashboard.at", { company: candidate.current_company })}`
                       : ""}
                   </Typography>
                 )}
@@ -455,31 +457,31 @@ export default function CandidateDetail() {
                 <Stack spacing={1} sx={{ mt: 2, fontSize: 14 }}>
                   {candidate.email && (
                     <Typography variant="body2">
-                      <Box component="span" sx={{ color: "grey.600" }}>Email:</Box>{" "}
+                      <Box component="span" sx={{ color: "grey.600" }}>{t("candidateDetail.emailLabel")}</Box>{" "}
                       {candidate.email}
                     </Typography>
                   )}
                   {candidate.phone && (
                     <Typography variant="body2">
-                      <Box component="span" sx={{ color: "grey.600" }}>Phone:</Box>{" "}
+                      <Box component="span" sx={{ color: "grey.600" }}>{t("candidateDetail.phoneLabel")}</Box>{" "}
                       {candidate.phone}
                     </Typography>
                   )}
                   {candidate.location && (
                     <Typography variant="body2">
-                      <Box component="span" sx={{ color: "grey.600" }}>Location:</Box>{" "}
+                      <Box component="span" sx={{ color: "grey.600" }}>{t("candidateDetail.locationLabel")}</Box>{" "}
                       {candidate.location}
                     </Typography>
                   )}
                   {candidate.experience_years != null && (
                     <Typography variant="body2">
-                      <Box component="span" sx={{ color: "grey.600" }}>Experience:</Box>{" "}
-                      {candidate.experience_years} years
+                      <Box component="span" sx={{ color: "grey.600" }}>{t("candidateDetail.experienceLabel")}</Box>{" "}
+                      {candidate.experience_years} {t("common.years")}
                     </Typography>
                   )}
                   {candidate.date_of_birth && (
                     <Typography variant="body2">
-                      <Box component="span" sx={{ color: "grey.600" }}>DOB:</Box>{" "}
+                      <Box component="span" sx={{ color: "grey.600" }}>{t("candidateDetail.dobLabel")}</Box>{" "}
                       {candidate.date_of_birth}
                     </Typography>
                   )}
@@ -491,7 +493,7 @@ export default function CandidateDetail() {
                     variant="caption"
                     sx={{ mb: 0.5, display: "block", fontWeight: 500, textTransform: "uppercase", color: "grey.600" }}
                   >
-                    Linked Jobs ({jobMatches.length})
+                    {t("candidateDetail.linkedJobs")} ({jobMatches.length})
                   </Typography>
                   {jobMatches.length > 0 ? (
                     <Stack spacing={0.75}>
@@ -549,7 +551,7 @@ export default function CandidateDetail() {
                     </Stack>
                   ) : (
                     <Typography variant="body2" sx={{ color: "grey.500", fontSize: 13 }}>
-                      No linked jobs yet.
+                      {t("candidateDetail.noLinkedJobs")}
                     </Typography>
                   )}
 
@@ -563,7 +565,7 @@ export default function CandidateDetail() {
                         onChange={(e) => setLinkJobId(e.target.value)}
                         sx={{ flex: 1 }}
                       >
-                        <MenuItem value="">-- Link to Job --</MenuItem>
+                        <MenuItem value="">{t("candidateDetail.linkToJobOption")}</MenuItem>
                         {availableJobs.map((j) => (
                           <MenuItem key={j.id} value={j.id}>
                             {j.title} -- {j.company}
@@ -596,7 +598,7 @@ export default function CandidateDetail() {
                       variant="caption"
                       sx={{ mb: 1, display: "block", fontWeight: 500, textTransform: "uppercase", color: "grey.600" }}
                     >
-                      Skills
+                      {t("candidateDetail.skills")}
                     </Typography>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
                       {candidate.skills.map((s) => (
@@ -621,10 +623,10 @@ export default function CandidateDetail() {
                     variant="caption"
                     sx={{ mb: 0.5, display: "block", fontWeight: 500, textTransform: "uppercase", color: "grey.600" }}
                   >
-                    Notes
+                    {t("candidateDetail.notes")}
                   </Typography>
                   <Typography variant="body2" sx={{ color: "grey.700" }}>
-                    {candidate.notes || "No notes yet."}
+                    {candidate.notes || t("candidateDetail.noNotes")}
                   </Typography>
                 </Box>
               </>
@@ -637,7 +639,7 @@ export default function CandidateDetail() {
           <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
             <Box sx={{ mb: 2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                Match Analysis
+                {t("candidateDetail.matchAnalysis")}
               </Typography>
               {jobMatches.length > 1 && (
                 <TextField
@@ -686,7 +688,7 @@ export default function CandidateDetail() {
                         onComplete={() => setTypewriterDone(true)}
                       />
                     ) : (
-                      reasoningText || "No match analysis yet."
+                      reasoningText || t("candidateDetail.noMatchAnalysis")
                     )}
                   </Typography>
                 </Box>
@@ -698,7 +700,7 @@ export default function CandidateDetail() {
                       variant="caption"
                       sx={{ mb: 0.5, display: "block", fontWeight: 500, textTransform: "uppercase", color: "grey.600" }}
                     >
-                      Strengths
+                      {t("candidateDetail.strengths")}
                     </Typography>
                     <Box component="ul" sx={{ listStyle: "disc inside", pl: 0, m: 0 }}>
                       {activeMatch!.strengths.map((s, i) => (
@@ -722,7 +724,7 @@ export default function CandidateDetail() {
                       variant="caption"
                       sx={{ mb: 0.5, display: "block", fontWeight: 500, textTransform: "uppercase", color: "grey.600" }}
                     >
-                      Gaps
+                      {t("candidateDetail.gapsLabel")}
                     </Typography>
                     <Box component="ul" sx={{ listStyle: "disc inside", pl: 0, m: 0 }}>
                       {activeMatch!.gaps.map((g, i) => (
@@ -742,8 +744,8 @@ export default function CandidateDetail() {
             ) : (
               <Typography variant="body2" sx={{ mb: 2, color: "grey.500" }}>
                 {jobMatches.length === 0
-                  ? "Link a job first, then generate analysis."
-                  : "Click the button below to generate a match analysis using AI."}
+                  ? t("candidateDetail.linkJobFirst")
+                  : t("candidateDetail.clickToGenerate")}
               </Typography>
             )}
 
@@ -754,7 +756,7 @@ export default function CandidateDetail() {
                   variant="caption"
                   sx={{ mb: 0.5, display: "block", fontWeight: 500, textTransform: "uppercase", color: "grey.600" }}
                 >
-                  Candidate Summary
+                  {t("candidateDetail.candidateSummary")}
                 </Typography>
                 <Typography variant="body2" sx={{ lineHeight: 1.6, color: "grey.700" }}>
                   {candidate.resume_summary}
@@ -792,10 +794,10 @@ export default function CandidateDetail() {
               }
             >
               {analyzing
-                ? "Analyzing..."
+                ? t("candidateDetail.analyzing")
                 : hasAnalysis
-                  ? "Re-generate Analysis"
-                  : "Generate Analysis"}
+                  ? t("candidateDetail.reGenerateAnalysis")
+                  : t("candidateDetail.generateAnalysis")}
             </Button>
           </Paper>
         </Grid>
@@ -805,7 +807,7 @@ export default function CandidateDetail() {
           <Grid size={12}>
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-                Communication History
+                {t("candidateDetail.communicationHistory")}
               </Typography>
               <Stack spacing={1.5}>
                 {emails.map((e) => (
@@ -824,7 +826,7 @@ export default function CandidateDetail() {
                     </Typography>
                     <Typography variant="caption" sx={{ mt: 0.5, display: "block", color: "grey.600" }}>
                       {e.email_type} &middot;{" "}
-                      {e.sent ? `Sent ${e.sent_at ?? ""}` : "Draft"}
+                      {e.sent ? t("candidateDetail.sent", { date: e.sent_at ?? "" }) : t("candidateDetail.draft")}
                     </Typography>
                   </Box>
                 ))}

@@ -251,14 +251,15 @@ export interface CalendarEvent {
 }
 
 // Pipeline columns for Kanban board
-export const PIPELINE_COLUMNS: { key: CandidateStatus; label: string }[] = [
-  { key: "new", label: "New" },
-  { key: "contacted", label: "Contacted" },
-  { key: "replied", label: "Replied" },
-  { key: "screening", label: "Screening" },
-  { key: "interview_scheduled", label: "Interview" },
-  { key: "offer_sent", label: "Offer" },
-  { key: "hired", label: "Hired" },
+// `labelKey` is resolved via t() at render time for i18n support
+export const PIPELINE_COLUMNS: { key: CandidateStatus; labelKey: string }[] = [
+  { key: "new", labelKey: "pipeline.new" },
+  { key: "contacted", labelKey: "pipeline.contacted" },
+  { key: "replied", labelKey: "pipeline.replied" },
+  { key: "screening", labelKey: "pipeline.screening" },
+  { key: "interview_scheduled", labelKey: "pipeline.interview" },
+  { key: "offer_sent", labelKey: "pipeline.offer" },
+  { key: "hired", labelKey: "pipeline.hired" },
 ];
 
 // ── Control Center types ─────────────────────────────────────────────────

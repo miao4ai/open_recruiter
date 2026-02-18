@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
@@ -44,7 +45,14 @@ const DEFAULT_MODEL: Record<string, string> = {
   gemini: "gemini-2.5-flash",
 };
 
+const LANGUAGES = [
+  { value: "en", label: "English" },
+  { value: "ja", label: "日本語" },
+  { value: "ko", label: "한국어" },
+];
+
 export default function Settings() {
+  const { t, i18n } = useTranslation();
   const { data: saved } = useApi(useCallback(() => getSettings(), []));
   const [form, setForm] = useState<SettingsType>({
     llm_provider: "anthropic",
@@ -95,62 +103,80 @@ export default function Settings() {
     setSaving(true);
     try {
       await updateSettings(form);
-      enqueueSnackbar("Settings saved.", { variant: "success" });
+      enqueueSnackbar(t("settings.settingsSaved"), { variant: "success" });
     } catch {
-      enqueueSnackbar("Failed to save settings.", { variant: "error", persist: true });
+      enqueueSnackbar(t("settings.failedToSave"), { variant: "error", persist: true });
     } finally {
       setSaving(false);
     }
   };
 
   const handleTestLlm = async () => {
-    enqueueSnackbar("Saving settings & testing LLM...", { variant: "info" });
+    enqueueSnackbar(t("settings.savingAndTestingLlm"), { variant: "info" });
     try {
       await updateSettings(form);
     } catch {
-      enqueueSnackbar("Failed to save settings.", { variant: "error", persist: true });
+      enqueueSnackbar(t("settings.failedToSave"), { variant: "error", persist: true });
       return;
     }
     try {
       const res = await testLlm();
       if (res.status === "ok") {
-        enqueueSnackbar(`LLM OK — response: "${res.response}"`, { variant: "success" });
+        enqueueSnackbar(t("settings.llmOk", { response: res.response }), { variant: "success" });
       } else {
-        enqueueSnackbar(`LLM Error: ${res.message}`, { variant: "error", persist: true });
+        enqueueSnackbar(t("settings.llmError", { message: res.message }), { variant: "error", persist: true });
       }
     } catch {
-      enqueueSnackbar("Failed to test LLM.", { variant: "error", persist: true });
+      enqueueSnackbar(t("settings.failedToTestLlm"), { variant: "error", persist: true });
     }
   };
 
   const handleTestEmail = async () => {
-    enqueueSnackbar("Saving settings & testing Email...", { variant: "info" });
+    enqueueSnackbar(t("settings.savingAndTestingEmail"), { variant: "info" });
     try {
       await updateSettings(form);
     } catch {
-      enqueueSnackbar("Failed to save settings.", { variant: "error", persist: true });
+      enqueueSnackbar(t("settings.failedToSave"), { variant: "error", persist: true });
       return;
     }
     try {
       const res = await testEmail();
       if (res.status === "ok") {
-        enqueueSnackbar(`Email OK (${res.backend}): ${res.message}`, { variant: "success" });
+        enqueueSnackbar(t("settings.emailOk", { backend: res.backend, message: res.message }), { variant: "success" });
       } else {
-        enqueueSnackbar(`Email Error: ${res.message}`, { variant: "error", persist: true });
+        enqueueSnackbar(t("settings.emailError", { message: res.message }), { variant: "error", persist: true });
       }
     } catch {
-      enqueueSnackbar("Failed to test Email.", { variant: "error", persist: true });
+      enqueueSnackbar(t("settings.failedToTestEmail"), { variant: "error", persist: true });
     }
   };
 
   return (
     <Box sx={{ maxWidth: 640, mx: "auto" }}>
       <Stack spacing={3}>
-        {/* LLM Configuration */}
-        <Section title="LLM Configuration">
+        {/* Language */}
+        <Section title={t("settings.language")}>
           <TextField
             select
-            label="Provider"
+            label={t("settings.language")}
+            value={i18n.language?.substring(0, 2) ?? "en"}
+            onChange={(e) => i18n.changeLanguage(e.target.value)}
+            fullWidth
+          >
+            {LANGUAGES.map((l) => (
+              <MenuItem key={l.value} value={l.value}>
+                {l.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <FormHelperText>{t("settings.languageHint")}</FormHelperText>
+        </Section>
+
+        {/* LLM Configuration */}
+        <Section title={t("settings.llmConfig")}>
+          <TextField
+            select
+            label={t("settings.provider")}
             name="llm_provider"
             value={form.llm_provider}
             onChange={handleChange}
@@ -162,7 +188,7 @@ export default function Settings() {
           </TextField>
           <TextField
             select
-            label="Model"
+            label={t("settings.model")}
             name="llm_model"
             value={form.llm_model}
             onChange={handleChange}
@@ -176,7 +202,7 @@ export default function Settings() {
           </TextField>
           {form.llm_provider === "anthropic" && (
             <TextField
-              label="Anthropic API Key"
+              label={t("settings.anthropicApiKey")}
               name="anthropic_api_key"
               type="password"
               value={form.anthropic_api_key}
@@ -187,7 +213,7 @@ export default function Settings() {
           )}
           {form.llm_provider === "openai" && (
             <TextField
-              label="OpenAI API Key"
+              label={t("settings.openaiApiKey")}
               name="openai_api_key"
               type="password"
               value={form.openai_api_key}
@@ -198,7 +224,7 @@ export default function Settings() {
           )}
           {form.llm_provider === "gemini" && (
             <TextField
-              label="Gemini API Key"
+              label={t("settings.geminiApiKey")}
               name="gemini_api_key"
               type="password"
               value={form.gemini_api_key}
@@ -212,28 +238,28 @@ export default function Settings() {
             startIcon={<ScienceOutlined />}
             onClick={handleTestLlm}
           >
-            Test LLM
+            {t("settings.testLlm")}
           </Button>
         </Section>
 
         {/* Email Configuration */}
-        <Section title="Email Configuration">
+        <Section title={t("settings.emailConfig")}>
           <TextField
             select
-            label="Backend"
+            label={t("settings.backend")}
             name="email_backend"
             value={form.email_backend}
             onChange={handleChange}
             fullWidth
           >
-            <MenuItem value="console">Console (print to terminal)</MenuItem>
-            <MenuItem value="gmail">Gmail (SMTP)</MenuItem>
-            <MenuItem value="smtp">Custom SMTP</MenuItem>
-            <MenuItem value="sendgrid">SendGrid</MenuItem>
+            <MenuItem value="console">{t("settings.consoleOption")}</MenuItem>
+            <MenuItem value="gmail">{t("settings.gmailOption")}</MenuItem>
+            <MenuItem value="smtp">{t("settings.customSmtp")}</MenuItem>
+            <MenuItem value="sendgrid">{t("settings.sendgridOption")}</MenuItem>
           </TextField>
           <Box>
             <TextField
-              label="From Email"
+              label={t("settings.fromEmail")}
               name="email_from"
               value={form.email_from}
               onChange={handleChange}
@@ -241,11 +267,11 @@ export default function Settings() {
               fullWidth
               slotProps={{ input: { readOnly: true } }}
             />
-            <FormHelperText>Auto-set to your login email</FormHelperText>
+            <FormHelperText>{t("settings.autoSetEmail")}</FormHelperText>
           </Box>
           {form.email_backend === "sendgrid" && (
             <TextField
-              label="SendGrid API Key"
+              label={t("settings.sendgridApiKey")}
               name="sendgrid_api_key"
               type="password"
               value={form.sendgrid_api_key}
@@ -259,7 +285,7 @@ export default function Settings() {
               {form.email_backend === "smtp" && (
                 <>
                   <TextField
-                    label="SMTP Host"
+                    label={t("settings.smtpHost")}
                     name="smtp_host"
                     value={form.smtp_host}
                     onChange={handleChange}
@@ -267,7 +293,7 @@ export default function Settings() {
                     fullWidth
                   />
                   <TextField
-                    label="SMTP Port"
+                    label={t("settings.smtpPort")}
                     name="smtp_port"
                     type="number"
                     value={form.smtp_port}
@@ -276,7 +302,7 @@ export default function Settings() {
                     fullWidth
                   />
                   <TextField
-                    label="SMTP Username"
+                    label={t("settings.smtpUsername")}
                     name="smtp_username"
                     value={form.smtp_username}
                     onChange={handleChange}
@@ -286,7 +312,7 @@ export default function Settings() {
                 </>
               )}
               <TextField
-                label={form.email_backend === "gmail" ? "Gmail App Password" : "SMTP Password"}
+                label={form.email_backend === "gmail" ? t("settings.gmailAppPassword") : t("settings.smtpPassword")}
                 name="smtp_password"
                 type="password"
                 value={form.smtp_password}
@@ -296,7 +322,7 @@ export default function Settings() {
               />
               {form.email_backend === "gmail" && (
                 <FormHelperText>
-                  Go to Google Account &rarr; Security &rarr; 2-Step Verification &rarr; App Passwords to generate one.
+                  {t("settings.gmailAppPasswordHint")}
                 </FormHelperText>
               )}
             </>
@@ -306,20 +332,20 @@ export default function Settings() {
             startIcon={<ScienceOutlined />}
             onClick={handleTestEmail}
           >
-            Test Email
+            {t("settings.testEmail")}
           </Button>
         </Section>
 
         {/* IMAP Configuration (Reply Detection) */}
         {(form.email_backend === "gmail" || form.email_backend === "smtp") && (
-          <Section title="IMAP Configuration (Reply Detection)">
+          <Section title={t("settings.imapConfig")}>
             <Typography variant="body2" color="text.secondary" sx={{ mt: -1, mb: 1 }}>
-              Configure IMAP to auto-detect when candidates reply to your emails.
+              {t("settings.imapHint")}
             </Typography>
             {form.email_backend === "gmail" ? (
               <>
                 <TextField
-                  label="IMAP Host"
+                  label={t("settings.imapHost")}
                   name="imap_host"
                   value={form.imap_host || "imap.gmail.com"}
                   onChange={handleChange}
@@ -328,21 +354,21 @@ export default function Settings() {
                 />
                 <Box>
                   <TextField
-                    label="IMAP Password"
+                    label={t("settings.imapPassword")}
                     name="imap_password"
                     type="password"
                     value={form.imap_password}
                     onChange={handleChange}
-                    placeholder="Same as Gmail App Password"
+                    placeholder={t("settings.sameAsGmail")}
                     fullWidth
                   />
-                  <FormHelperText>Use the same App Password as above</FormHelperText>
+                  <FormHelperText>{t("settings.useAppPassword")}</FormHelperText>
                 </Box>
               </>
             ) : (
               <>
                 <TextField
-                  label="IMAP Host"
+                  label={t("settings.imapHost")}
                   name="imap_host"
                   value={form.imap_host}
                   onChange={handleChange}
@@ -350,7 +376,7 @@ export default function Settings() {
                   fullWidth
                 />
                 <TextField
-                  label="IMAP Port"
+                  label={t("settings.imapPort")}
                   name="imap_port"
                   type="number"
                   value={form.imap_port}
@@ -359,7 +385,7 @@ export default function Settings() {
                   fullWidth
                 />
                 <TextField
-                  label="IMAP Username"
+                  label={t("settings.imapUsername")}
                   name="imap_username"
                   value={form.imap_username}
                   onChange={handleChange}
@@ -367,7 +393,7 @@ export default function Settings() {
                   fullWidth
                 />
                 <TextField
-                  label="IMAP Password"
+                  label={t("settings.imapPassword")}
                   name="imap_password"
                   type="password"
                   value={form.imap_password}
@@ -381,23 +407,23 @@ export default function Settings() {
         )}
 
         {/* Recruiter Profile */}
-        <Section title="Recruiter Profile">
+        <Section title={t("settings.recruiterProfile")}>
           <TextField
-            label="Name"
+            label={t("settings.fieldName")}
             name="recruiter_name"
             value={form.recruiter_name}
             onChange={handleChange}
             fullWidth
           />
           <TextField
-            label="Email"
+            label={t("settings.fieldEmail")}
             name="recruiter_email"
             value={form.recruiter_email}
             onChange={handleChange}
             fullWidth
           />
           <TextField
-            label="Company"
+            label={t("settings.fieldCompany")}
             name="recruiter_company"
             value={form.recruiter_company}
             onChange={handleChange}
@@ -413,7 +439,7 @@ export default function Settings() {
             onClick={handleSave}
             disabled={saving}
           >
-            {saving ? "Saving..." : "Save Settings"}
+            {saving ? t("common.saving") : t("settings.saveSettings")}
           </Button>
         </Box>
       </Stack>
