@@ -40,6 +40,21 @@ export interface Job {
   created_at: string;
 }
 
+export interface CandidateJobMatch {
+  id: string;
+  candidate_id: string;
+  job_id: string;
+  job_title: string;
+  job_company: string;
+  match_score: number;
+  match_reasoning: string;
+  strengths: string[];
+  gaps: string[];
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Candidate {
   id: string;
   name: string;
@@ -53,11 +68,14 @@ export interface Candidate {
   resume_path: string;
   resume_summary: string;
   status: CandidateStatus;
+  date_of_birth: string;
+  notes: string;
+  job_matches: CandidateJobMatch[];
+  // Backward compat — populated when listing candidates for a specific job
   match_score: number;
   match_reasoning: string;
   strengths: string[];
   gaps: string[];
-  notes: string;
   job_id: string;
   created_at: string;
   updated_at: string;

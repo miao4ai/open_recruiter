@@ -26,6 +26,7 @@ Return a JSON object with:
 - "skills": list of technical and professional skills
 - "experience_years": estimated total years of experience (integer)
 - "location": candidate location (or empty string)
+- "date_of_birth": date of birth in YYYY-MM-DD format (or empty string if not found)
 - "resume_summary": 2-3 sentence professional summary
 Only output valid JSON.
 """

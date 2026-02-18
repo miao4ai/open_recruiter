@@ -5,9 +5,14 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from backend/ dir first, then fall back to project root
+_backend_dir = Path(__file__).resolve().parent.parent
+load_dotenv(_backend_dir / ".env")
+load_dotenv(_backend_dir.parent / ".env")
 
 
 @dataclass
@@ -39,7 +44,7 @@ class Config:
         if not self.llm_model:
             self.llm_model = {
                 "anthropic": "claude-sonnet-4-20250514",
-                "openai": "gpt-4o",
+                "openai": "gpt-5.1",
             }.get(self.llm_provider, "claude-sonnet-4-20250514")
 
 

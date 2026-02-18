@@ -88,7 +88,7 @@ class CandidateUpdate(BaseModel):
     location: str | None = None
     status: CandidateStatus | None = None
     notes: str | None = None
-    job_id: str | None = None
+    date_of_birth: str | None = None
 
 class JobUpdate(BaseModel):
     title: str | None = None
@@ -99,6 +99,20 @@ class JobUpdate(BaseModel):
 class MatchRequest(BaseModel):
     job_id: str
     candidate_ids: list[str]
+
+class CandidateJobMatch(BaseModel):
+    id: str = ""
+    candidate_id: str = ""
+    job_id: str = ""
+    job_title: str = ""
+    job_company: str = ""
+    match_score: float = 0.0
+    match_reasoning: str = ""
+    strengths: list[str] = Field(default_factory=list)
+    gaps: list[str] = Field(default_factory=list)
+    status: str = "new"
+    created_at: str = ""
+    updated_at: str = ""
 
 class Candidate(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
@@ -113,11 +127,14 @@ class Candidate(BaseModel):
     resume_path: str = ""
     resume_summary: str = ""
     status: CandidateStatus = CandidateStatus.NEW
+    date_of_birth: str = ""
+    notes: str = ""
+    job_matches: list[CandidateJobMatch] = Field(default_factory=list)
+    # Backward compat — populated when listing candidates for a specific job
     match_score: float = 0.0
     match_reasoning: str = ""
     strengths: list[str] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
-    notes: str = ""
     job_id: str = ""
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())

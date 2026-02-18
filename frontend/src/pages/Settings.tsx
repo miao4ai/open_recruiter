@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
-import { Save, FlaskConical } from "lucide-react";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import MenuItem from "@mui/material/MenuItem";
+import Button from "@mui/material/Button";
+import FormHelperText from "@mui/material/FormHelperText";
+import Stack from "@mui/material/Stack";
+import SaveOutlined from "@mui/icons-material/SaveOutlined";
+import ScienceOutlined from "@mui/icons-material/ScienceOutlined";
+import { useSnackbar } from "notistack";
 import { useApi } from "../hooks/useApi";
 import {
   getSettings,
@@ -8,6 +18,25 @@ import {
   testEmail,
 } from "../lib/api";
 import type { Settings as SettingsType } from "../types";
+
+const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  anthropic: [
+    { value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
+    { value: "claude-haiku-4-20250414", label: "Claude Haiku 4" },
+    { value: "claude-opus-4-20250514", label: "Claude Opus 4" },
+  ],
+  openai: [
+    { value: "gpt-5.2-pro", label: "GPT-5.2 Pro" },
+    { value: "gpt-5.1", label: "GPT-5.1" },
+    { value: "gpt-4.1", label: "GPT-4.1" },
+    { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
+  ],
+};
+
+const DEFAULT_MODEL: Record<string, string> = {
+  anthropic: "claude-sonnet-4-20250514",
+  openai: "gpt-5.1",
+};
 
 export default function Settings() {
   const { data: saved } = useApi(useCallback(() => getSettings(), []));
@@ -28,270 +57,286 @@ export default function Settings() {
     recruiter_company: "",
   });
   const [saving, setSaving] = useState(false);
-  const [testResult, setTestResult] = useState<string | null>(null);
+  const { enqueueSnackbar } = useSnackbar();
 
   useEffect(() => {
     if (saved) setForm(saved);
   }, [saved]);
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === "llm_provider") {
+      // Auto-switch model to the provider's default
+      const models = MODEL_OPTIONS[value] ?? [];
+      const currentModel = form.llm_model;
+      const modelExists = models.some((m) => m.value === currentModel);
+      setForm({
+        ...form,
+        llm_provider: value,
+        llm_model: modelExists ? currentModel : (DEFAULT_MODEL[value] ?? ""),
+      });
+    } else {
+      setForm({ ...form, [name]: value });
+    }
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
       await updateSettings(form);
-      setTestResult("Settings saved.");
+      enqueueSnackbar("Settings saved.", { variant: "success" });
+    } catch {
+      enqueueSnackbar("Failed to save settings.", { variant: "error", persist: true });
     } finally {
       setSaving(false);
     }
   };
 
   const handleTestLlm = async () => {
-    setTestResult("Testing LLM...");
-    const res = await testLlm();
-    setTestResult(
-      res.status === "ok"
-        ? `LLM OK — response: "${res.response}"`
-        : `LLM Error: ${res.message}`
-    );
+    enqueueSnackbar("Saving settings & testing LLM...", { variant: "info" });
+    try {
+      await updateSettings(form);
+    } catch {
+      enqueueSnackbar("Failed to save settings.", { variant: "error", persist: true });
+      return;
+    }
+    try {
+      const res = await testLlm();
+      if (res.status === "ok") {
+        enqueueSnackbar(`LLM OK — response: "${res.response}"`, { variant: "success" });
+      } else {
+        enqueueSnackbar(`LLM Error: ${res.message}`, { variant: "error", persist: true });
+      }
+    } catch {
+      enqueueSnackbar("Failed to test LLM.", { variant: "error", persist: true });
+    }
   };
 
   const handleTestEmail = async () => {
-    setTestResult("Testing Email...");
-    const res = await testEmail();
-    setTestResult(
-      res.status === "ok"
-        ? `Email OK (${res.backend}): ${res.message}`
-        : `Email Error: ${res.message}`
-    );
+    enqueueSnackbar("Saving settings & testing Email...", { variant: "info" });
+    try {
+      await updateSettings(form);
+    } catch {
+      enqueueSnackbar("Failed to save settings.", { variant: "error", persist: true });
+      return;
+    }
+    try {
+      const res = await testEmail();
+      if (res.status === "ok") {
+        enqueueSnackbar(`Email OK (${res.backend}): ${res.message}`, { variant: "success" });
+      } else {
+        enqueueSnackbar(`Email Error: ${res.message}`, { variant: "error", persist: true });
+      }
+    } catch {
+      enqueueSnackbar("Failed to test Email.", { variant: "error", persist: true });
+    }
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      {/* LLM Config */}
-      <Section title="LLM Configuration">
-        <Field label="Provider">
-          <select
+    <Box sx={{ maxWidth: 640, mx: "auto" }}>
+      <Stack spacing={3}>
+        {/* LLM Config */}
+        <Section title="LLM Configuration">
+          <TextField
+            select
+            label="Provider"
             name="llm_provider"
             value={form.llm_provider}
             onChange={handleChange}
-            className="input"
+            fullWidth
           >
-            <option value="anthropic">Anthropic</option>
-            <option value="openai">OpenAI</option>
-          </select>
-        </Field>
-        <Field label="Model (optional)">
-          <input
+            <MenuItem value="anthropic">Anthropic</MenuItem>
+            <MenuItem value="openai">OpenAI</MenuItem>
+          </TextField>
+          <TextField
+            select
+            label="Model"
             name="llm_model"
             value={form.llm_model}
             onChange={handleChange}
-            placeholder="e.g. claude-sonnet-4-20250514"
-            className="input"
-          />
-        </Field>
-        <Field label="Anthropic API Key">
-          <input
-            name="anthropic_api_key"
-            type="password"
-            value={form.anthropic_api_key}
-            onChange={handleChange}
-            placeholder="sk-ant-..."
-            className="input"
-          />
-        </Field>
-        <Field label="OpenAI API Key">
-          <input
-            name="openai_api_key"
-            type="password"
-            value={form.openai_api_key}
-            onChange={handleChange}
-            placeholder="sk-..."
-            className="input"
-          />
-        </Field>
-        <button
-          onClick={handleTestLlm}
-          className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          <FlaskConical className="h-4 w-4" /> Test LLM
-        </button>
-      </Section>
+            fullWidth
+          >
+            {(MODEL_OPTIONS[form.llm_provider] ?? []).map((m) => (
+              <MenuItem key={m.value} value={m.value}>
+                {m.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          {form.llm_provider === "anthropic" && (
+            <TextField
+              label="Anthropic API Key"
+              name="anthropic_api_key"
+              type="password"
+              value={form.anthropic_api_key}
+              onChange={handleChange}
+              placeholder="sk-ant-..."
+              fullWidth
+            />
+          )}
+          {form.llm_provider === "openai" && (
+            <TextField
+              label="OpenAI API Key"
+              name="openai_api_key"
+              type="password"
+              value={form.openai_api_key}
+              onChange={handleChange}
+              placeholder="sk-..."
+              fullWidth
+            />
+          )}
+          <Button
+            variant="outlined"
+            startIcon={<ScienceOutlined />}
+            onClick={handleTestLlm}
+          >
+            Test LLM
+          </Button>
+        </Section>
 
-      {/* Email Config */}
-      <Section title="Email Configuration">
-        <Field label="Backend">
-          <select
+        {/* Email Config */}
+        <Section title="Email Configuration">
+          <TextField
+            select
+            label="Backend"
             name="email_backend"
             value={form.email_backend}
             onChange={handleChange}
-            className="input"
+            fullWidth
           >
-            <option value="console">Console (print to terminal)</option>
-            <option value="gmail">Gmail (SMTP)</option>
-            <option value="smtp">Custom SMTP</option>
-            <option value="sendgrid">SendGrid</option>
-          </select>
-        </Field>
-        <Field label="From Email">
-          <input
-            name="email_from"
-            value={form.email_from}
-            onChange={handleChange}
-            placeholder="recruiter@company.com"
-            className="input"
-            readOnly
-          />
-          <p className="mt-1 text-xs text-gray-400">Auto-set to your login email</p>
-        </Field>
-        {form.email_backend === "sendgrid" && (
-          <Field label="SendGrid API Key">
-            <input
+            <MenuItem value="console">Console (print to terminal)</MenuItem>
+            <MenuItem value="gmail">Gmail (SMTP)</MenuItem>
+            <MenuItem value="smtp">Custom SMTP</MenuItem>
+            <MenuItem value="sendgrid">SendGrid</MenuItem>
+          </TextField>
+          <Box>
+            <TextField
+              label="From Email"
+              name="email_from"
+              value={form.email_from}
+              onChange={handleChange}
+              placeholder="recruiter@company.com"
+              fullWidth
+              slotProps={{ input: { readOnly: true } }}
+            />
+            <FormHelperText>Auto-set to your login email</FormHelperText>
+          </Box>
+          {form.email_backend === "sendgrid" && (
+            <TextField
+              label="SendGrid API Key"
               name="sendgrid_api_key"
               type="password"
               value={form.sendgrid_api_key}
               onChange={handleChange}
               placeholder="SG...."
-              className="input"
+              fullWidth
             />
-          </Field>
-        )}
-        {(form.email_backend === "gmail" || form.email_backend === "smtp") && (
-          <>
-            {form.email_backend === "smtp" && (
-              <>
-                <Field label="SMTP Host">
-                  <input
+          )}
+          {(form.email_backend === "gmail" || form.email_backend === "smtp") && (
+            <>
+              {form.email_backend === "smtp" && (
+                <>
+                  <TextField
+                    label="SMTP Host"
                     name="smtp_host"
                     value={form.smtp_host}
                     onChange={handleChange}
                     placeholder="smtp.example.com"
-                    className="input"
+                    fullWidth
                   />
-                </Field>
-                <Field label="SMTP Port">
-                  <input
+                  <TextField
+                    label="SMTP Port"
                     name="smtp_port"
                     type="number"
                     value={form.smtp_port}
                     onChange={handleChange}
                     placeholder="587"
-                    className="input"
+                    fullWidth
                   />
-                </Field>
-                <Field label="SMTP Username">
-                  <input
+                  <TextField
+                    label="SMTP Username"
                     name="smtp_username"
                     value={form.smtp_username}
                     onChange={handleChange}
                     placeholder="your-email@example.com"
-                    className="input"
+                    fullWidth
                   />
-                </Field>
-              </>
-            )}
-            <Field label={form.email_backend === "gmail" ? "Gmail App Password" : "SMTP Password"}>
-              <input
+                </>
+              )}
+              <TextField
+                label={form.email_backend === "gmail" ? "Gmail App Password" : "SMTP Password"}
                 name="smtp_password"
                 type="password"
                 value={form.smtp_password}
                 onChange={handleChange}
                 placeholder={form.email_backend === "gmail" ? "xxxx xxxx xxxx xxxx" : "password"}
-                className="input"
+                fullWidth
               />
-            </Field>
-            {form.email_backend === "gmail" && (
-              <p className="text-xs text-gray-500">
-                Go to Google Account → Security → 2-Step Verification → App Passwords to generate one.
-              </p>
-            )}
-          </>
-        )}
-        <button
-          onClick={handleTestEmail}
-          className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          <FlaskConical className="h-4 w-4" /> Test Email
-        </button>
-      </Section>
+              {form.email_backend === "gmail" && (
+                <FormHelperText>
+                  Go to Google Account → Security → 2-Step Verification → App Passwords to generate one.
+                </FormHelperText>
+              )}
+            </>
+          )}
+          <Button
+            variant="outlined"
+            startIcon={<ScienceOutlined />}
+            onClick={handleTestEmail}
+          >
+            Test Email
+          </Button>
+        </Section>
 
-      {/* Personal Info */}
-      <Section title="Recruiter Profile">
-        <Field label="Name">
-          <input
+        {/* Recruiter Profile */}
+        <Section title="Recruiter Profile">
+          <TextField
+            label="Name"
             name="recruiter_name"
             value={form.recruiter_name}
             onChange={handleChange}
-            className="input"
+            fullWidth
           />
-        </Field>
-        <Field label="Email">
-          <input
+          <TextField
+            label="Email"
             name="recruiter_email"
             value={form.recruiter_email}
             onChange={handleChange}
-            className="input"
+            fullWidth
           />
-        </Field>
-        <Field label="Company">
-          <input
+          <TextField
+            label="Company"
             name="recruiter_company"
             value={form.recruiter_company}
             onChange={handleChange}
-            className="input"
+            fullWidth
           />
-        </Field>
-      </Section>
+        </Section>
 
-      {/* Save */}
-      <div className="flex items-center gap-4">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          <Save className="h-4 w-4" /> {saving ? "Saving..." : "Save Settings"}
-        </button>
-        {testResult && (
-          <span className="text-sm text-gray-600">{testResult}</span>
-        )}
-      </div>
-    </div>
+        {/* Save */}
+        <Box>
+          <Button
+            variant="contained"
+            startIcon={<SaveOutlined />}
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save Settings"}
+          </Button>
+        </Box>
+      </Stack>
+    </Box>
   );
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
-      <h3 className="mb-4 font-semibold">{title}</h3>
-      <div className="space-y-3">{children}</div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">
-        {label}
-      </label>
-      {children}
-    </div>
+    <Paper variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
+      <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
+        {title}
+      </Typography>
+      <Stack spacing={2}>{children}</Stack>
+    </Paper>
   );
 }

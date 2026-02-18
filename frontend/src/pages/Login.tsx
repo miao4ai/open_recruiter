@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { Bot } from "lucide-react";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import Alert from "@mui/material/Alert";
+import SmartToyOutlined from "@mui/icons-material/SmartToyOutlined";
 import { login, register, setToken } from "../lib/api";
 import type { User } from "../types";
 
@@ -8,7 +16,8 @@ interface Props {
 }
 
 export default function Login({ onLogin }: Props) {
-  const [isRegister, setIsRegister] = useState(false);
+  const [tab, setTab] = useState(0);
+  const isRegister = tab === 1;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -36,101 +45,73 @@ export default function Login({ onLogin }: Props) {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-lg">
+    <Box sx={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", bgcolor: "background.default" }}>
+      <Paper elevation={3} sx={{ width: "100%", maxWidth: 440, p: 4, borderRadius: 3 }}>
         {/* Logo */}
-        <div className="mb-8 flex items-center justify-center gap-2">
-          <Bot className="h-8 w-8 text-blue-600" />
-          <span className="text-xl font-bold tracking-tight text-gray-900">
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, mb: 4 }}>
+          <SmartToyOutlined sx={{ fontSize: 32, color: "primary.main" }} />
+          <Typography variant="h5" fontWeight={700} letterSpacing="-0.02em">
             Open Recruiter
-          </span>
-        </div>
+          </Typography>
+        </Box>
 
         {/* Tabs */}
-        <div className="mb-6 flex rounded-lg bg-gray-100 p-1">
-          <button
-            onClick={() => { setIsRegister(false); setError(""); }}
-            className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
-              !isRegister
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            Login
-          </button>
-          <button
-            onClick={() => { setIsRegister(true); setError(""); }}
-            className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
-              isRegister
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            Register
-          </button>
-        </div>
+        <Tabs
+          value={tab}
+          onChange={(_, v) => { setTab(v); setError(""); }}
+          variant="fullWidth"
+          sx={{ mb: 3 }}
+        >
+          <Tab label="Login" />
+          <Tab label="Register" />
+        </Tabs>
 
         {error && (
-          <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <Alert severity="error" sx={{ mb: 2 }}>
             {error}
-          </div>
+          </Alert>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <Box component="form" onSubmit={handleSubmit} sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {isRegister && (
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Name
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                placeholder="Your name"
-              />
-            </div>
+            <TextField
+              label="Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Your name"
+              fullWidth
+            />
           )}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="you@company.com"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="At least 6 characters"
-            />
-          </div>
-          <button
+          <TextField
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="you@company.com"
+            fullWidth
+          />
+          <TextField
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            inputProps={{ minLength: 6 }}
+            placeholder="At least 6 characters"
+            fullWidth
+          />
+          <Button
             type="submit"
+            variant="contained"
+            fullWidth
             disabled={loading}
-            className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            sx={{ py: 1.25, mt: 1 }}
           >
-            {loading
-              ? "Please wait..."
-              : isRegister
-                ? "Create Account"
-                : "Sign In"}
-          </button>
-        </form>
-      </div>
-    </div>
+            {loading ? "Please wait..." : isRegister ? "Create Account" : "Sign In"}
+          </Button>
+        </Box>
+      </Paper>
+    </Box>
   );
 }

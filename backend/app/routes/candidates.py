@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -38,7 +39,8 @@ async def upload_resume(file: UploadFile = File(...), job_id: str = Form(""), _u
       1. Save file to disk
       2. PyMuPDF extracts raw text
       3. LLM parses text into structured fields
-      4. Store Candidate in SQLite
+      4. Find-or-create Candidate in SQLite
+      5. Create candidate_jobs link
     """
     file_bytes = await file.read()
     filename = file.filename or "resume"
@@ -61,7 +63,6 @@ async def upload_resume(file: UploadFile = File(...), job_id: str = Form(""), _u
         from app.routes.settings import get_config
         cfg = get_config()
 
-        # Only call LLM if an API key is configured
         has_key = (
             (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
             or (cfg.llm_provider == "openai" and cfg.openai_api_key)
@@ -72,66 +73,86 @@ async def upload_resume(file: UploadFile = File(...), job_id: str = Form(""), _u
         else:
             log.warning("No LLM API key configured — skipping structured parsing.")
     except Exception as e:
-        # LLM failure is non-fatal; we still have the raw text
         log.error("LLM resume parsing failed: %s", e)
 
-    # ── Step 3.5: duplicate check ───────────────────────────────────────
+    # ── Step 4: Find-or-create candidate ───────────────────────────────
     parsed_name = parsed.get("name") or _guess_name(filename)
     parsed_email = parsed.get("email", "")
+    parsed_dob = parsed.get("date_of_birth", "")
+
+    existing = None
     if parsed_name and parsed_email:
-        existing = db.find_candidate_by_name_email(parsed_name, parsed_email)
-        if existing:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Candidate '{parsed_name}' ({parsed_email}) already exists in the database.",
-            )
+        existing = db.find_candidate_by_identity(parsed_name, parsed_email, parsed_dob)
 
-    # ── Step 4: build Candidate and store ──────────────────────────────
-    candidate = Candidate(
-        name=parsed_name,
-        email=parsed.get("email", ""),
-        phone=parsed.get("phone", ""),
-        current_title=parsed.get("current_title", ""),
-        current_company=parsed.get("current_company", ""),
-        skills=parsed.get("skills", []),
-        experience_years=parsed.get("experience_years"),
-        location=parsed.get("location", ""),
-        resume_path=str(save_path),
-        resume_summary=parsed.get("resume_summary", "") or raw_text[:500],
-        job_id=job_id,
-    )
-    db.insert_candidate(candidate.model_dump())
-
-    try:
-        embed_text = vectorstore.build_candidate_embed_text(candidate)
-        vectorstore.index_candidate(
-            candidate_id=candidate.id,
-            text=embed_text,
-            metadata={
-                "name": candidate.name,
-                "job_id": candidate.job_id,
-                "current_title": candidate.current_title,
-            },
+    if existing:
+        candidate_id = existing["id"]
+        # Check if already linked to this job
+        if job_id:
+            cj = db.get_candidate_job(candidate_id, job_id)
+            if cj:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Candidate '{parsed_name}' is already linked to this job.",
+                )
+    else:
+        # Create new candidate
+        candidate = Candidate(
+            name=parsed_name,
+            email=parsed.get("email", ""),
+            phone=parsed.get("phone", ""),
+            current_title=parsed.get("current_title", ""),
+            current_company=parsed.get("current_company", ""),
+            skills=parsed.get("skills", []),
+            experience_years=parsed.get("experience_years"),
+            location=parsed.get("location", ""),
+            date_of_birth=parsed_dob,
+            resume_path=str(save_path),
+            resume_summary=parsed.get("resume_summary", "") or raw_text[:500],
         )
-    except Exception as e:
-        log.warning("Failed to index candidate in vector store: %s", e)
+        db.insert_candidate(candidate.model_dump())
+        candidate_id = candidate.id
 
-    # Auto-match against linked job (if any)
-    if candidate.job_id:
+        # Index in vector store
+        try:
+            embed_text = vectorstore.build_candidate_embed_text(candidate)
+            vectorstore.index_candidate(
+                candidate_id=candidate_id,
+                text=embed_text,
+                metadata={
+                    "name": candidate.name,
+                    "current_title": candidate.current_title,
+                },
+            )
+        except Exception as e:
+            log.warning("Failed to index candidate in vector store: %s", e)
+
+    # ── Step 5: Create candidate_jobs link ─────────────────────────────
+    if job_id:
+        now = datetime.now().isoformat()
+        db.insert_candidate_job({
+            "id": uuid.uuid4().hex[:8],
+            "candidate_id": candidate_id,
+            "job_id": job_id,
+            "match_score": 0.0,
+            "created_at": now,
+            "updated_at": now,
+        })
+
+        # Auto-match: vector similarity score
         try:
             rankings = vectorstore.search_candidates_for_job(
-                job_id=candidate.job_id, n_results=200,
+                job_id=job_id, n_results=200,
             )
             score_map = {r["candidate_id"]: r["score"] for r in rankings}
-            score = score_map.get(candidate.id, 0.0)
-            db.update_candidate(candidate.id, {
+            score = score_map.get(candidate_id, 0.0)
+            db.update_candidate_job(candidate_id, job_id, {
                 "match_score": score,
                 "updated_at": datetime.now().isoformat(),
             })
         except Exception as e:
-            log.warning("Auto-match failed for new candidate %s: %s", candidate.id, e)
+            log.warning("Auto-match failed for candidate %s: %s", candidate_id, e)
 
-    return candidate.model_dump()
+    return db.get_candidate(candidate_id)
 
 
 @router.get("/{candidate_id}")
@@ -159,14 +180,83 @@ async def update_candidate_route(candidate_id: str, update: CandidateUpdate, _us
             text=embed_text,
             metadata={
                 "name": updated.get("name", ""),
-                "job_id": updated.get("job_id", ""),
                 "current_title": updated.get("current_title", ""),
             },
         )
     except Exception as e:
         log.warning("Failed to reindex candidate in vector store: %s", e)
 
-    # Auto-match against linked job
+    # Auto-match against all linked jobs
+    try:
+        _auto_match_candidate(updated)
+    except Exception as e:
+        log.warning("Auto-match failed for candidate %s: %s", candidate_id, e)
+
+    return updated
+
+
+@router.post("/{candidate_id}/reparse")
+async def reparse_candidate_route(candidate_id: str, _user: dict = Depends(get_current_user)):
+    """Re-run LLM parsing on an existing candidate's resume file."""
+    c = db.get_candidate(candidate_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    resume_path = c.get("resume_path", "")
+    if not resume_path or not Path(resume_path).exists():
+        raise HTTPException(status_code=400, detail="Resume file not found on disk")
+
+    from app.routes.settings import get_config
+    cfg = get_config()
+
+    has_key = (
+        (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
+        or (cfg.llm_provider == "openai" and cfg.openai_api_key)
+    )
+    if not has_key:
+        raise HTTPException(status_code=400, detail="No LLM API key configured. Go to Settings first.")
+
+    from app.tools.resume_parser import extract_text
+    file_bytes = Path(resume_path).read_bytes()
+    filename = Path(resume_path).name
+    try:
+        raw_text = extract_text(file_bytes, filename)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    from app.agents.resume import parse_resume_text
+    parsed = parse_resume_text(cfg, raw_text)
+
+    updates = {
+        "name": parsed.get("name") or c.get("name", ""),
+        "email": parsed.get("email") or c.get("email", ""),
+        "phone": parsed.get("phone") or c.get("phone", ""),
+        "current_title": parsed.get("current_title") or c.get("current_title", ""),
+        "current_company": parsed.get("current_company") or c.get("current_company", ""),
+        "skills": parsed.get("skills") or c.get("skills", []),
+        "experience_years": parsed.get("experience_years"),
+        "location": parsed.get("location") or c.get("location", ""),
+        "date_of_birth": parsed.get("date_of_birth") or c.get("date_of_birth", ""),
+        "resume_summary": parsed.get("resume_summary") or c.get("resume_summary", ""),
+        "updated_at": datetime.now().isoformat(),
+    }
+    db.update_candidate(candidate_id, updates)
+
+    updated = db.get_candidate(candidate_id)
+    try:
+        embed_text = vectorstore.build_candidate_embed_text(updated)
+        vectorstore.index_candidate(
+            candidate_id=candidate_id,
+            text=embed_text,
+            metadata={
+                "name": updated.get("name", ""),
+                "current_title": updated.get("current_title", ""),
+            },
+        )
+    except Exception as e:
+        log.warning("Failed to reindex candidate in vector store: %s", e)
+
+    # Auto-match against all linked jobs
     try:
         _auto_match_candidate(updated)
     except Exception as e:
@@ -183,9 +273,56 @@ async def delete_candidate_route(candidate_id: str, _user: dict = Depends(get_cu
     try:
         vectorstore.remove_candidate(candidate_id)
     except Exception:
-        pass  # Non-fatal: embedding cleanup is best-effort
+        pass  # Non-fatal
 
     return {"status": "deleted"}
+
+
+@router.post("/{candidate_id}/link-job")
+async def link_candidate_job(candidate_id: str, job_id: str = Form(...), _user: dict = Depends(get_current_user)):
+    """Link an existing candidate to a job."""
+    c = db.get_candidate(candidate_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    job = db.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    existing = db.get_candidate_job(candidate_id, job_id)
+    if existing:
+        raise HTTPException(status_code=409, detail="Candidate is already linked to this job.")
+
+    now = datetime.now().isoformat()
+    db.insert_candidate_job({
+        "id": uuid.uuid4().hex[:8],
+        "candidate_id": candidate_id,
+        "job_id": job_id,
+        "match_score": 0.0,
+        "created_at": now,
+        "updated_at": now,
+    })
+
+    # Auto-match
+    try:
+        rankings = vectorstore.search_candidates_for_job(job_id=job_id, n_results=200)
+        score_map = {r["candidate_id"]: r["score"] for r in rankings}
+        score = score_map.get(candidate_id, 0.0)
+        db.update_candidate_job(candidate_id, job_id, {
+            "match_score": score,
+            "updated_at": datetime.now().isoformat(),
+        })
+    except Exception as e:
+        log.warning("Auto-match failed for link %s→%s: %s", candidate_id, job_id, e)
+
+    return db.get_candidate(candidate_id)
+
+
+@router.delete("/{candidate_id}/jobs/{job_id}")
+async def unlink_candidate_job(candidate_id: str, job_id: str, _user: dict = Depends(get_current_user)):
+    """Unlink a candidate from a job."""
+    if not db.delete_candidate_job(candidate_id, job_id):
+        raise HTTPException(status_code=404, detail="Link not found")
+    return {"status": "unlinked"}
 
 
 @router.post("/match")
@@ -203,8 +340,6 @@ async def match_candidates(req: MatchRequest, _user: dict = Depends(get_current_
         job_id=req.job_id,
         candidate_ids=req.candidate_ids,
     )
-
-    # Build a lookup for vector scores
     vector_scores = {r["candidate_id"]: r["score"] for r in rankings}
 
     # Stage 2: LLM evaluation (optional)
@@ -232,14 +367,29 @@ async def match_candidates(req: MatchRequest, _user: dict = Depends(get_current_
                 "reasoning": f"Vector similarity: {vscore:.2f} (configure LLM key for detailed evaluation)",
             }
 
-        # Persist match results to SQLite
-        db.update_candidate(cid, {
-            "match_score": match_data["score"],
-            "match_reasoning": match_data["reasoning"],
-            "strengths": match_data["strengths"],
-            "gaps": match_data["gaps"],
-            "updated_at": datetime.now().isoformat(),
-        })
+        # Ensure candidate_jobs link exists, then update
+        existing_cj = db.get_candidate_job(cid, req.job_id)
+        now = datetime.now().isoformat()
+        if not existing_cj:
+            db.insert_candidate_job({
+                "id": uuid.uuid4().hex[:8],
+                "candidate_id": cid,
+                "job_id": req.job_id,
+                "match_score": match_data["score"],
+                "match_reasoning": match_data["reasoning"],
+                "strengths": match_data["strengths"],
+                "gaps": match_data["gaps"],
+                "created_at": now,
+                "updated_at": now,
+            })
+        else:
+            db.update_candidate_job(cid, req.job_id, {
+                "match_score": match_data["score"],
+                "match_reasoning": match_data["reasoning"],
+                "strengths": match_data["strengths"],
+                "gaps": match_data["gaps"],
+                "updated_at": now,
+            })
 
         results.append({
             "candidate_id": cid,
@@ -254,29 +404,28 @@ async def match_candidates(req: MatchRequest, _user: dict = Depends(get_current_
 
 
 def _auto_match_candidate(candidate: dict) -> None:
-    """Re-run vector-based matching for a single candidate against their linked job."""
-    job_id = candidate.get("job_id", "")
-    if not job_id:
+    """Re-run vector-based matching for a candidate against ALL linked jobs."""
+    job_matches = candidate.get("job_matches", [])
+    if not job_matches:
         return
 
-    rankings = vectorstore.search_candidates_for_job(
-        job_id=job_id, n_results=200,
-    )
-    score_map = {r["candidate_id"]: r["score"] for r in rankings}
-    score = score_map.get(candidate["id"], 0.0)
-
-    db.update_candidate(candidate["id"], {
-        "match_score": score,
-        "updated_at": datetime.now().isoformat(),
-    })
+    for jm in job_matches:
+        job_id = jm["job_id"]
+        rankings = vectorstore.search_candidates_for_job(
+            job_id=job_id, n_results=200,
+        )
+        score_map = {r["candidate_id"]: r["score"] for r in rankings}
+        score = score_map.get(candidate["id"], 0.0)
+        db.update_candidate_job(candidate["id"], job_id, {
+            "match_score": score,
+            "updated_at": datetime.now().isoformat(),
+        })
 
 
 def _guess_name(filename: str) -> str:
     """Best-effort name from filename (e.g. 'Alice_Wang_Resume.pdf' → 'Alice Wang')."""
     stem = Path(filename).stem
-    # Remove common suffixes
     for word in ("resume", "cv", "简历", "Resume", "CV"):
         stem = stem.replace(word, "")
-    # Replace separators with spaces
     name = stem.replace("_", " ").replace("-", " ").strip()
     return name if name else "Unknown"

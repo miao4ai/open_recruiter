@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Send, Trash2, Bot, Loader2 } from "lucide-react";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import IconButton from "@mui/material/IconButton";
+import Avatar from "@mui/material/Avatar";
+import Chip from "@mui/material/Chip";
+import CircularProgress from "@mui/material/CircularProgress";
+import SendOutlined from "@mui/icons-material/SendOutlined";
+import DeleteOutline from "@mui/icons-material/DeleteOutline";
+import SmartToyOutlined from "@mui/icons-material/SmartToyOutlined";
 import { useApi } from "../hooks/useApi";
 import { sendChatMessage, getChatHistory, clearChatHistory } from "../lib/api";
 import type { ChatMessage } from "../types";
@@ -76,108 +87,126 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Header */}
-      <div className="flex items-center justify-between pb-4">
-        <div className="flex items-center gap-2">
-          <Bot className="h-5 w-5 text-blue-500" />
-          <h2 className="text-lg font-semibold">Recruiting Assistant</h2>
-        </div>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 2 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <SmartToyOutlined sx={{ color: "primary.main" }} />
+          <Typography variant="h6" fontWeight={600}>
+            Recruiting Assistant
+          </Typography>
+        </Box>
         {messages.length > 0 && (
-          <button
+          <Button
+            size="small"
+            variant="outlined"
+            color="inherit"
+            startIcon={<DeleteOutline />}
             onClick={handleClear}
-            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+            sx={{ color: "text.secondary" }}
           >
-            <Trash2 className="h-3.5 w-3.5" /> Clear Chat
-          </button>
+            Clear Chat
+          </Button>
         )}
-      </div>
+      </Box>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-4 rounded-xl border border-gray-200 bg-white p-4">
+      <Paper
+        variant="outlined"
+        sx={{ flexGrow: 1, overflowY: "auto", p: 2, display: "flex", flexDirection: "column", gap: 2 }}
+      >
         {messages.length === 0 && !sending && (
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <Bot className="h-12 w-12 text-gray-200" />
-            <p className="mt-3 text-sm text-gray-400">
+          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1, textAlign: "center" }}>
+            <SmartToyOutlined sx={{ fontSize: 48, color: "grey.300" }} />
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
               Ask me about your candidates, jobs, or recruiting strategy.
-            </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
+            </Typography>
+            <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 1, mt: 2 }}>
               {[
                 "Which candidates have the highest match scores?",
                 "Should I send a follow-up email?",
                 "Summarize my current pipeline",
               ].map((q) => (
-                <button
+                <Chip
                   key={q}
+                  label={q}
+                  variant="outlined"
+                  size="small"
                   onClick={() => setInput(q)}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50"
-                >
-                  {q}
-                </button>
+                  sx={{ cursor: "pointer" }}
+                />
               ))}
-            </div>
-          </div>
+            </Box>
+          </Box>
         )}
 
         {messages.map((msg) => (
-          <div
+          <Box
             key={msg.id}
-            className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
+            sx={{ display: "flex", gap: 1.5, justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}
           >
             {msg.role === "assistant" && (
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100">
-                <Bot className="h-4 w-4 text-blue-600" />
-              </div>
+              <Avatar sx={{ bgcolor: "primary.light", width: 28, height: 28 }}>
+                <SmartToyOutlined sx={{ fontSize: 16 }} />
+              </Avatar>
             )}
-            <div
-              className={`max-w-[80%] rounded-xl px-4 py-3 ${
-                msg.role === "user"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-50 text-gray-800"
-              }`}
+            <Paper
+              elevation={0}
+              sx={{
+                maxWidth: "80%",
+                px: 2,
+                py: 1.5,
+                borderRadius: 3,
+                bgcolor: msg.role === "user" ? "primary.main" : "grey.50",
+                color: msg.role === "user" ? "white" : "text.primary",
+              }}
             >
-              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-            </div>
-          </div>
+              <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                {msg.content}
+              </Typography>
+            </Paper>
+          </Box>
         ))}
 
         {sending && (
-          <div className="flex gap-3">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100">
-              <Bot className="h-4 w-4 text-blue-600" />
-            </div>
-            <div className="rounded-xl bg-gray-50 px-4 py-3">
-              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-            </div>
-          </div>
+          <Box sx={{ display: "flex", gap: 1.5 }}>
+            <Avatar sx={{ bgcolor: "primary.light", width: 28, height: 28 }}>
+              <SmartToyOutlined sx={{ fontSize: 16 }} />
+            </Avatar>
+            <Paper elevation={0} sx={{ px: 2, py: 1.5, borderRadius: 3, bgcolor: "grey.50" }}>
+              <CircularProgress size={16} />
+            </Paper>
+          </Box>
         )}
 
         <div ref={messagesEndRef} />
-      </div>
+      </Paper>
 
       {/* Input */}
-      <div className="pt-4">
-        <div className="flex gap-2">
-          <textarea
+      <Box sx={{ pt: 2 }}>
+        <Box sx={{ display: "flex", gap: 1 }}>
+          <TextField
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask about candidates, jobs, or get recruiting advice..."
+            multiline
             rows={2}
-            className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            fullWidth
           />
-          <button
+          <IconButton
+            color="primary"
             onClick={handleSend}
             disabled={sending || !input.trim()}
-            className="flex h-auto items-center justify-center rounded-xl bg-blue-600 px-4 text-white hover:bg-blue-700 disabled:opacity-50"
+            sx={{ bgcolor: "primary.main", color: "white", borderRadius: 2, width: 48, "&:hover": { bgcolor: "primary.dark" }, "&.Mui-disabled": { bgcolor: "grey.300", color: "white" } }}
           >
-            <Send className="h-5 w-5" />
-          </button>
-        </div>
-        <p className="mt-1 text-center text-xs text-gray-400">
+            <SendOutlined />
+          </IconButton>
+        </Box>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mt: 0.5 }}>
           Enter to send, Shift+Enter for new line
-        </p>
-      </div>
-    </div>
+        </Typography>
+      </Box>
+    </Box>
   );
 }

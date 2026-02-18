@@ -7,6 +7,7 @@ normalization and PII filtering stages before persisting.
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -126,56 +127,73 @@ def _run_stages(
     except Exception as e:
         log.warning("Privacy filter failed (continuing): %s", e)
 
-    # ── Dedup check ───────────────────────────────────────────────────────
-    email = parsed.get("email", "")
-    if email:
-        existing = db.list_candidates()
-        for c in existing:
-            if c.get("email", "").lower() == email.lower():
-                # Update existing candidate instead of duplicating
-                db.update_candidate(c["id"], {
-                    "resume_path": str(save_path),
-                    "resume_summary": parsed.get("resume_summary", "") or text[:500],
-                    "skills": parsed.get("skills", c.get("skills", [])),
-                    "current_title": parsed.get("current_title", "") or c.get("current_title", ""),
-                    "current_company": parsed.get("current_company", "") or c.get("current_company", ""),
-                    "updated_at": datetime.now().isoformat(),
-                })
-                log.info("Updated existing candidate %s (dedup by email)", c["id"])
-                return db.get_candidate(c["id"])  # type: ignore[return-value]
+    # ── Find-or-create candidate ──────────────────────────────────────────
+    parsed_name = parsed.get("name") or _guess_name(filename)
+    parsed_email = parsed.get("email", "")
+    parsed_dob = parsed.get("date_of_birth", "")
 
-    # ── Build Candidate and store ─────────────────────────────────────────
-    candidate = Candidate(
-        name=parsed.get("name") or _guess_name(filename),
-        email=parsed.get("email", ""),
-        phone=parsed.get("phone", ""),
-        current_title=parsed.get("current_title", ""),
-        current_company=parsed.get("current_company", ""),
-        skills=parsed.get("skills", []),
-        experience_years=parsed.get("experience_years"),
-        location=parsed.get("location", ""),
-        resume_path=str(save_path),
-        resume_summary=parsed.get("resume_summary", "") or text[:500],
-        job_id=job_id,
-    )
-    db.insert_candidate(candidate.model_dump())
+    existing = None
+    if parsed_name and parsed_email:
+        existing = db.find_candidate_by_identity(parsed_name, parsed_email, parsed_dob)
 
-    # ── Index in vector store ─────────────────────────────────────────────
-    try:
-        embed_text = vectorstore.build_candidate_embed_text(candidate)
-        vectorstore.index_candidate(
-            candidate_id=candidate.id,
-            text=embed_text,
-            metadata={
-                "name": candidate.name,
-                "job_id": candidate.job_id,
-                "current_title": candidate.current_title,
-            },
+    if existing:
+        candidate_id = existing["id"]
+        # Update fields if needed
+        db.update_candidate(candidate_id, {
+            "resume_path": str(save_path),
+            "resume_summary": parsed.get("resume_summary", "") or text[:500],
+            "skills": parsed.get("skills", existing.get("skills", [])),
+            "current_title": parsed.get("current_title", "") or existing.get("current_title", ""),
+            "current_company": parsed.get("current_company", "") or existing.get("current_company", ""),
+            "updated_at": datetime.now().isoformat(),
+        })
+        log.info("Updated existing candidate %s (dedup by identity)", candidate_id)
+    else:
+        candidate = Candidate(
+            name=parsed_name,
+            email=parsed_email,
+            phone=parsed.get("phone", ""),
+            current_title=parsed.get("current_title", ""),
+            current_company=parsed.get("current_company", ""),
+            skills=parsed.get("skills", []),
+            experience_years=parsed.get("experience_years"),
+            location=parsed.get("location", ""),
+            date_of_birth=parsed_dob,
+            resume_path=str(save_path),
+            resume_summary=parsed.get("resume_summary", "") or text[:500],
         )
-    except Exception as e:
-        log.warning("Failed to index candidate in vector store: %s", e)
+        db.insert_candidate(candidate.model_dump())
+        candidate_id = candidate.id
 
-    return candidate.model_dump()
+        # Index in vector store
+        try:
+            embed_text = vectorstore.build_candidate_embed_text(candidate)
+            vectorstore.index_candidate(
+                candidate_id=candidate_id,
+                text=embed_text,
+                metadata={
+                    "name": candidate.name,
+                    "current_title": candidate.current_title,
+                },
+            )
+        except Exception as e:
+            log.warning("Failed to index candidate in vector store: %s", e)
+
+    # Link to job if specified
+    if job_id:
+        cj_existing = db.get_candidate_job(candidate_id, job_id)
+        if not cj_existing:
+            now = datetime.now().isoformat()
+            db.insert_candidate_job({
+                "id": uuid.uuid4().hex[:8],
+                "candidate_id": candidate_id,
+                "job_id": job_id,
+                "match_score": 0.0,
+                "created_at": now,
+                "updated_at": now,
+            })
+
+    return db.get_candidate(candidate_id)  # type: ignore[return-value]
 
 
 def _guess_name(filename: str) -> str:

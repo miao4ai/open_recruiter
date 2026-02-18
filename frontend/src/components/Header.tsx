@@ -1,5 +1,10 @@
 import { useLocation } from "react-router-dom";
-import { LogOut } from "lucide-react";
+import AppBar from "@mui/material/AppBar";
+import Toolbar from "@mui/material/Toolbar";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import Box from "@mui/material/Box";
+import LogoutOutlined from "@mui/icons-material/LogoutOutlined";
 import type { User } from "../types";
 
 const PAGE_TITLES: Record<string, string> = {
@@ -22,18 +27,26 @@ export default function Header({ user, onLogout }: Props) {
     (pathname.startsWith("/candidates/") ? "Candidate Detail" : "Open Recruiter");
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-6">
-      <h1 className="text-lg font-semibold text-gray-900">{title}</h1>
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-gray-500">{user.email}</span>
-        <button
-          onClick={onLogout}
-          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-        >
-          <LogOut className="h-4 w-4" />
-          Logout
-        </button>
-      </div>
-    </header>
+    <AppBar position="static" color="inherit" elevation={0} sx={{ borderBottom: 1, borderColor: "divider" }}>
+      <Toolbar sx={{ minHeight: 56 }}>
+        <Typography variant="h6" fontWeight={600} sx={{ flexGrow: 1 }}>
+          {title}
+        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Typography variant="body2" color="text.secondary">
+            {user.email}
+          </Typography>
+          <Button
+            size="small"
+            color="inherit"
+            startIcon={<LogoutOutlined fontSize="small" />}
+            onClick={onLogout}
+            sx={{ color: "text.secondary" }}
+          >
+            Logout
+          </Button>
+        </Box>
+      </Toolbar>
+    </AppBar>
   );
 }

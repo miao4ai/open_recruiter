@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Route, Routes } from "react-router-dom";
+import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import Dashboard from "./pages/Dashboard";
@@ -36,9 +38,9 @@ export default function App() {
 
   if (checking) {
     return (
-      <div className="flex h-screen items-center justify-center text-gray-400">
-        Loading...
-      </div>
+      <Box sx={{ display: "flex", height: "100vh", alignItems: "center", justifyContent: "center" }}>
+        <CircularProgress />
+      </Box>
     );
   }
 
@@ -47,11 +49,11 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, overflow: "hidden" }}>
         <Header user={user} onLogout={handleLogout} />
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
+        <Box component="main" sx={{ flexGrow: 1, overflowY: "auto", bgcolor: "background.default", p: 3 }}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/jobs" element={<Jobs />} />
@@ -61,8 +63,8 @@ export default function App() {
             <Route path="/chat" element={<Chat />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
-        </main>
-      </div>
-    </div>
+        </Box>
+      </Box>
+    </Box>
   );
 }

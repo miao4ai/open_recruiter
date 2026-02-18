@@ -1,5 +1,22 @@
 import { useCallback, useMemo } from "react";
-import { Briefcase, Users, Mail, Calendar, Plus, Upload, Send } from "lucide-react";
+import {
+  WorkOutline,
+  PeopleOutline,
+  MailOutline,
+  CalendarTodayOutlined,
+  AddOutlined,
+  UploadOutlined,
+  SendOutlined,
+} from "@mui/icons-material";
+import {
+  Box,
+  Paper,
+  Typography,
+  Card,
+  CardContent,
+  Avatar,
+  Grid2 as Grid,
+} from "@mui/material";
 import { useApi } from "../hooks/useApi";
 import { listJobs, listCandidates, listEmails } from "../lib/api";
 import type { Job, Candidate, Email, CandidateStatus } from "../types";
@@ -17,22 +34,51 @@ function StatCard({
   color: string;
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className={`rounded-lg p-2.5 ${color}`}>
-        <Icon className="h-5 w-5 text-white" />
-      </div>
-      <div>
-        <p className="text-sm text-gray-500">{label}</p>
-        <p className="text-2xl font-semibold">{value}</p>
-      </div>
-    </div>
+    <Card
+      variant="outlined"
+      sx={{
+        borderRadius: 3,
+        boxShadow: "0 1px 2px 0 rgba(0,0,0,0.05)",
+      }}
+    >
+      <CardContent
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          p: 2.5,
+          "&:last-child": { pb: 2.5 },
+        }}
+      >
+        <Avatar
+          sx={{
+            bgcolor: color,
+            width: 40,
+            height: 40,
+            borderRadius: 2,
+          }}
+          variant="rounded"
+        >
+          <Icon sx={{ fontSize: 20, color: "#fff" }} />
+        </Avatar>
+        <Box>
+          <Typography variant="body2" sx={{ color: "grey.500" }}>
+            {label}
+          </Typography>
+          <Typography variant="h5" sx={{ fontWeight: 600 }}>
+            {value}
+          </Typography>
+        </Box>
+      </CardContent>
+    </Card>
   );
 }
 
 type ActivityItem = {
   type: "job" | "candidate" | "email";
   icon: React.ElementType;
-  iconColor: string;
+  iconBg: string;
+  iconFg: string;
   title: string;
   detail: string;
   time: string;
@@ -53,8 +99,9 @@ function RecentActivity({
     for (const j of jobs ?? []) {
       all.push({
         type: "job",
-        icon: Plus,
-        iconColor: "bg-blue-100 text-blue-600",
+        icon: AddOutlined,
+        iconBg: "#dbeafe",
+        iconFg: "#2563eb",
         title: `Job created: ${j.title}`,
         detail: j.company || "",
         time: j.created_at,
@@ -64,10 +111,13 @@ function RecentActivity({
     for (const c of candidates ?? []) {
       all.push({
         type: "candidate",
-        icon: Upload,
-        iconColor: "bg-emerald-100 text-emerald-600",
+        icon: UploadOutlined,
+        iconBg: "#d1fae5",
+        iconFg: "#059669",
         title: `Candidate added: ${c.name || "Unnamed"}`,
-        detail: c.current_title ? `${c.current_title}${c.current_company ? ` at ${c.current_company}` : ""}` : "",
+        detail: c.current_title
+          ? `${c.current_title}${c.current_company ? ` at ${c.current_company}` : ""}`
+          : "",
         time: c.created_at,
       });
     }
@@ -76,10 +126,9 @@ function RecentActivity({
       const status = e.sent ? "sent" : e.approved ? "approved" : "drafted";
       all.push({
         type: "email",
-        icon: e.sent ? Send : Mail,
-        iconColor: e.sent
-          ? "bg-green-100 text-green-600"
-          : "bg-amber-100 text-amber-600",
+        icon: e.sent ? SendOutlined : MailOutline,
+        iconBg: e.sent ? "#dcfce7" : "#fef3c7",
+        iconFg: e.sent ? "#16a34a" : "#d97706",
         title: `Email ${status}: ${e.subject}`,
         detail: `To: ${e.to_email}${e.candidate_name ? ` (${e.candidate_name})` : ""}`,
         time: e.sent_at || e.created_at,
@@ -93,33 +142,92 @@ function RecentActivity({
 
   if (items.length === 0) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-400">
-        No activity yet. Create a job and add candidates to get started.
-      </div>
+      <Paper
+        variant="outlined"
+        sx={{
+          borderRadius: 3,
+          p: 3,
+          textAlign: "center",
+        }}
+      >
+        <Typography variant="body2" sx={{ color: "grey.400" }}>
+          No activity yet. Create a job and add candidates to get started.
+        </Typography>
+      </Paper>
     );
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white divide-y divide-gray-100">
+    <Paper
+      variant="outlined"
+      sx={{
+        borderRadius: 3,
+        overflow: "hidden",
+      }}
+    >
       {items.map((item, i) => (
-        <div key={i} className="flex items-start gap-3 px-4 py-3">
-          <div className={`mt-0.5 rounded-lg p-1.5 ${item.iconColor}`}>
-            <item.icon className="h-4 w-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-gray-800 truncate">
+        <Box
+          key={i}
+          sx={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 1.5,
+            px: 2,
+            py: 1.5,
+            borderBottom: i < items.length - 1 ? "1px solid" : "none",
+            borderColor: "grey.100",
+          }}
+        >
+          <Avatar
+            variant="rounded"
+            sx={{
+              mt: 0.25,
+              width: 28,
+              height: 28,
+              borderRadius: 2,
+              bgcolor: item.iconBg,
+            }}
+          >
+            <item.icon sx={{ fontSize: 16, color: item.iconFg }} />
+          </Avatar>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 500,
+                color: "grey.800",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
               {item.title}
-            </p>
+            </Typography>
             {item.detail && (
-              <p className="text-xs text-gray-500 truncate">{item.detail}</p>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "grey.500",
+                  display: "block",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {item.detail}
+              </Typography>
             )}
-          </div>
-          <time className="shrink-0 text-xs text-gray-400">
+          </Box>
+          <Typography
+            component="time"
+            variant="caption"
+            sx={{ flexShrink: 0, color: "grey.400" }}
+          >
             {formatRelativeTime(item.time)}
-          </time>
-        </div>
+          </Typography>
+        </Box>
       ))}
-    </div>
+    </Paper>
   );
 }
 
@@ -160,79 +268,142 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
       {/* Stat cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          icon={Briefcase}
-          label="Active Jobs"
-          value={totalJobs}
-          color="bg-blue-500"
-        />
-        <StatCard
-          icon={Users}
-          label="Candidates"
-          value={totalCandidates}
-          color="bg-emerald-500"
-        />
-        <StatCard
-          icon={Mail}
-          label="Pending Emails"
-          value={pendingEmails}
-          color="bg-amber-500"
-        />
-        <StatCard
-          icon={Calendar}
-          label="Interviews"
-          value={interviews}
-          color="bg-purple-500"
-        />
-      </div>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+          <StatCard
+            icon={WorkOutline}
+            label="Active Jobs"
+            value={totalJobs}
+            color="#3b82f6"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+          <StatCard
+            icon={PeopleOutline}
+            label="Candidates"
+            value={totalCandidates}
+            color="#10b981"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+          <StatCard
+            icon={MailOutline}
+            label="Pending Emails"
+            value={pendingEmails}
+            color="#f59e0b"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+          <StatCard
+            icon={CalendarTodayOutlined}
+            label="Interviews"
+            value={interviews}
+            color="#8b5cf6"
+          />
+        </Grid>
+      </Grid>
 
       {/* Pipeline Kanban */}
-      <div>
-        <h2 className="mb-4 text-lg font-semibold">Pipeline</h2>
-        <div className="flex gap-3 overflow-x-auto pb-4">
+      <Box>
+        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+          Pipeline
+        </Typography>
+        <Box
+          sx={{
+            display: "flex",
+            gap: 1.5,
+            overflowX: "auto",
+            pb: 2,
+          }}
+        >
           {PIPELINE_COLUMNS.map((col) => (
-            <div
+            <Paper
               key={col.key}
-              className="w-52 shrink-0 rounded-lg border border-gray-200 bg-white"
+              variant="outlined"
+              sx={{
+                width: 208,
+                flexShrink: 0,
+                borderRadius: 2,
+              }}
             >
-              <div className="border-b border-gray-100 px-3 py-2">
-                <h3 className="text-sm font-medium text-gray-700">
+              <Box
+                sx={{
+                  borderBottom: "1px solid",
+                  borderColor: "grey.100",
+                  px: 1.5,
+                  py: 1,
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  sx={{ fontWeight: 500, color: "grey.700" }}
+                >
                   {col.label}
-                  <span className="ml-1.5 text-xs text-gray-400">
-                    {grouped[col.key]?.length ?? 0}
-                  </span>
-                </h3>
-              </div>
-              <div className="space-y-2 p-2">
-                {grouped[col.key]?.map((c) => (
-                  <div
-                    key={c.id}
-                    className="rounded-md border border-gray-100 bg-gray-50 p-2 text-sm"
+                  <Typography
+                    component="span"
+                    variant="caption"
+                    sx={{ ml: 0.75, color: "grey.400" }}
                   >
-                    <p className="font-medium">{c.name || "Unnamed"}</p>
-                    <p className="text-xs text-gray-500">
-                      Score: {Math.round(c.match_score * 100)}%
-                    </p>
-                  </div>
-                )) ?? (
-                  <p className="px-2 py-4 text-center text-xs text-gray-400">
+                    {grouped[col.key]?.length ?? 0}
+                  </Typography>
+                </Typography>
+              </Box>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1,
+                  p: 1,
+                }}
+              >
+                {grouped[col.key]?.length ? (
+                  grouped[col.key]?.map((c) => (
+                    <Paper
+                      key={c.id}
+                      variant="outlined"
+                      sx={{
+                        borderColor: "grey.100",
+                        bgcolor: "grey.50",
+                        p: 1,
+                        borderRadius: 1.5,
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {c.name || "Unnamed"}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "grey.500" }}>
+                        Score: {c.match_score ? `${Math.round(c.match_score * 100)}%` : "\u2014"}
+                      </Typography>
+                    </Paper>
+                  ))
+                ) : (
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      px: 1,
+                      py: 2,
+                      textAlign: "center",
+                      color: "grey.400",
+                    }}
+                  >
                     No candidates
-                  </p>
+                  </Typography>
                 )}
-              </div>
-            </div>
+              </Box>
+            </Paper>
           ))}
-        </div>
-      </div>
+        </Box>
+      </Box>
 
       {/* Recent Activity */}
-      <div>
-        <h2 className="mb-3 text-lg font-semibold">Recent Activity</h2>
+      <Box>
+        <Typography variant="h6" sx={{ fontWeight: 600, mb: 1.5 }}>
+          Recent Activity
+        </Typography>
         <RecentActivity jobs={jobs} candidates={candidates} emails={emails} />
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }

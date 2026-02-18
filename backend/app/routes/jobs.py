@@ -20,7 +20,7 @@ MATCH_THRESHOLD = 0.30  # minimum cosine similarity to count as a match
 @router.get("")
 async def list_jobs_route(_user: dict = Depends(get_current_user)):
     jobs = db.list_jobs()
-    # Enrich with vector-based match counts (how many candidates match this job)
+    # Enrich with vector-based match counts
     for j in jobs:
         try:
             rankings = vectorstore.search_candidates_for_job(
@@ -72,29 +72,28 @@ async def get_job_route(job_id: str, _user: dict = Depends(get_current_user)):
 
 @router.get("/{job_id}/ranked-candidates")
 async def ranked_candidates_route(job_id: str, _user: dict = Depends(get_current_user)):
-    """Return all candidates ranked by vector similarity to this job."""
+    """Return candidates linked to this job, ranked by match score."""
     job = db.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    # Get candidates linked to this job (already includes match_score from candidate_jobs)
+    candidates = db.list_candidates(job_id=job_id)
+
+    # Also enrich with vector scores for any that haven't been LLM-matched yet
     try:
         rankings = vectorstore.search_candidates_for_job(
             job_id=job_id, n_results=200,
         )
+        score_map = {r["candidate_id"]: r["score"] for r in rankings}
+        for c in candidates:
+            if c.get("match_score", 0.0) == 0.0:
+                c["match_score"] = score_map.get(c["id"], 0.0)
     except Exception as e:
         log.warning("Vector search failed for job %s: %s", job_id, e)
-        rankings = []
 
-    # Build a score lookup from vector results
-    score_map = {r["candidate_id"]: r["score"] for r in rankings}
-
-    # Get all candidates, enrich with scores, sort by score desc
-    all_candidates = db.list_candidates()
-    for c in all_candidates:
-        c["match_score"] = score_map.get(c["id"], 0.0)
-
-    all_candidates.sort(key=lambda c: c["match_score"], reverse=True)
-    return all_candidates
+    candidates.sort(key=lambda c: c["match_score"], reverse=True)
+    return candidates
 
 
 @router.put("/{job_id}")
@@ -137,7 +136,7 @@ async def delete_job_route(job_id: str, _user: dict = Depends(get_current_user))
     try:
         vectorstore.remove_job(job_id)
     except Exception:
-        pass  # Non-fatal: embedding cleanup is best-effort
+        pass  # Non-fatal
 
     return {"status": "deleted"}
 
@@ -155,7 +154,7 @@ def _auto_match_candidates_for_job(job_id: str) -> None:
 
     for c in candidates:
         score = score_map.get(c["id"], 0.0)
-        db.update_candidate(c["id"], {
+        db.update_candidate_job(c["id"], job_id, {
             "match_score": score,
             "updated_at": datetime.now().isoformat(),
         })
