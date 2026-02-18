@@ -247,9 +247,9 @@ prompt_read() {
     local result=""
 
     if [[ -n "$default_val" ]]; then
-        echo -ne "  ${CYAN}?${NC} ${prompt_text} ${MUTED}($default_val)${NC}: "
+        echo -ne "  ${CYAN}?${NC} ${prompt_text} ${MUTED}($default_val)${NC}: " >&2
     else
-        echo -ne "  ${CYAN}?${NC} ${prompt_text}: "
+        echo -ne "  ${CYAN}?${NC} ${prompt_text}: " >&2
     fi
 
     read -r result </dev/tty
@@ -263,9 +263,9 @@ prompt_secret() {
     local prompt_text="$1"
     local result=""
 
-    echo -ne "  ${CYAN}?${NC} ${prompt_text}: "
+    echo -ne "  ${CYAN}?${NC} ${prompt_text}: " >&2
     read -rs result </dev/tty
-    echo ""
+    echo "" >&2
     echo "$result"
 }
 
@@ -273,26 +273,73 @@ prompt_choice() {
     local prompt_text="$1"
     shift
     local options=("$@")
+    local count=${#options[@]}
+    local selected=0
 
-    echo -e "  ${CYAN}?${NC} ${prompt_text}"
-    local i=1
-    for opt in "${options[@]}"; do
-        if [[ $i -eq 1 ]]; then
-            echo -e "    ${ACCENT}${BOLD}$i)${NC} $opt  ${MUTED}(default)${NC}"
+    echo -e "  ${CYAN}?${NC} ${prompt_text}" >&2
+    echo -e "    ${MUTED}Use arrow keys to move, Enter to select${NC}" >&2
+
+    # Hide cursor
+    printf '\033[?25l' >/dev/tty
+
+    # Draw options
+    local i
+    for ((i=0; i<count; i++)); do
+        if [[ $i -eq $selected ]]; then
+            echo -e "    ${ACCENT}${BOLD}> ${options[$i]}${NC}" >/dev/tty
         else
-            echo -e "    ${MUTED}$i)${NC} $opt"
+            echo -e "      ${MUTED}${options[$i]}${NC}" >/dev/tty
         fi
-        ((i++))
     done
 
-    echo -ne "  ${MUTED}Enter choice [1-${#options[@]}]:${NC} "
-    local choice
-    read -r choice </dev/tty
+    # Key loop
+    while true; do
+        # Read one char
+        IFS= read -rsn1 key </dev/tty
 
-    if [[ -z "$choice" ]]; then
-        choice=1
-    fi
-    echo "$choice"
+        if [[ "$key" == $'\x1b' ]]; then
+            # Read the rest of the escape sequence (e.g. [A, [B, OA, OB)
+            IFS= read -rsn2 seq </dev/tty
+            case "$seq" in
+                "[A"|"OA")  ((selected > 0)) && ((selected--)) ;;
+                "[B"|"OB")  ((selected < count - 1)) && ((selected++)) ;;
+            esac
+        elif [[ "$key" == "" ]]; then
+            break
+        elif [[ "$key" =~ ^[1-9]$ ]] && [[ "$key" -le "$count" ]]; then
+            selected=$((key - 1))
+            break
+        else
+            continue
+        fi
+
+        # Move cursor up and redraw
+        printf "\033[${count}A\r" >/dev/tty
+        for ((i=0; i<count; i++)); do
+            printf "\033[2K" >/dev/tty
+            if [[ $i -eq $selected ]]; then
+                echo -e "    ${ACCENT}${BOLD}> ${options[$i]}${NC}" >/dev/tty
+            else
+                echo -e "      ${MUTED}${options[$i]}${NC}" >/dev/tty
+            fi
+        done
+    done
+
+    # Final redraw: highlight the chosen option in green
+    printf "\033[${count}A\r" >/dev/tty
+    for ((i=0; i<count; i++)); do
+        printf "\033[2K" >/dev/tty
+        if [[ $i -eq $selected ]]; then
+            echo -e "    ${SUCCESS}${BOLD}> ${options[$i]}${NC}" >/dev/tty
+        else
+            echo -e "      ${MUTED}${options[$i]}${NC}" >/dev/tty
+        fi
+    done
+
+    # Show cursor
+    printf '\033[?25h' >/dev/tty
+
+    echo $((selected + 1))
 }
 
 prompt_yn() {
