@@ -105,6 +105,7 @@ def _run_stages(
     has_key = (
         (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
         or (cfg.llm_provider == "openai" and cfg.openai_api_key)
+        or (cfg.llm_provider == "gemini" and cfg.gemini_api_key)
     )
     if has_key:
         try:
@@ -148,6 +149,22 @@ def _run_stages(
             "updated_at": datetime.now().isoformat(),
         })
         log.info("Updated existing candidate %s (dedup by identity)", candidate_id)
+
+        # Re-index in vector store so embeddings reflect updated profile
+        try:
+            updated = db.get_candidate(candidate_id)
+            if updated:
+                embed_text = vectorstore.build_candidate_embed_text(updated)
+                vectorstore.index_candidate(
+                    candidate_id=candidate_id,
+                    text=embed_text,
+                    metadata={
+                        "name": updated.get("name", ""),
+                        "current_title": updated.get("current_title", ""),
+                    },
+                )
+        except Exception as e:
+            log.warning("Re-index failed for dedup candidate %s: %s", candidate_id, e)
     else:
         candidate = Candidate(
             name=parsed_name,
