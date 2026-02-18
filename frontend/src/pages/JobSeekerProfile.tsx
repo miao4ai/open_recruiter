@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Save, Upload, FileText, Loader2, Check, X, Plus,
-} from "lucide-react";
+  SaveOutlined, UploadOutlined, DescriptionOutlined, CheckOutlined, CloseOutlined, AddOutlined,
+} from "@mui/icons-material";
+import { CircularProgress } from "@mui/material";
 import { useApi } from "../hooks/useApi";
 import { getMyProfile, updateMyProfile, uploadResumeForProfile } from "../lib/api";
 import type { JobSeekerProfile } from "../types";
@@ -111,7 +112,7 @@ export default function JobSeekerProfilePage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-pink-400" />
+        <CircularProgress size={24} sx={{ color: 'rgb(244 114 182)' }} />
       </div>
     );
   }
@@ -142,9 +143,9 @@ export default function JobSeekerProfilePage() {
               hover:bg-pink-100 disabled:opacity-50"
           >
             {uploading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <CircularProgress size={16} />
             ) : (
-              <Upload className="h-4 w-4" />
+              <UploadOutlined className="h-4 w-4" />
             )}
             {uploading
               ? "Parsing..."
@@ -159,11 +160,11 @@ export default function JobSeekerProfilePage() {
               text-sm font-medium text-white hover:bg-pink-600 disabled:opacity-50"
           >
             {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <CircularProgress size={16} />
             ) : saved ? (
-              <Check className="h-4 w-4" />
+              <CheckOutlined className="h-4 w-4" />
             ) : (
-              <Save className="h-4 w-4" />
+              <SaveOutlined className="h-4 w-4" />
             )}
             {saving ? "Saving..." : saved ? "Saved!" : "Save Changes"}
           </button>
@@ -173,7 +174,7 @@ export default function JobSeekerProfilePage() {
       {/* Empty state */}
       {!hasProfile && (
         <div className="rounded-xl border border-pink-200 bg-pink-50 p-6 text-center">
-          <FileText className="mx-auto h-10 w-10 text-pink-400" />
+          <DescriptionOutlined className="mx-auto h-10 w-10 text-pink-400" />
           <h2 className="mt-3 text-lg font-semibold text-gray-700">
             No profile yet
           </h2>
@@ -256,7 +257,7 @@ export default function JobSeekerProfilePage() {
                 onClick={() => handleRemoveSkill(i)}
                 className="ml-0.5 rounded-full p-0.5 hover:bg-pink-200"
               >
-                <X className="h-3 w-3" />
+                <CloseOutlined className="h-3 w-3" />
               </button>
             </span>
           ))}
@@ -281,7 +282,7 @@ export default function JobSeekerProfilePage() {
             className="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-2
               text-sm font-medium text-gray-600 hover:bg-gray-200 disabled:opacity-50"
           >
-            <Plus className="h-4 w-4" />
+            <AddOutlined className="h-4 w-4" />
             Add
           </button>
         </div>

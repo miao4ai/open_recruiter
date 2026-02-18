@@ -43,6 +43,7 @@ import {
   sendEmail,
 } from "../lib/api";
 import type { Job, Candidate } from "../types";
+import SemanticSearchBar, { type SearchResult } from "../components/SemanticSearchBar";
 
 export default function Jobs() {
   const { data: jobs, refresh } = useApi(useCallback(() => listJobs(), []));
@@ -54,6 +55,15 @@ export default function Jobs() {
   const [rawText, setRawText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [emailJob, setEmailJob] = useState<Job | null>(null);
+  const [searchResults, setSearchResults] = useState<SearchResult<Job>[] | null>(null);
+
+  const handleSearchResults = useCallback((results: SearchResult<Job>[] | null) => {
+    setSearchResults(results);
+  }, []);
+
+  const displayJobs = searchResults
+    ? searchResults.map((r) => ({ ...r.record, _score: r.similarity_score }))
+    : jobs;
 
   const resetForm = () => {
     setTitle("");
@@ -134,6 +144,13 @@ export default function Jobs() {
           </Button>
         )}
       </Box>
+
+      {/* Semantic search */}
+      <SemanticSearchBar<Job>
+        collection="jobs"
+        placeholder="Search jobs — try 'senior React developer' or 'machine learning startup'..."
+        onResults={handleSearchResults}
+      />
 
       {/* Create / Edit form */}
       {isFormOpen && (
@@ -223,7 +240,7 @@ export default function Jobs() {
 
       {/* Job list */}
       <Grid container spacing={1.5}>
-        {jobs?.map((job) => (
+        {displayJobs?.map((job) => (
           <Grid key={job.id} size={{ xs: 12, sm: 6, lg: 4 }}>
             <Card
               variant="outlined"
@@ -237,9 +254,24 @@ export default function Jobs() {
               <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
                 <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
                   <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "grey.900" }}>
-                      {job.title || "Untitled"}
-                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "grey.900" }}>
+                        {job.title || "Untitled"}
+                      </Typography>
+                      {(job as any)._score != null && (
+                        <Chip
+                          label={`${Math.round((job as any)._score * 100)}% match`}
+                          size="small"
+                          sx={{
+                            fontSize: 10,
+                            height: 20,
+                            background: "linear-gradient(to right, #3b82f6, #8b5cf6)",
+                            color: "white",
+                            fontWeight: 600,
+                          }}
+                        />
+                      )}
+                    </Box>
                     {job.company && (
                       <Typography variant="body2" sx={{ mt: 0.25, color: "grey.600" }}>
                         {job.company}
@@ -314,7 +346,7 @@ export default function Jobs() {
         ))}
       </Grid>
 
-      {(!jobs || jobs.length === 0) && !showForm && (
+      {(!displayJobs || displayJobs.length === 0) && !showForm && (
         <Paper
           variant="outlined"
           sx={{
@@ -326,7 +358,9 @@ export default function Jobs() {
         >
           <WorkOutline sx={{ fontSize: 40, color: "grey.400", mx: "auto", display: "block" }} />
           <Typography variant="body2" sx={{ mt: 1.5, color: "grey.600" }}>
-            No jobs yet. Click <strong>New Job</strong> to add one.
+            {searchResults
+              ? "No jobs match your search."
+              : <>No jobs yet. Click <strong>New Job</strong> to add one.</>}
           </Typography>
         </Paper>
       )}

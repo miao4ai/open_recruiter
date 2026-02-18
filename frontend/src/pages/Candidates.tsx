@@ -27,7 +27,8 @@ import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import { useApi } from "../hooks/useApi";
 import { listCandidates, listJobs, uploadResume, deleteCandidate } from "../lib/api";
-import type { CandidateStatus } from "../types";
+import type { Candidate, CandidateStatus } from "../types";
+import SemanticSearchBar, { type SearchResult } from "../components/SemanticSearchBar";
 
 const UPLOAD_STEPS = [
   "Uploading file",
@@ -405,6 +406,15 @@ export default function Candidates() {
   const [uploadDone, setUploadDone] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState("");
   const [uploadError, setUploadError] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult<Candidate>[] | null>(null);
+
+  const handleSearchResults = useCallback((results: SearchResult<Candidate>[] | null) => {
+    setSearchResults(results);
+  }, []);
+
+  const displayCandidates = searchResults
+    ? searchResults.map((r) => r.record)
+    : candidates;
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -600,11 +610,18 @@ export default function Candidates() {
         </Box>
       </Box>
 
+      {/* Semantic search */}
+      <SemanticSearchBar<Candidate>
+        collection="candidates"
+        placeholder="Search candidates — try 'Python backend with 5 years experience' or 'React developer'..."
+        onResults={handleSearchResults}
+      />
+
       {/* Data grid or empty state */}
-      {candidates && candidates.length > 0 ? (
+      {displayCandidates && displayCandidates.length > 0 ? (
         <Paper sx={{ width: "100%" }}>
           <DataGrid
-            rows={candidates ?? []}
+            rows={displayCandidates ?? []}
             columns={columns}
             getRowId={(row) => row.id}
             autoHeight
@@ -629,7 +646,9 @@ export default function Candidates() {
             sx={{ fontSize: 40, color: "grey.400", mx: "auto" }}
           />
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-            No candidates yet. Click <strong>Import Resume</strong> to add one.
+            {searchResults
+              ? "No candidates match your search."
+              : <>No candidates yet. Click <strong>Import Resume</strong> to add one.</>}
           </Typography>
         </Paper>
       )}

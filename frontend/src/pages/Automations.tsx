@@ -1,20 +1,20 @@
 import { useCallback, useState } from "react";
 import {
-  Zap,
-  Play,
-  Pencil,
-  Trash2,
-  Plus,
-  X,
-  Sparkles,
-  Mail,
-  Reply,
-  Trash,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Loader2,
-} from "lucide-react";
+  BoltOutlined,
+  PlayArrowOutlined,
+  EditOutlined,
+  DeleteOutline,
+  AddOutlined,
+  CloseOutlined,
+  AutoAwesomeOutlined,
+  MailOutline,
+  ReplyOutlined,
+  DeleteOutlined,
+  CheckCircleOutlined,
+  CancelOutlined,
+  AccessTimeOutlined,
+} from "@mui/icons-material";
+import { CircularProgress } from "@mui/material";
 import { useApi } from "../hooks/useApi";
 import {
   listAutomationRules,
@@ -34,12 +34,12 @@ import type {
 
 const RULE_TYPE_META: Record<
   AutomationRuleType,
-  { label: string; icon: typeof Sparkles; color: string }
+  { label: string; icon: React.ElementType; color: string }
 > = {
-  auto_match: { label: "Auto-Match", icon: Sparkles, color: "blue" },
-  inbox_scan: { label: "Inbox Scanner", icon: Mail, color: "green" },
-  auto_followup: { label: "Auto Follow-Up", icon: Reply, color: "amber" },
-  pipeline_cleanup: { label: "Pipeline Cleanup", icon: Trash, color: "red" },
+  auto_match: { label: "Auto-Match", icon: AutoAwesomeOutlined, color: "blue" },
+  inbox_scan: { label: "Inbox Scanner", icon: MailOutline, color: "green" },
+  auto_followup: { label: "Auto Follow-Up", icon: ReplyOutlined, color: "amber" },
+  pipeline_cleanup: { label: "Pipeline Cleanup", icon: DeleteOutlined, color: "red" },
 };
 
 function describeSchedule(rule: AutomationRule): string {
@@ -121,7 +121,7 @@ export default function Automations() {
     <div className="mx-auto max-w-3xl space-y-6">
       {/* Scheduler Status */}
       <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-3">
-        <Zap className="h-5 w-5 text-amber-500" />
+        <BoltOutlined className="h-5 w-5 text-amber-500" />
         <span className="font-semibold text-sm">Background Scheduler</span>
         <span
           className={`ml-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -150,7 +150,7 @@ export default function Automations() {
             onClick={() => setShowCreate(true)}
             className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
           >
-            <Plus className="h-3.5 w-3.5" /> Add Rule
+            <AddOutlined className="h-3.5 w-3.5" /> Add Rule
           </button>
         </div>
 
@@ -198,9 +198,9 @@ export default function Automations() {
                     className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
                   >
                     {runningId === rule.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <CircularProgress size={16} />
                     ) : (
-                      <Play className="h-4 w-4" />
+                      <PlayArrowOutlined className="h-4 w-4" />
                     )}
                   </button>
                   <button
@@ -208,14 +208,14 @@ export default function Automations() {
                     title="Edit"
                     className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                   >
-                    <Pencil className="h-4 w-4" />
+                    <EditOutlined className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(rule.id)}
                     title="Delete"
                     className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-red-500"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <DeleteOutline className="h-4 w-4" />
                   </button>
                   {/* Toggle */}
                   <button
@@ -287,10 +287,10 @@ export default function Automations() {
 
 function LogRow({ log }: { log: AutomationLog }) {
   const statusIcon = {
-    success: <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />,
-    error: <XCircle className="h-3.5 w-3.5 text-red-500" />,
-    running: <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />,
-    skipped: <Clock className="h-3.5 w-3.5 text-gray-400" />,
+    success: <CheckCircleOutlined className="h-3.5 w-3.5 text-green-500" />,
+    error: <CancelOutlined className="h-3.5 w-3.5 text-red-500" />,
+    running: <CircularProgress size={14} />,
+    skipped: <AccessTimeOutlined className="h-3.5 w-3.5 text-gray-400" />,
   }[log.status];
 
   return (
@@ -384,7 +384,7 @@ function RuleModal({
             {isEdit ? "Edit Rule" : "Create Rule"}
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="h-5 w-5" />
+            <CloseOutlined className="h-5 w-5" />
           </button>
         </div>
 

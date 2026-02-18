@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  X,
-  Clock,
-  User,
-  Briefcase,
-  Trash2,
-  Edit3,
-} from "lucide-react";
+  ChevronLeftOutlined,
+  ChevronRightOutlined,
+  AddOutlined,
+  CloseOutlined,
+  AccessTimeOutlined,
+  PersonOutline,
+  WorkOutline,
+  DeleteOutline,
+  EditOutlined,
+} from "@mui/icons-material";
 import { useApi } from "../hooks/useApi";
 import {
   listEvents,
@@ -162,7 +162,7 @@ function EventModal({
         <div className="flex items-center justify-between border-b px-6 py-4">
           <h3 className="text-lg font-semibold">{isEdit ? "Edit Event" : "New Event"}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="h-5 w-5" />
+            <CloseOutlined className="h-5 w-5" />
           </button>
         </div>
 
@@ -277,7 +277,7 @@ function EventModal({
                 onClick={onDelete}
                 className="flex items-center gap-1 text-sm text-red-500 hover:text-red-700"
               >
-                <Trash2 className="h-4 w-4" />
+                <DeleteOutline className="h-4 w-4" />
                 Delete
               </button>
             )}
@@ -334,7 +334,7 @@ function EventDetailModal({
               <h3 className="mt-1 text-lg font-semibold text-gray-900">{event.title}</h3>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-              <X className="h-5 w-5" />
+              <CloseOutlined className="h-5 w-5" />
             </button>
           </div>
         </div>
@@ -342,7 +342,7 @@ function EventDetailModal({
         {/* Body */}
         <div className="space-y-3 px-6 py-4">
           <div className="flex items-center gap-2 text-sm text-gray-600">
-            <Clock className="h-4 w-4" />
+            <AccessTimeOutlined className="h-4 w-4" />
             <span>
               {formatDateShort(event.start_time)} {formatTime(event.start_time)}
               {event.end_time ? ` — ${formatTime(event.end_time)}` : ""}
@@ -351,14 +351,14 @@ function EventDetailModal({
 
           {event.candidate_name && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <User className="h-4 w-4" />
+              <PersonOutline className="h-4 w-4" />
               <span>{event.candidate_name}</span>
             </div>
           )}
 
           {event.job_title && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Briefcase className="h-4 w-4" />
+              <WorkOutline className="h-4 w-4" />
               <span>{event.job_title}</span>
             </div>
           )}
@@ -376,14 +376,14 @@ function EventDetailModal({
             onClick={onDelete}
             className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
           >
-            <Trash2 className="h-4 w-4" />
+            <DeleteOutline className="h-4 w-4" />
             Delete
           </button>
           <button
             onClick={onEdit}
             className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
-            <Edit3 className="h-4 w-4" />
+            <EditOutlined className="h-4 w-4" />
             Edit
           </button>
         </div>
@@ -534,7 +534,7 @@ export default function Calendar() {
                 onClick={goPrev}
                 className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"
               >
-                <ChevronLeft className="h-5 w-5" />
+                <ChevronLeftOutlined className="h-5 w-5" />
               </button>
               <button
                 onClick={goToday}
@@ -546,7 +546,7 @@ export default function Calendar() {
                 onClick={goNext}
                 className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"
               >
-                <ChevronRight className="h-5 w-5" />
+                <ChevronRightOutlined className="h-5 w-5" />
               </button>
             </div>
           </div>
@@ -554,7 +554,7 @@ export default function Calendar() {
             onClick={() => { setCreateDate(todayStr); setShowCreateModal(true); }}
             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
-            <Plus className="h-4 w-4" />
+            <AddOutlined className="h-4 w-4" />
             New Event
           </button>
         </div>
@@ -644,12 +644,12 @@ export default function Calendar() {
                     <span className={`text-sm font-medium ${c.text}`}>{evt.title}</span>
                   </div>
                   <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
-                    <Clock className="h-3 w-3" />
+                    <AccessTimeOutlined className="h-3 w-3" />
                     {formatDateShort(evt.start_time)} {formatTime(evt.start_time)}
                   </div>
                   {evt.candidate_name && (
                     <div className="mt-0.5 flex items-center gap-1 text-xs text-gray-500">
-                      <User className="h-3 w-3" />
+                      <PersonOutline className="h-3 w-3" />
                       {evt.candidate_name}
                     </div>
                   )}

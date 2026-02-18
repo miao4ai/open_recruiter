@@ -1,11 +1,11 @@
 import { NavLink } from "react-router-dom";
-import { MessageSquare, UserCircle, Briefcase } from "lucide-react";
+import { ChatBubbleOutline, AccountCircleOutlined, WorkOutline } from "@mui/icons-material";
 import clsx from "clsx";
 
 const NAV_ITEMS = [
-  { to: "/", icon: MessageSquare, label: "Ai Chan" },
-  { to: "/jobs", icon: Briefcase, label: "My Jobs" },
-  { to: "/profile", icon: UserCircle, label: "My Profile" },
+  { to: "/", icon: ChatBubbleOutline, label: "Ai Chan" },
+  { to: "/jobs", icon: WorkOutline, label: "My Jobs" },
+  { to: "/profile", icon: AccountCircleOutlined, label: "My Profile" },
 ];
 
 export default function JobSeekerSidebar() {
@@ -39,7 +39,7 @@ export default function JobSeekerSidebar() {
               )
             }
           >
-            <Icon className="h-5 w-5" />
+            <Icon sx={{ fontSize: 20 }} />
             {label}
           </NavLink>
         ))}

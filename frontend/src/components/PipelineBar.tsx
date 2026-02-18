@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRightOutlined } from "@mui/icons-material";
 import type { Candidate, CandidateStatus } from "../types";
 import { PIPELINE_COLUMNS } from "../types";
 
@@ -43,7 +43,7 @@ export default function PipelineBar({ candidates, activeStage, onStageClick }: P
 
         return (
           <div key={col.key} className="flex items-center">
-            {i > 0 && <ChevronRight className="mx-0.5 h-3 w-3 text-gray-300" />}
+            {i > 0 && <ChevronRightOutlined sx={{ fontSize: 12 }} className="mx-0.5 text-gray-300" />}
             <button
               onClick={() => onStageClick(col.key)}
               className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${

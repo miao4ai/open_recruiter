@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Search, X, Sparkles, Loader2 } from "lucide-react";
+import { SearchOutlined, CloseOutlined, AutoAwesomeOutlined } from "@mui/icons-material";
+import { CircularProgress } from "@mui/material";
 import { searchByText } from "../lib/api";
 import type { Job, Candidate } from "../types";
 
@@ -104,10 +105,11 @@ export default function SemanticSearchBar<T extends Job | Candidate>({
         {/* Search / loading icon */}
         <div className="flex-shrink-0">
           {searching ? (
-            <Loader2 className="h-4.5 w-4.5 animate-spin text-blue-500" />
+            <CircularProgress size={18} className="text-blue-500" />
           ) : (
-            <Search
-              className={`h-4.5 w-4.5 transition-colors ${
+            <SearchOutlined
+              sx={{ fontSize: 18 }}
+              className={`transition-colors ${
                 isActive ? "text-blue-500" : "text-gray-400"
               }`}
             />
@@ -130,7 +132,7 @@ export default function SemanticSearchBar<T extends Job | Candidate>({
         <div className="flex flex-shrink-0 items-center gap-1.5">
           {isActive && resultCount !== null && !searching && (
             <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
-              <Sparkles className="h-3 w-3" />
+              <AutoAwesomeOutlined sx={{ fontSize: 12 }} />
               {resultCount} found
             </span>
           )}
@@ -139,7 +141,7 @@ export default function SemanticSearchBar<T extends Job | Candidate>({
               onClick={clear}
               className="rounded-md p-0.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
             >
-              <X className="h-4 w-4" />
+              <CloseOutlined sx={{ fontSize: 16 }} />
             </button>
           )}
         </div>

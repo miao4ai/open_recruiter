@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Send, Trash2, Loader2, Plus, MessageSquare, X, Upload,
-} from "lucide-react";
+  SendOutlined, DeleteOutline, AddOutlined, ChatBubbleOutlineOutlined, CloseOutlined, UploadOutlined,
+} from "@mui/icons-material";
+import { CircularProgress } from "@mui/material";
 import { useApi } from "../hooks/useApi";
 import {
   sendChatMessage,
@@ -74,7 +75,7 @@ function SessionSidebar({
           onClick={onNewChat}
           className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-pink-500 to-rose-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90"
         >
-          <Plus className="h-4 w-4" />
+          <AddOutlined className="h-4 w-4" />
           New Chat
         </button>
       </div>
@@ -95,7 +96,7 @@ function SessionSidebar({
                     : "text-gray-700 hover:bg-gray-50"
                 }`}
               >
-                <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+                <ChatBubbleOutlineOutlined className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{s.title}</p>
                   <p className="text-xs text-gray-400">{formatDate(s.updated_at)}</p>
@@ -105,7 +106,7 @@ function SessionSidebar({
                   className="mt-0.5 hidden shrink-0 rounded p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600 group-hover:block"
                   title="Delete session"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <CloseOutlined className="h-3.5 w-3.5" />
                 </button>
               </button>
             ))}
@@ -359,7 +360,7 @@ export default function JobSeekerHome() {
             onClick={handleClearAll}
             className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
           >
-            <Trash2 className="h-3.5 w-3.5" /> Clear All
+            <DeleteOutline className="h-3.5 w-3.5" /> Clear All
           </button>
         </div>
 
@@ -389,7 +390,7 @@ export default function JobSeekerHome() {
             <div className="flex gap-3">
               <AiChanAvatar />
               <div className="rounded-xl bg-gray-50 px-4 py-3">
-                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                <CircularProgress size={16} sx={{ color: 'rgb(156 163 175)' }} />
               </div>
             </div>
           )}
@@ -415,9 +416,9 @@ export default function JobSeekerHome() {
               title="Upload resume"
             >
               {uploading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <CircularProgress size={20} />
               ) : (
-                <Upload className="h-5 w-5" />
+                <UploadOutlined className="h-5 w-5" />
               )}
             </button>
             <textarea
@@ -433,7 +434,7 @@ export default function JobSeekerHome() {
               disabled={sending || !input.trim()}
               className="flex h-auto items-center justify-center rounded-xl bg-pink-500 px-4 text-white hover:bg-pink-600 disabled:opacity-50"
             >
-              <Send className="h-5 w-5" />
+              <SendOutlined className="h-5 w-5" />
             </button>
           </div>
           <p className="mt-1 text-center text-xs text-gray-400">

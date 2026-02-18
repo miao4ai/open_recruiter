@@ -8,22 +8,22 @@ import ListItemText from "@mui/material/ListItemText";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Divider from "@mui/material/Divider";
-import DashboardOutlined from "@mui/icons-material/DashboardOutlined";
+import ChatBubbleOutline from "@mui/icons-material/ChatBubbleOutline";
 import WorkOutline from "@mui/icons-material/WorkOutline";
 import PeopleOutline from "@mui/icons-material/PeopleOutline";
-import MailOutline from "@mui/icons-material/MailOutline";
-import ChatBubbleOutline from "@mui/icons-material/ChatBubbleOutline";
+import CalendarMonthOutlined from "@mui/icons-material/CalendarMonthOutlined";
+import BoltOutlined from "@mui/icons-material/BoltOutlined";
 import SettingsOutlined from "@mui/icons-material/SettingsOutlined";
 import SmartToyOutlined from "@mui/icons-material/SmartToyOutlined";
 
 const DRAWER_WIDTH = 240;
 
 const NAV_ITEMS = [
-  { to: "/", icon: <DashboardOutlined />, label: "Dashboard" },
+  { to: "/", icon: <ChatBubbleOutline />, label: "Erika Chan" },
   { to: "/jobs", icon: <WorkOutline />, label: "Jobs" },
   { to: "/candidates", icon: <PeopleOutline />, label: "Candidates" },
-  { to: "/outreach", icon: <MailOutline />, label: "Outreach" },
-  { to: "/chat", icon: <ChatBubbleOutline />, label: "Chat" },
+  { to: "/calendar", icon: <CalendarMonthOutlined />, label: "Calendar" },
+  { to: "/automations", icon: <BoltOutlined />, label: "Automations" },
   { to: "/settings", icon: <SettingsOutlined />, label: "Settings" },
 ];
 

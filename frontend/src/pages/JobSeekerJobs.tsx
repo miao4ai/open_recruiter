@@ -1,8 +1,9 @@
 import { useCallback, useRef, useState } from "react";
 import {
-  Search, Loader2, MapPin, Building2, DollarSign, Clock, Briefcase,
-  ChevronDown, ChevronUp, X, Upload, Trash2,
-} from "lucide-react";
+  SearchOutlined, LocationOnOutlined, BusinessOutlined, AttachMoneyOutlined, AccessTimeOutlined, WorkOutline,
+  ExpandMoreOutlined, ExpandLessOutlined, CloseOutlined, UploadOutlined, DeleteOutline,
+} from "@mui/icons-material";
+import { CircularProgress } from "@mui/material";
 import { useApi } from "../hooks/useApi";
 import { seekerListJobs, seekerUploadJd, seekerDeleteJob } from "../lib/api";
 import type { Job } from "../types";
@@ -74,9 +75,9 @@ export default function JobSeekerJobs() {
               text-sm font-medium text-white hover:bg-pink-600 disabled:opacity-50"
           >
             {uploading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <CircularProgress size={16} />
             ) : (
-              <Upload className="h-4 w-4" />
+              <UploadOutlined className="h-4 w-4" />
             )}
             {uploading ? "Parsing..." : "Upload JD"}
           </button>
@@ -86,7 +87,7 @@ export default function JobSeekerJobs() {
       {/* Search bar */}
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <SearchOutlined className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -100,7 +101,7 @@ export default function JobSeekerJobs() {
               onClick={handleClear}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
             >
-              <X className="h-4 w-4" />
+              <CloseOutlined className="h-4 w-4" />
             </button>
           )}
         </div>
@@ -116,7 +117,7 @@ export default function JobSeekerJobs() {
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-pink-400" />
+          <CircularProgress size={24} sx={{ color: 'rgb(244 114 182)' }} />
         </div>
       )}
 
@@ -148,7 +149,7 @@ export default function JobSeekerJobs() {
       {/* Empty state */}
       {!loading && jobs && jobs.length === 0 && (
         <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
-          <Briefcase className="mx-auto h-10 w-10 text-gray-300" />
+          <WorkOutline className="mx-auto h-10 w-10 text-gray-300" />
           <p className="mt-3 text-sm text-gray-500">
             {searchTerm
               ? "No jobs match your search. Try different keywords."
@@ -182,7 +183,7 @@ function JobCard({
       >
         {/* Icon */}
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-pink-50">
-          <Briefcase className="h-5 w-5 text-pink-500" />
+          <WorkOutline className="h-5 w-5 text-pink-500" />
         </div>
 
         {/* Info */}
@@ -194,32 +195,32 @@ function JobCard({
           <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
             {job.company && (
               <span className="inline-flex items-center gap-1">
-                <Building2 className="h-3.5 w-3.5" />
+                <BusinessOutlined className="h-3.5 w-3.5" />
                 {job.company}
               </span>
             )}
             {job.location && (
               <span className="inline-flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5" />
+                <LocationOnOutlined className="h-3.5 w-3.5" />
                 {job.location}
                 {job.remote && " (Remote)"}
               </span>
             )}
             {!job.location && job.remote && (
               <span className="inline-flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5" />
+                <LocationOnOutlined className="h-3.5 w-3.5" />
                 Remote
               </span>
             )}
             {job.salary_range && (
               <span className="inline-flex items-center gap-1">
-                <DollarSign className="h-3.5 w-3.5" />
+                <AttachMoneyOutlined className="h-3.5 w-3.5" />
                 {job.salary_range}
               </span>
             )}
             {job.posted_date && (
               <span className="inline-flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5" />
+                <AccessTimeOutlined className="h-3.5 w-3.5" />
                 {job.posted_date}
               </span>
             )}
@@ -253,12 +254,12 @@ function JobCard({
             className="text-gray-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
             title="Delete"
           >
-            <Trash2 className="h-4 w-4" />
+            <DeleteOutline className="h-4 w-4" />
           </span>
           {expanded ? (
-            <ChevronUp className="h-5 w-5 text-gray-400" />
+            <ExpandLessOutlined className="h-5 w-5 text-gray-400" />
           ) : (
-            <ChevronDown className="h-5 w-5 text-gray-400" />
+            <ExpandMoreOutlined className="h-5 w-5 text-gray-400" />
           )}
         </div>
       </button>

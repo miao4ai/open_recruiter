@@ -1,9 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  X, Users, Briefcase, Calendar, Mail, MapPin, Building2,
-  Star, Clock, ChevronRight, FileText, TrendingUp,
-  AlertTriangle, Bell, Sparkles, ArrowRight,
-} from "lucide-react";
+  CloseOutlined,
+  PeopleOutlined,
+  WorkOutline,
+  CalendarTodayOutlined,
+  MailOutline,
+  LocationOnOutlined,
+  BusinessOutlined,
+  Star as StarIcon,
+  AccessTimeOutlined,
+  ChevronRightOutlined,
+  DescriptionOutlined,
+  TrendingUpOutlined,
+  WarningAmberOutlined,
+  NotificationsOutlined,
+  AutoAwesomeOutlined,
+  ArrowForwardOutlined,
+} from "@mui/icons-material";
 import {
   DndContext,
   DragEndEvent,
@@ -50,7 +63,7 @@ export default function ContextPanel({ view, onClose, onViewCandidate, onViewJob
           onClick={onClose}
           className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
         >
-          <X className="h-4 w-4" />
+          <CloseOutlined sx={{ fontSize: 16 }} />
         </button>
       </div>
 
@@ -124,17 +137,17 @@ function BriefingView({
     <div className="space-y-4">
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-2">
-        <StatCard icon={<Users className="h-4 w-4" />} label="Candidates" value={stats.total} color="blue" />
-        <StatCard icon={<Briefcase className="h-4 w-4" />} label="Active Jobs" value={stats.jobCount} color="purple" />
-        <StatCard icon={<Mail className="h-4 w-4" />} label="Pending Emails" value={stats.pendingEmails.length} color="amber" />
-        <StatCard icon={<Calendar className="h-4 w-4" />} label="Today's Events" value={stats.todayEvents.length} color="green" />
+        <StatCard icon={<PeopleOutlined sx={{ fontSize: 16 }} />} label="Candidates" value={stats.total} color="blue" />
+        <StatCard icon={<WorkOutline sx={{ fontSize: 16 }} />} label="Active Jobs" value={stats.jobCount} color="purple" />
+        <StatCard icon={<MailOutline sx={{ fontSize: 16 }} />} label="Pending Emails" value={stats.pendingEmails.length} color="amber" />
+        <StatCard icon={<CalendarTodayOutlined sx={{ fontSize: 16 }} />} label="Today's Events" value={stats.todayEvents.length} color="green" />
       </div>
 
       {/* Proactive Notifications */}
       {notifications.length > 0 && (
         <div>
           <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            <Bell className="h-3.5 w-3.5" /> Alerts ({notifications.length})
+            <NotificationsOutlined sx={{ fontSize: 14 }} /> Alerts ({notifications.length})
           </h4>
           <div className="space-y-1.5">
             {notifications.slice(0, 5).map((n) => (
@@ -148,7 +161,7 @@ function BriefingView({
       {stats.contacted.length > 0 && (
         <div>
           <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            <Clock className="h-3.5 w-3.5" /> Awaiting Reply ({stats.contacted.length})
+            <AccessTimeOutlined sx={{ fontSize: 14 }} /> Awaiting Reply ({stats.contacted.length})
           </h4>
           <div className="space-y-1.5">
             {stats.contacted.slice(0, 5).map((c) => (
@@ -170,7 +183,7 @@ function BriefingView({
       {stats.todayEvents.length > 0 && (
         <div>
           <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            <Calendar className="h-3.5 w-3.5" /> Today
+            <CalendarTodayOutlined sx={{ fontSize: 14 }} /> Today
           </h4>
           <div className="space-y-1.5">
             {stats.todayEvents.map((e: CalendarEvent) => (
@@ -191,9 +204,9 @@ function BriefingView({
           onClick={() => onSendPrompt("Review the new candidates in the pipeline")}
           className="flex w-full items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 hover:bg-blue-100"
         >
-          <TrendingUp className="h-4 w-4" />
+          <TrendingUpOutlined sx={{ fontSize: 16 }} />
           {stats.newCount} new candidate{stats.newCount !== 1 ? "s" : ""} to review
-          <ChevronRight className="ml-auto h-4 w-4" />
+          <ChevronRightOutlined className="ml-auto" sx={{ fontSize: 16 }} />
         </button>
       )}
     </div>
@@ -235,7 +248,7 @@ function CandidateView({
           </span>
           {candidate.match_score > 0 && (
             <span className="flex items-center gap-1 text-xs text-amber-600">
-              <Star className="h-3 w-3" fill="currentColor" />
+              <StarIcon sx={{ fontSize: 12 }} />
               {Math.round(candidate.match_score * 100)}% match
             </span>
           )}
@@ -246,17 +259,17 @@ function CandidateView({
       <div className="space-y-1.5 text-sm">
         {candidate.email && (
           <div className="flex items-center gap-2 text-gray-600">
-            <Mail className="h-3.5 w-3.5 text-gray-400" /> {candidate.email}
+            <MailOutline className="text-gray-400" sx={{ fontSize: 14 }} /> {candidate.email}
           </div>
         )}
         {candidate.location && (
           <div className="flex items-center gap-2 text-gray-600">
-            <MapPin className="h-3.5 w-3.5 text-gray-400" /> {candidate.location}
+            <LocationOnOutlined className="text-gray-400" sx={{ fontSize: 14 }} /> {candidate.location}
           </div>
         )}
         {candidate.experience_years != null && (
           <div className="flex items-center gap-2 text-gray-600">
-            <Building2 className="h-3.5 w-3.5 text-gray-400" /> {candidate.experience_years}+ years
+            <BusinessOutlined className="text-gray-400" sx={{ fontSize: 14 }} /> {candidate.experience_years}+ years
           </div>
         )}
       </div>
@@ -279,7 +292,7 @@ function CandidateView({
       {candidate.resume_summary && (
         <div>
           <h5 className="mb-1 flex items-center gap-1 text-xs font-semibold text-gray-500">
-            <FileText className="h-3 w-3" /> Resume Summary
+            <DescriptionOutlined sx={{ fontSize: 12 }} /> Resume Summary
           </h5>
           <p className="text-xs leading-relaxed text-gray-600">{candidate.resume_summary}</p>
         </div>
@@ -389,10 +402,10 @@ function StageSelector({
         className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
       >
         <span className="flex items-center gap-1.5">
-          <ArrowRight className="h-3 w-3" />
+          <ArrowForwardOutlined sx={{ fontSize: 12 }} />
           Move to Stage...
         </span>
-        <ChevronRight className={`h-3 w-3 transition-transform ${open ? "rotate-90" : ""}`} />
+        <ChevronRightOutlined className={`transition-transform ${open ? "rotate-90" : ""}`} sx={{ fontSize: 12 }} />
       </button>
       {open && (
         <div className="absolute left-0 right-0 z-10 mt-1 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
@@ -440,7 +453,7 @@ function JobView({
         <p className="text-sm text-gray-500">{job.company}</p>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
           {job.location && (
-            <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {job.location}</span>
+            <span className="flex items-center gap-1"><LocationOnOutlined sx={{ fontSize: 12 }} /> {job.location}</span>
           )}
           {job.remote && <span className="rounded bg-green-50 px-1.5 py-0.5 text-green-700">Remote</span>}
           {job.salary_range && <span>{job.salary_range}</span>}
@@ -746,7 +759,7 @@ function EventsView({ onSendPrompt }: { onSendPrompt: (prompt: string) => void }
         </div>
       ) : (
         <div className="py-6 text-center">
-          <Calendar className="mx-auto h-8 w-8 text-gray-300" />
+          <CalendarTodayOutlined className="mx-auto text-gray-300" sx={{ fontSize: 32 }} />
           <p className="mt-2 text-sm text-gray-400">No upcoming events</p>
           <button
             onClick={() => onSendPrompt("Schedule an interview")}
@@ -924,13 +937,13 @@ function NotificationCard({
     success: "text-green-500",
     info: "text-blue-500",
   };
-  const SeverityIcon = n.severity === "warning" ? AlertTriangle
-    : n.severity === "success" ? Sparkles : Bell;
+  const SeverityIcon = n.severity === "warning" ? WarningAmberOutlined
+    : n.severity === "success" ? AutoAwesomeOutlined : NotificationsOutlined;
 
   return (
     <div className={`rounded-lg border p-2.5 ${severityStyles[n.severity]}`}>
       <div className="flex items-start gap-2">
-        <SeverityIcon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${iconStyles[n.severity]}`} />
+        <SeverityIcon className={`mt-0.5 shrink-0 ${iconStyles[n.severity]}`} sx={{ fontSize: 14 }} />
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-gray-800">{n.title}</p>
           <p className="mt-0.5 text-[10px] text-gray-500">{n.description}</p>

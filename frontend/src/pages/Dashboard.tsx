@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   WorkOutline,
   PeopleOutline,
@@ -7,6 +7,10 @@ import {
   AddOutlined,
   UploadOutlined,
   SendOutlined,
+  ChevronLeftOutlined,
+  ChevronRightOutlined,
+  AccessTimeOutlined,
+  PersonOutline,
 } from "@mui/icons-material";
 import {
   Box,
@@ -16,11 +20,16 @@ import {
   CardContent,
   Avatar,
   Grid2 as Grid,
+  IconButton,
+  Button,
 } from "@mui/material";
+import { Link } from "react-router-dom";
 import { useApi } from "../hooks/useApi";
-import { listJobs, listCandidates, listEmails } from "../lib/api";
-import type { Job, Candidate, Email, CandidateStatus } from "../types";
+import { listJobs, listCandidates, listEmails, listEvents } from "../lib/api";
+import type { Job, Candidate, Email, CalendarEvent, EventType } from "../types";
 import { PIPELINE_COLUMNS } from "../types";
+
+/* ── StatCard ──────────────────────────────────────────────────────────── */
 
 function StatCard({
   icon: Icon,
@@ -73,6 +82,8 @@ function StatCard({
     </Card>
   );
 }
+
+/* ── RecentActivity ────────────────────────────────────────────────────── */
 
 type ActivityItem = {
   type: "job" | "candidate" | "email";
@@ -231,6 +242,8 @@ function RecentActivity({
   );
 }
 
+/* ── Helper functions ──────────────────────────────────────────────────── */
+
 function formatRelativeTime(isoStr: string): string {
   if (!isoStr) return "";
   const date = new Date(isoStr);
@@ -247,12 +260,336 @@ function formatRelativeTime(isoStr: string): string {
   return date.toLocaleDateString();
 }
 
+function pad2(n: number) {
+  return n.toString().padStart(2, "0");
+}
+
+function toDateKey(d: Date) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function getMonday(d: Date) {
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.getFullYear(), d.getMonth(), diff);
+}
+
+function formatTimeShort(iso: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+/* ── Weekly Calendar Strip ─────────────────────────────────────────────── */
+
+const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const EVENT_DOT_COLORS: Record<EventType, string> = {
+  interview: "#a855f7",
+  follow_up: "#3b82f6",
+  offer: "#22c55e",
+  screening: "#f59e0b",
+  other: "#9ca3af",
+};
+
+const EVENT_PILL_COLORS: Record<
+  EventType,
+  { bg: string; border: string; text: string }
+> = {
+  interview: { bg: "#faf5ff", border: "#e9d5ff", text: "#7c3aed" },
+  follow_up: { bg: "#eff6ff", border: "#bfdbfe", text: "#2563eb" },
+  offer: { bg: "#f0fdf4", border: "#bbf7d0", text: "#16a34a" },
+  screening: { bg: "#fffbeb", border: "#fde68a", text: "#d97706" },
+  other: { bg: "#f9fafb", border: "#e5e7eb", text: "#4b5563" },
+};
+
+function WeeklyCalendar({ events }: { events: CalendarEvent[] | null }) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = toDateKey(today);
+
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  const weekDays = useMemo(() => {
+    const ref = new Date(today);
+    ref.setDate(ref.getDate() + weekOffset * 7);
+    const monday = getMonday(ref);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return d;
+    });
+  }, [weekOffset]);
+
+  const eventsByDate = useMemo(() => {
+    const map: Record<string, CalendarEvent[]> = {};
+    for (const e of events ?? []) {
+      const key = e.start_time.slice(0, 10);
+      if (!map[key]) map[key] = [];
+      map[key].push(e);
+    }
+    return map;
+  }, [events]);
+
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+
+  const selectedEvents = eventsByDate[selectedDate] ?? [];
+
+  const weekLabel = useMemo(() => {
+    const first = weekDays[0];
+    const last = weekDays[6];
+    const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+    return `${first.toLocaleDateString(undefined, opts)} \u2014 ${last.toLocaleDateString(undefined, opts)}`;
+  }, [weekDays]);
+
+  return (
+    <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
+      {/* Header */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottom: "1px solid",
+          borderColor: "grey.200",
+          px: 2,
+          py: 1.5,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, color: "grey.900" }}>
+            This Week
+          </Typography>
+          <Typography variant="caption" sx={{ color: "grey.400" }}>
+            {weekLabel}
+          </Typography>
+        </Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <IconButton
+            size="small"
+            onClick={() => setWeekOffset((o) => o - 1)}
+            sx={{ color: "grey.400" }}
+          >
+            <ChevronLeftOutlined fontSize="small" />
+          </IconButton>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => {
+              setWeekOffset(0);
+              setSelectedDate(todayStr);
+            }}
+            sx={{
+              minWidth: "auto",
+              px: 1,
+              py: 0.25,
+              fontSize: "0.75rem",
+              fontWeight: 500,
+              color: "grey.500",
+              borderColor: "grey.300",
+              "&:hover": { bgcolor: "grey.50" },
+            }}
+          >
+            Today
+          </Button>
+          <IconButton
+            size="small"
+            onClick={() => setWeekOffset((o) => o + 1)}
+            sx={{ color: "grey.400" }}
+          >
+            <ChevronRightOutlined fontSize="small" />
+          </IconButton>
+          <Typography
+            component={Link}
+            to="/calendar"
+            variant="caption"
+            sx={{
+              ml: 1,
+              color: "primary.main",
+              textDecoration: "none",
+              "&:hover": { color: "primary.dark" },
+            }}
+          >
+            Full calendar
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* Day strip */}
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: "repeat(7, 1fr)",
+          borderBottom: "1px solid",
+          borderColor: "grey.200",
+        }}
+      >
+        {weekDays.map((d) => {
+          const key = toDateKey(d);
+          const isToday = key === todayStr;
+          const isSelected = key === selectedDate;
+          const dayEvents = eventsByDate[key] ?? [];
+          return (
+            <Box
+              key={key}
+              component="button"
+              onClick={() => setSelectedDate(key)}
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 0.5,
+                py: 1.5,
+                border: "none",
+                cursor: "pointer",
+                bgcolor: isSelected ? "#eff6ff" : "transparent",
+                transition: "background-color 0.15s",
+                "&:hover": {
+                  bgcolor: isSelected ? "#eff6ff" : "grey.50",
+                },
+              }}
+            >
+              <Typography variant="caption" sx={{ color: "grey.400" }}>
+                {DAY_NAMES_SHORT[d.getDay()]}
+              </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  ...(isToday
+                    ? { bgcolor: "#2563eb", color: "#fff" }
+                    : isSelected
+                      ? { bgcolor: "#dbeafe", color: "#1d4ed8" }
+                      : { color: "grey.700" }),
+                }}
+              >
+                {d.getDate()}
+              </Box>
+              {/* Event dots */}
+              <Box sx={{ display: "flex", gap: "2px" }}>
+                {dayEvents.slice(0, 3).map((evt) => (
+                  <Box
+                    key={evt.id}
+                    sx={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      bgcolor:
+                        EVENT_DOT_COLORS[evt.event_type] ||
+                        EVENT_DOT_COLORS.other,
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+          );
+        })}
+      </Box>
+
+      {/* Selected day's events */}
+      <Box sx={{ px: 2, py: 1.5 }}>
+        {selectedEvents.length === 0 ? (
+          <Typography
+            variant="caption"
+            sx={{
+              display: "block",
+              py: 1,
+              textAlign: "center",
+              color: "grey.400",
+            }}
+          >
+            No events on this day
+          </Typography>
+        ) : (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            {selectedEvents.map((evt) => {
+              const c =
+                EVENT_PILL_COLORS[evt.event_type] || EVENT_PILL_COLORS.other;
+              return (
+                <Box
+                  key={evt.id}
+                  sx={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 1.5,
+                    borderRadius: 2,
+                    border: "1px solid",
+                    borderColor: c.border,
+                    bgcolor: c.bg,
+                    p: 1.25,
+                  }}
+                >
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{ fontWeight: 500, color: c.text }}
+                    >
+                      {evt.title}
+                    </Typography>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1.5,
+                        mt: 0.25,
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.5,
+                          color: "grey.500",
+                        }}
+                      >
+                        <AccessTimeOutlined sx={{ fontSize: 12 }} />
+                        {formatTimeShort(evt.start_time)}
+                        {evt.end_time
+                          ? ` \u2014 ${formatTimeShort(evt.end_time)}`
+                          : ""}
+                      </Typography>
+                      {evt.candidate_name && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 0.5,
+                            color: "grey.500",
+                          }}
+                        >
+                          <PersonOutline sx={{ fontSize: 12 }} />
+                          {evt.candidate_name}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                </Box>
+              );
+            })}
+          </Box>
+        )}
+      </Box>
+    </Paper>
+  );
+}
+
+/* ── Dashboard ─────────────────────────────────────────────────────────── */
+
 export default function Dashboard() {
   const { data: jobs } = useApi(useCallback(() => listJobs(), []));
   const { data: candidates } = useApi(
-    useCallback(() => listCandidates(), [])
+    useCallback(() => listCandidates(), []),
   );
   const { data: emails } = useApi(useCallback(() => listEmails(), []));
+  const { data: events } = useApi(useCallback(() => listEvents(), []));
 
   const totalJobs = jobs?.length ?? 0;
   const totalCandidates = candidates?.length ?? 0;
@@ -304,6 +641,9 @@ export default function Dashboard() {
           />
         </Grid>
       </Grid>
+
+      {/* Weekly Calendar */}
+      <WeeklyCalendar events={events} />
 
       {/* Pipeline Kanban */}
       <Box>
@@ -374,7 +714,10 @@ export default function Dashboard() {
                         {c.name || "Unnamed"}
                       </Typography>
                       <Typography variant="caption" sx={{ color: "grey.500" }}>
-                        Score: {c.match_score ? `${Math.round(c.match_score * 100)}%` : "\u2014"}
+                        Score:{" "}
+                        {c.match_score
+                          ? `${Math.round(c.match_score * 100)}%`
+                          : "\u2014"}
                       </Typography>
                     </Paper>
                   ))

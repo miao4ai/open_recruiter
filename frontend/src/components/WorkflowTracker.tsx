@@ -1,4 +1,5 @@
-import { CheckCircle, Circle, Loader2, X } from "lucide-react";
+import { CheckCircleOutlined, CircleOutlined, CloseOutlined } from "@mui/icons-material";
+import { CircularProgress } from "@mui/material";
 import type { ActiveWorkflow } from "../types";
 
 interface Props {
@@ -23,7 +24,7 @@ export default function WorkflowTracker({ workflow, onCancel }: Props) {
             className="rounded p-0.5 text-gray-400 hover:bg-white/60 hover:text-gray-600"
             title="Cancel workflow"
           >
-            <X className="h-3.5 w-3.5" />
+            <CloseOutlined sx={{ fontSize: 14 }} />
           </button>
         )}
       </div>
@@ -43,11 +44,11 @@ export default function WorkflowTracker({ workflow, onCancel }: Props) {
         {steps.map((step, i) => (
           <div key={i} className="flex items-center gap-1.5">
             {step.status === "done" ? (
-              <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+              <CheckCircleOutlined sx={{ fontSize: 14 }} className="text-green-600" />
             ) : step.status === "running" ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+              <CircularProgress size={14} className="text-blue-600" />
             ) : (
-              <Circle className="h-3.5 w-3.5 text-gray-300" />
+              <CircleOutlined sx={{ fontSize: 14 }} className="text-gray-300" />
             )}
             <span
               className={`text-[11px] ${

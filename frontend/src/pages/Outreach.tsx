@@ -6,6 +6,10 @@ import AddOutlined from "@mui/icons-material/AddOutlined";
 import CloseOutlined from "@mui/icons-material/CloseOutlined";
 import DeleteOutline from "@mui/icons-material/DeleteOutline";
 import EditOutlined from "@mui/icons-material/EditOutlined";
+import RefreshOutlined from "@mui/icons-material/RefreshOutlined";
+import ChatBubbleOutline from "@mui/icons-material/ChatBubbleOutline";
+import ExpandMoreOutlined from "@mui/icons-material/ExpandMoreOutlined";
+import ExpandLessOutlined from "@mui/icons-material/ExpandLessOutlined";
 import {
   Box,
   Stack,
@@ -22,6 +26,8 @@ import {
   TextField,
   Alert,
   IconButton,
+  Collapse,
+  CircularProgress,
 } from "@mui/material";
 import { useApi } from "../hooks/useApi";
 import {
@@ -31,6 +37,8 @@ import {
   composeEmail,
   updateEmailDraft,
   deleteEmail,
+  markEmailReplied,
+  checkReplies,
 } from "../lib/api";
 import type { Email, EmailType } from "../types";
 
@@ -103,6 +111,18 @@ We wish you all the best in your career journey.
 
 Warm regards`,
   },
+  recommendation: {
+    subject: "Strong Candidate Recommendation — [Position Title]",
+    body: `Hi [Hiring Manager],
+
+I'd like to recommend a strong candidate for the [Position Title] role.
+
+[Candidate Name] is currently a [Current Title] with [X] years of experience. Their background in [key skills] aligns well with your requirements.
+
+I've attached their resume for your review. Would you be interested in scheduling an interview?
+
+Best regards`,
+  },
 };
 
 const EMAIL_TYPE_LABELS: Record<EmailType, string> = {
@@ -110,6 +130,7 @@ const EMAIL_TYPE_LABELS: Record<EmailType, string> = {
   followup: "Follow-up",
   interview_invite: "Interview Invite",
   rejection: "Rejection",
+  recommendation: "Recommendation",
 };
 
 // ── Compose / Edit Modal ─────────────────────────────────────────────────
@@ -319,6 +340,45 @@ export default function Outreach() {
     refresh();
   };
 
+  const handleMarkReplied = async (id: string) => {
+    await markEmailReplied(id);
+    refresh();
+  };
+
+  const [checking, setChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState<string | null>(null);
+  const handleCheckReplies = async () => {
+    setChecking(true);
+    setCheckResult(null);
+    try {
+      const res = await checkReplies();
+      setCheckResult(
+        res.replies_found > 0
+          ? `Found ${res.replies_found} new ${res.replies_found === 1 ? "reply" : "replies"}!`
+          : "No new replies found."
+      );
+      refresh();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail || "Failed to check replies";
+      setCheckResult(msg);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  // Track which sent emails are expanded
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   return (
     <Stack spacing={3}>
       {/* Compose / Edit modal */}
@@ -477,59 +537,210 @@ export default function Outreach() {
 
       {/* Sent emails */}
       <Box>
-        <Typography variant="h6" sx={{ mb: 1.5 }}>
-          Sent{" "}
-          <Typography
-            component="span"
-            variant="body2"
-            sx={{ color: "text.secondary" }}
-          >
-            ({sent.length})
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            mb: 1.5,
+          }}
+        >
+          <Typography variant="h6">
+            Sent{" "}
+            <Typography
+              component="span"
+              variant="body2"
+              sx={{ color: "text.secondary" }}
+            >
+              ({sent.length})
+            </Typography>
           </Typography>
-        </Typography>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+            {checkResult && (
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                {checkResult}
+              </Typography>
+            )}
+            <Button
+              size="small"
+              variant="outlined"
+              color="inherit"
+              onClick={handleCheckReplies}
+              disabled={checking}
+              startIcon={
+                checking ? (
+                  <CircularProgress size={14} color="inherit" />
+                ) : (
+                  <RefreshOutlined sx={{ fontSize: 16 }} />
+                )
+              }
+            >
+              {checking ? "Checking..." : "Check for Replies"}
+            </Button>
+          </Stack>
+        </Box>
 
         {sent.length > 0 ? (
           <Stack spacing={1}>
-            {sent.map((e) => (
-              <Paper
-                key={e.id}
-                variant="outlined"
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  px: 2,
-                  py: 1.5,
-                }}
-              >
-                <Box>
-                  <Typography
-                    component="span"
-                    variant="body2"
-                    sx={{ fontWeight: 500 }}
+            {sent.map((e) => {
+              const isExpanded = expandedIds.has(e.id);
+              return (
+                <Paper key={e.id} variant="outlined" sx={{ overflow: "hidden" }}>
+                  {/* Sent email row */}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      px: 2,
+                      py: 1.5,
+                    }}
                   >
-                    {e.subject}
-                  </Typography>
-                  <Typography
-                    component="span"
-                    variant="body2"
-                    sx={{ color: "text.secondary", ml: 1 }}
-                  >
-                    to {e.to_email || e.candidate_name}
-                  </Typography>
-                </Box>
-                <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                    {e.sent_at
-                      ? new Date(e.sent_at).toLocaleDateString()
-                      : ""}
-                  </Typography>
-                  {e.reply_received && (
-                    <Chip label="Replied" color="success" size="small" />
-                  )}
-                </Stack>
-              </Paper>
-            ))}
+                    <Box
+                      onClick={() => toggleExpand(e.id)}
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        minWidth: 0,
+                        flex: 1,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <IconButton size="small" sx={{ flexShrink: 0 }}>
+                        {isExpanded ? (
+                          <ExpandLessOutlined sx={{ fontSize: 18, color: "text.secondary" }} />
+                        ) : (
+                          <ExpandMoreOutlined sx={{ fontSize: 18, color: "text.secondary" }} />
+                        )}
+                      </IconButton>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 500,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {e.subject}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{ color: "text.secondary", flexShrink: 0 }}
+                      >
+                        to {e.to_email || e.candidate_name}
+                      </Typography>
+                    </Box>
+                    <Stack
+                      direction="row"
+                      spacing={1.5}
+                      sx={{ alignItems: "center", ml: 2, flexShrink: 0 }}
+                    >
+                      <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                        {e.sent_at
+                          ? new Date(e.sent_at).toLocaleDateString()
+                          : ""}
+                      </Typography>
+                      {e.reply_received ? (
+                        <Chip label="Replied" color="success" size="small" />
+                      ) : (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="inherit"
+                          startIcon={<ChatBubbleOutline sx={{ fontSize: 14 }} />}
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            handleMarkReplied(e.id);
+                          }}
+                          sx={{ textTransform: "none", fontSize: "0.75rem" }}
+                        >
+                          Mark Replied
+                        </Button>
+                      )}
+                    </Stack>
+                  </Box>
+
+                  {/* Expanded: email body + reply */}
+                  <Collapse in={isExpanded}>
+                    <Box
+                      sx={{
+                        borderTop: 1,
+                        borderColor: "divider",
+                        px: 2,
+                        py: 2,
+                      }}
+                    >
+                      <Stack spacing={2}>
+                        <Box
+                          sx={{
+                            whiteSpace: "pre-wrap",
+                            bgcolor: "grey.50",
+                            borderRadius: 1,
+                            p: 1.5,
+                          }}
+                        >
+                          <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                            {e.body}
+                          </Typography>
+                        </Box>
+
+                        {e.reply_received && e.reply_body && (
+                          <Paper
+                            variant="outlined"
+                            sx={{
+                              p: 1.5,
+                              borderColor: "success.light",
+                              bgcolor: "success.50",
+                            }}
+                          >
+                            <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", mb: 0.5 }}>
+                              <ChatBubbleOutline sx={{ fontSize: 14, color: "success.main" }} />
+                              <Typography
+                                variant="caption"
+                                sx={{ fontWeight: 600, color: "success.main" }}
+                              >
+                                Reply received
+                              </Typography>
+                              {e.replied_at && (
+                                <Typography
+                                  variant="caption"
+                                  sx={{ color: "success.dark" }}
+                                >
+                                  {" "}
+                                  — {new Date(e.replied_at).toLocaleDateString()}
+                                </Typography>
+                              )}
+                            </Stack>
+                            <Typography
+                              variant="body2"
+                              sx={{ whiteSpace: "pre-wrap", color: "text.secondary" }}
+                            >
+                              {e.reply_body}
+                            </Typography>
+                          </Paper>
+                        )}
+
+                        {e.reply_received && !e.reply_body && (
+                          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+                            <ChatBubbleOutline sx={{ fontSize: 14, color: "success.main" }} />
+                            <Typography variant="caption" sx={{ color: "success.main" }}>
+                              Reply received (manually marked)
+                            </Typography>
+                            {e.replied_at && (
+                              <Typography variant="caption" sx={{ color: "success.dark" }}>
+                                — {new Date(e.replied_at).toLocaleDateString()}
+                              </Typography>
+                            )}
+                          </Stack>
+                        )}
+                      </Stack>
+                    </Box>
+                  </Collapse>
+                </Paper>
+              );
+            })}
           </Stack>
         ) : (
           <Typography variant="body2" sx={{ color: "text.secondary" }}>
