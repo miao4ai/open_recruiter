@@ -1,5 +1,37 @@
 import { useCallback, useRef, useState } from "react";
-import { Plus, Trash2, Users, Pencil, X, Save, Mail, Send, Paperclip } from "lucide-react";
+import {
+  AddOutlined,
+  DeleteOutline,
+  PeopleOutline,
+  EditOutlined,
+  CloseOutlined,
+  SaveOutlined,
+  MailOutline,
+  SendOutlined,
+  AttachFileOutlined,
+  WorkOutline,
+} from "@mui/icons-material";
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Checkbox,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  Grid2 as Grid,
+  IconButton,
+  MenuItem,
+  Paper,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import { useApi } from "../hooks/useApi";
 import {
   listJobs,
@@ -11,7 +43,6 @@ import {
   sendEmail,
 } from "../lib/api";
 import type { Job, Candidate } from "../types";
-import SemanticSearchBar, { type SearchResult } from "../components/SemanticSearchBar";
 
 export default function Jobs() {
   const { data: jobs, refresh } = useApi(useCallback(() => listJobs(), []));
@@ -23,16 +54,6 @@ export default function Jobs() {
   const [rawText, setRawText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [emailJob, setEmailJob] = useState<Job | null>(null);
-  const [searchResults, setSearchResults] = useState<SearchResult<Job>[] | null>(null);
-
-  const handleSearchResults = useCallback((results: SearchResult<Job>[] | null) => {
-    setSearchResults(results);
-  }, []);
-
-  // If searching, show search results; otherwise show all jobs
-  const displayJobs = searchResults
-    ? searchResults.map((r) => ({ ...r.record, _score: r.similarity_score }))
-    : jobs;
 
   const resetForm = () => {
     setTitle("");
@@ -94,214 +115,220 @@ export default function Jobs() {
   const isFormOpen = showForm || editingJob;
 
   return (
-    <div className="space-y-4">
+    <Stack spacing={2}>
       {/* Header row */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <Typography variant="h6" sx={{ fontWeight: 600 }}>
           All Jobs{" "}
-          <span className="text-sm font-normal text-gray-400">
+          <Typography component="span" variant="body2" sx={{ fontWeight: 400, color: "grey.500" }}>
             ({jobs?.length ?? 0})
-          </span>
-        </h2>
+          </Typography>
+        </Typography>
         {!isFormOpen && (
-          <button
+          <Button
+            variant="contained"
+            startIcon={<AddOutlined />}
             onClick={() => { resetForm(); setShowForm(true); }}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
-            <Plus className="h-4 w-4" />
             New Job
-          </button>
+          </Button>
         )}
-      </div>
-
-      {/* Semantic search */}
-      <SemanticSearchBar<Job>
-        collection="jobs"
-        placeholder="Search jobs — try 'senior React developer' or 'machine learning startup'..."
-        onResults={handleSearchResults}
-      />
+      </Box>
 
       {/* Create / Edit form */}
       {isFormOpen && (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
-          <h3 className="font-semibold">
-            {editingJob ? "Edit Job" : "New Job"}
-          </h3>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Job Title
-              </label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                placeholder="e.g. Senior Frontend Engineer"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Company
-              </label>
-              <input
-                type="text"
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                placeholder="e.g. Acme Corp"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Posted Date
-              </label>
-              <input
-                type="date"
-                value={postedDate}
-                onChange={(e) => setPostedDate(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Job Description
-            </label>
-            <textarea
+        <Paper variant="outlined" sx={{ p: 3 }}>
+          <Stack spacing={2.5}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              {editingJob ? "Edit Job" : "New Job"}
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <TextField
+                  label="Job Title"
+                  size="small"
+                  fullWidth
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Senior Frontend Engineer"
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <TextField
+                  label="Company"
+                  size="small"
+                  fullWidth
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  placeholder="e.g. Acme Corp"
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <TextField
+                  label="Posted Date"
+                  size="small"
+                  fullWidth
+                  type="date"
+                  value={postedDate}
+                  onChange={(e) => setPostedDate(e.target.value)}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                />
+              </Grid>
+            </Grid>
+            <TextField
+              label="Job Description"
+              fullWidth
+              multiline
+              rows={8}
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
-              rows={8}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               placeholder="Paste the full job description here..."
             />
-          </div>
-          <div className="flex gap-2">
-            {editingJob ? (
-              <>
-                <button
-                  onClick={handleUpdate}
-                  disabled={submitting}
-                  className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  <Save className="h-4 w-4" />
-                  {submitting ? "Saving..." : "Save Changes"}
-                </button>
-                <button
-                  onClick={cancelEdit}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={handleCreate}
-                  disabled={submitting || !rawText.trim()}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {submitting ? "Creating..." : "Create Job"}
-                </button>
-                <button
-                  onClick={() => { setShowForm(false); resetForm(); }}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-              </>
-            )}
-          </div>
-        </div>
+            <Stack direction="row" spacing={1}>
+              {editingJob ? (
+                <>
+                  <Button
+                    variant="contained"
+                    startIcon={<SaveOutlined />}
+                    onClick={handleUpdate}
+                    disabled={submitting}
+                  >
+                    {submitting ? "Saving..." : "Save Changes"}
+                  </Button>
+                  <Button variant="outlined" onClick={cancelEdit}>
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="contained"
+                    onClick={handleCreate}
+                    disabled={submitting || !rawText.trim()}
+                  >
+                    {submitting ? "Creating..." : "Create Job"}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={() => { setShowForm(false); resetForm(); }}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              )}
+            </Stack>
+          </Stack>
+        </Paper>
       )}
 
       {/* Job list */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {displayJobs?.map((job) => {
-          const score = (job as any)._score as number | undefined;
-          return (
-            <div
-              key={job.id}
-              className={`group rounded-xl border bg-white p-5 shadow-sm transition-all hover:shadow-md ${
-                score != null
-                  ? "border-blue-200 ring-1 ring-blue-100"
-                  : "border-gray-200"
-              }`}
+      <Grid container spacing={1.5}>
+        {jobs?.map((job) => (
+          <Grid key={job.id} size={{ xs: 12, sm: 6, lg: 4 }}>
+            <Card
+              variant="outlined"
+              sx={{
+                height: "100%",
+                transition: "box-shadow 0.2s",
+                "&:hover": { boxShadow: 3 },
+                "&:hover [data-job-actions]": { opacity: 1 },
+              }}
             >
-              <div className="flex items-start justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="truncate font-semibold text-gray-900">
+              <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
+                <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "grey.900" }}>
                       {job.title || "Untitled"}
-                    </h3>
-                    {score != null && (
-                      <span className="flex-shrink-0 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                        {Math.round(score * 100)}% match
-                      </span>
+                    </Typography>
+                    {job.company && (
+                      <Typography variant="body2" sx={{ mt: 0.25, color: "grey.600" }}>
+                        {job.company}
+                      </Typography>
                     )}
-                  </div>
-                  {job.company && (
-                    <p className="mt-0.5 text-sm text-gray-500">{job.company}</p>
-                  )}
-                  {job.posted_date && (
-                    <p className="mt-0.5 text-xs text-gray-400">Posted: {job.posted_date}</p>
-                  )}
-                </div>
-                <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                  <button
-                    onClick={() => setEmailJob(job)}
-                    className="text-gray-300 hover:text-green-500"
-                    title="Send Email to Company"
+                    {job.posted_date && (
+                      <Typography variant="caption" sx={{ mt: 0.25, display: "block", color: "grey.500" }}>
+                        Posted: {job.posted_date}
+                      </Typography>
+                    )}
+                  </Box>
+                  <Box
+                    data-job-actions
+                    sx={{ display: "inline-flex", gap: 0.25, opacity: 0, transition: "opacity 0.2s" }}
                   >
-                    <Mail className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => startEdit(job)}
-                    className="text-gray-300 hover:text-blue-500"
-                    title="Edit"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(job.id)}
-                    className="text-gray-300 hover:text-red-500"
-                    title="Delete"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-              {job.required_skills.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1">
-                  {job.required_skills.slice(0, 4).map((s) => (
-                    <span
-                      key={s}
-                      className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700"
-                    >
-                      {s}
-                    </span>
-                  ))}
-                </div>
-              )}
-              <div className="mt-3 flex items-center gap-1 text-xs text-gray-400">
-                <Users className="h-3.5 w-3.5" />
-                {job.candidate_count} matched candidate
-                {job.candidate_count !== 1 ? "s" : ""}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                    <Tooltip title="Send Email to Company">
+                      <IconButton
+                        size="small"
+                        onClick={() => setEmailJob(job)}
+                        sx={{ color: "grey.400", "&:hover": { color: "success.main" } }}
+                      >
+                        <MailOutline fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Edit">
+                      <IconButton
+                        size="small"
+                        onClick={() => startEdit(job)}
+                        sx={{ color: "grey.400", "&:hover": { color: "primary.main" } }}
+                      >
+                        <EditOutlined fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Delete">
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDelete(job.id)}
+                        sx={{ color: "grey.400", "&:hover": { color: "error.main" } }}
+                      >
+                        <DeleteOutline fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </Box>
+                {job.required_skills.length > 0 && (
+                  <Stack direction="row" spacing={0.5} sx={{ mt: 1.5, flexWrap: "wrap", gap: 0.5 }}>
+                    {job.required_skills.slice(0, 4).map((s) => (
+                      <Chip
+                        key={s}
+                        label={s}
+                        size="small"
+                        sx={{
+                          bgcolor: "blue.50",
+                          color: "primary.dark",
+                          fontSize: "0.75rem",
+                          height: 24,
+                        }}
+                      />
+                    ))}
+                  </Stack>
+                )}
+                <Stack direction="row" spacing={0.5} sx={{ mt: 1.5, alignItems: "center" }}>
+                  <PeopleOutline sx={{ fontSize: 16, color: "grey.500" }} />
+                  <Typography variant="caption" sx={{ color: "grey.500" }}>
+                    {job.candidate_count} matched candidate
+                    {job.candidate_count !== 1 ? "s" : ""}
+                  </Typography>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
 
-      {(!displayJobs || displayJobs.length === 0) && !showForm && (
-        <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
-          <BriefcaseIcon className="mx-auto h-10 w-10 text-gray-300" />
-          <p className="mt-3 text-sm text-gray-500">
-            {searchResults
-              ? "No jobs match your search."
-              : <>No jobs yet. Click <strong>New Job</strong> to add one.</>}
-          </p>
-        </div>
+      {(!jobs || jobs.length === 0) && !showForm && (
+        <Paper
+          variant="outlined"
+          sx={{
+            p: 6,
+            textAlign: "center",
+            borderStyle: "dashed",
+            borderColor: "grey.300",
+          }}
+        >
+          <WorkOutline sx={{ fontSize: 40, color: "grey.400", mx: "auto", display: "block" }} />
+          <Typography variant="body2" sx={{ mt: 1.5, color: "grey.600" }}>
+            No jobs yet. Click <strong>New Job</strong> to add one.
+          </Typography>
+        </Paper>
       )}
 
       {/* Email modal */}
@@ -311,11 +338,11 @@ export default function Jobs() {
           onClose={() => setEmailJob(null)}
         />
       )}
-    </div>
+    </Stack>
   );
 }
 
-/* ── Job Email Modal ────────────────────────────────────────────────────── */
+/* -- Job Email Modal -------------------------------------------------------- */
 
 function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
   // Load all candidates ranked by vector similarity to this job
@@ -374,174 +401,157 @@ function JobEmailModal({ job, onClose }: { job: Job; onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="mx-4 w-full max-w-2xl rounded-xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-          <h3 className="font-semibold">
-            Send Email to Company — {job.title}
-          </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          Send Email to Company — {job.title}
+        </Typography>
+        <IconButton size="small" onClick={onClose} sx={{ color: "grey.500" }}>
+          <CloseOutlined />
+        </IconButton>
+      </DialogTitle>
 
-        {sent ? (
-          <div className="p-8 text-center">
-            <p className="text-sm text-emerald-600 font-medium">Email saved successfully!</p>
-          </div>
-        ) : (
-          <div className="space-y-4 p-5">
-            {/* To */}
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">
-                Company Email
-              </label>
-              <input
+      {sent ? (
+        <DialogContent sx={{ py: 6, textAlign: "center" }}>
+          <Typography variant="body2" sx={{ fontWeight: 500, color: "success.main" }}>
+            Email saved successfully!
+          </Typography>
+        </DialogContent>
+      ) : (
+        <>
+          <DialogContent dividers>
+            <Stack spacing={2.5}>
+              {/* To */}
+              <TextField
+                label="Company Email"
+                size="small"
+                fullWidth
                 type="email"
                 value={toEmail}
                 onChange={(e) => setToEmail(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 placeholder="hr@company.com"
               />
-            </div>
 
-            {/* Candidate selector */}
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">
-                Select Candidate (optional)
-              </label>
-              <select
+              {/* Candidate selector */}
+              <TextField
+                label="Select Candidate (optional)"
+                size="small"
+                fullWidth
+                select
                 value={selectedCandidateId}
                 onChange={(e) => handleCandidateChange(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                <option value="">— None —</option>
+                <MenuItem value="">— None —</MenuItem>
                 {candidates?.map((c) => (
-                  <option key={c.id} value={c.id}>
+                  <MenuItem key={c.id} value={c.id}>
                     {c.name} — {c.current_title || "N/A"} ({Math.round(c.match_score * 100)}% match)
-                  </option>
+                  </MenuItem>
                 ))}
-              </select>
-            </div>
+              </TextField>
 
-            {/* Attachment */}
-            {selectedCandidateId && (
-              <div className="space-y-2">
-                {selectedCandidate?.resume_path && (
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={useCandidateResume && !attachment}
-                      onChange={(e) => {
-                        setUseCandidateResume(e.target.checked);
-                        if (e.target.checked) setAttachment(null);
-                      }}
-                      className="rounded border-gray-300"
+              {/* Attachment */}
+              {selectedCandidateId && (
+                <Stack spacing={1}>
+                  {selectedCandidate?.resume_path && (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={useCandidateResume && !attachment}
+                          onChange={(e) => {
+                            setUseCandidateResume(e.target.checked);
+                            if (e.target.checked) setAttachment(null);
+                          }}
+                        />
+                      }
+                      label={
+                        <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+                          <AttachFileOutlined sx={{ fontSize: 16, color: "grey.500" }} />
+                          <Typography variant="body2">Attach candidate's resume</Typography>
+                        </Stack>
+                      }
                     />
-                    <Paperclip className="h-3.5 w-3.5 text-gray-400" />
-                    Attach candidate's resume
-                  </label>
-                )}
-                <div className="flex items-center gap-2">
-                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
-                    <Paperclip className="h-3.5 w-3.5" />
-                    {attachment ? attachment.name : "Upload PDF"}
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept=".pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) {
-                          setAttachment(f);
-                          setUseCandidateResume(false);
-                        }
-                      }}
-                    />
-                  </label>
-                  {attachment && (
-                    <button
-                      onClick={() => {
-                        setAttachment(null);
-                        if (fileRef.current) fileRef.current.value = "";
-                      }}
-                      className="text-xs text-red-500 hover:underline"
-                    >
-                      Remove
-                    </button>
                   )}
-                </div>
-              </div>
-            )}
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      component="label"
+                      startIcon={<AttachFileOutlined />}
+                      sx={{ textTransform: "none" }}
+                    >
+                      {attachment ? attachment.name : "Upload PDF"}
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        accept=".pdf"
+                        hidden
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) {
+                            setAttachment(f);
+                            setUseCandidateResume(false);
+                          }
+                        }}
+                      />
+                    </Button>
+                    {attachment && (
+                      <Button
+                        size="small"
+                        color="error"
+                        sx={{ textTransform: "none" }}
+                        onClick={() => {
+                          setAttachment(null);
+                          if (fileRef.current) fileRef.current.value = "";
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </Stack>
+                </Stack>
+              )}
 
-            {/* Subject */}
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">
-                Subject
-              </label>
-              <input
-                type="text"
+              {/* Subject */}
+              <TextField
+                label="Subject"
+                size="small"
+                fullWidth
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
-            </div>
 
-            {/* Body */}
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">
-                Body
-              </label>
-              <textarea
+              {/* Body */}
+              <TextField
+                label="Body"
+                fullWidth
+                multiline
+                rows={8}
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                rows={8}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
-            </div>
+            </Stack>
+          </DialogContent>
 
-            {/* Actions */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleSend(true)}
-                disabled={sending || !toEmail.trim()}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              >
-                {sending ? "Saving..." : "Save as Draft"}
-              </button>
-              <button
-                onClick={() => handleSend(false)}
-                disabled={sending || !toEmail.trim()}
-                className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                <Send className="h-4 w-4" />
-                {sending ? "Sending..." : "Send Now"}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function BriefcaseIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-      <rect width="20" height="14" x="2" y="6" rx="2" />
-    </svg>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button
+              variant="outlined"
+              onClick={() => handleSend(true)}
+              disabled={sending || !toEmail.trim()}
+            >
+              {sending ? "Saving..." : "Save as Draft"}
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<SendOutlined />}
+              onClick={() => handleSend(false)}
+              disabled={sending || !toEmail.trim()}
+            >
+              {sending ? "Sending..." : "Send Now"}
+            </Button>
+          </DialogActions>
+        </>
+      )}
+    </Dialog>
   );
 }

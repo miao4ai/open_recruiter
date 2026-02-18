@@ -1,17 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
-  Mail,
-  Trash2,
-  Pencil,
-  Save,
-  X,
-  Sparkles,
-  Loader2,
-  Briefcase,
-} from "lucide-react";
+  ArrowBackOutlined,
+  MailOutline,
+  DeleteOutline,
+  EditOutlined,
+  SaveOutlined,
+  CloseOutlined,
+  AutoAwesomeOutlined,
+  LinkOutlined,
+  LinkOffOutlined,
+} from "@mui/icons-material";
+import {
+  Box,
+  Stack,
+  Button,
+  Paper,
+  Grid2 as Grid,
+  TextField,
+  MenuItem,
+  Chip,
+  Typography,
+  CircularProgress,
+} from "@mui/material";
 import { useApi } from "../hooks/useApi";
+import RefreshOutlined from "@mui/icons-material/RefreshOutlined";
 import {
   getCandidate,
   listEmails,
@@ -20,8 +33,11 @@ import {
   deleteCandidate,
   matchCandidates,
   composeEmail,
+  reparseCandidate,
+  linkCandidateJob,
+  unlinkCandidateJob,
 } from "../lib/api";
-import type { Candidate, TopJob } from "../types";
+import type { Candidate, CandidateJobMatch } from "../types";
 
 export default function CandidateDetail() {
   const { id } = useParams<{ id: string }>();
@@ -39,20 +55,44 @@ export default function CandidateDetail() {
   const [form, setForm] = useState<Partial<Candidate>>({});
   const [saving, setSaving] = useState(false);
 
+  // Re-parse state
+  const [reparsing, setReparsing] = useState(false);
+
   // Match analysis state
   const [analyzing, setAnalyzing] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState("");
   const [typewriterText, setTypewriterText] = useState("");
   const [typewriterDone, setTypewriterDone] = useState(true);
 
+  // Link job state
+  const [linkJobId, setLinkJobId] = useState("");
+  const [linking, setLinking] = useState(false);
+
   if (loading) {
-    return <p className="text-sm text-gray-400">Loading...</p>;
+    return (
+      <Typography variant="body2" sx={{ color: "grey.500" }}>
+        Loading...
+      </Typography>
+    );
   }
   if (!candidate) {
-    return <p className="text-sm text-red-500">Candidate not found.</p>;
+    return (
+      <Typography variant="body2" sx={{ color: "error.main" }}>
+        Candidate not found.
+      </Typography>
+    );
   }
 
-  const hasAnalysis = !!(candidate.match_reasoning);
-  const topJobs: TopJob[] = candidate.top_jobs ?? [];
+  const jobMatches: CandidateJobMatch[] = candidate.job_matches ?? [];
+  // Pick the selected or best match for display
+  const activeMatch = selectedJobId
+    ? jobMatches.find((m) => m.job_id === selectedJobId)
+    : jobMatches.length > 0
+      ? jobMatches.reduce((best, m) => (m.match_score > best.match_score ? m : best), jobMatches[0])
+      : null;
+
+  const scorePct = activeMatch ? Math.round(activeMatch.match_score * 100) : 0;
+  const hasAnalysis = !!(activeMatch?.match_reasoning);
 
   const startEdit = () => {
     setForm({
@@ -64,6 +104,7 @@ export default function CandidateDetail() {
       skills: candidate.skills,
       experience_years: candidate.experience_years,
       location: candidate.location,
+      date_of_birth: candidate.date_of_birth,
       notes: candidate.notes,
     });
     setEditing(true);
@@ -98,13 +139,26 @@ export default function CandidateDetail() {
     navigate("/candidates");
   };
 
+  const handleReparse = async () => {
+    setReparsing(true);
+    try {
+      await reparseCandidate(id!);
+      refresh();
+    } catch (err: any) {
+      alert(err?.response?.data?.detail || "Re-parse failed");
+    } finally {
+      setReparsing(false);
+    }
+  };
+
   const handleAnalyze = async () => {
+    const jobId = selectedJobId || activeMatch?.job_id;
+    if (!jobId) return;
     setAnalyzing(true);
     setTypewriterText("");
     setTypewriterDone(false);
     try {
-      // matchCandidates now triggers _auto_match_all_jobs on the backend
-      const results = await matchCandidates(candidate.job_id || "", [candidate.id]);
+      const results = await matchCandidates(jobId, [candidate.id]);
       const result = results[0];
       if (result?.reasoning) {
         setTypewriterText(result.reasoning);
@@ -115,105 +169,208 @@ export default function CandidateDetail() {
     }
   };
 
+  const handleLinkJob = async () => {
+    if (!linkJobId) return;
+    setLinking(true);
+    try {
+      await linkCandidateJob(id!, linkJobId);
+      setLinkJobId("");
+      refresh();
+    } catch (err: any) {
+      alert(err?.response?.data?.detail || "Link failed");
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  const handleUnlinkJob = async (jobId: string) => {
+    if (!confirm("Unlink this job?")) return;
+    try {
+      await unlinkCandidateJob(id!, jobId);
+      refresh();
+    } catch (err: any) {
+      alert(err?.response?.data?.detail || "Unlink failed");
+    }
+  };
+
   const updateField = (key: string, value: string | string[] | number | null) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
   // Determine which reasoning text to show
   const showTypewriter = !typewriterDone && typewriterText;
-  const reasoningText = showTypewriter ? typewriterText : candidate.match_reasoning;
+  const reasoningText = showTypewriter ? typewriterText : activeMatch?.match_reasoning || "";
+
+  const scoreColor =
+    scorePct >= 70
+      ? "#10b981"
+      : scorePct >= 40
+        ? "#f59e0b"
+        : "#ef4444";
+
+  const scoreTextColor =
+    scorePct >= 70
+      ? "#059669"
+      : scorePct >= 40
+        ? "#d97706"
+        : "#ef4444";
+
+  // Jobs not yet linked (for link selector)
+  const linkedJobIds = new Set(jobMatches.map((m) => m.job_id));
+  const availableJobs = jobs?.filter((j) => !linkedJobIds.has(j.id)) ?? [];
 
   return (
-    <div className="space-y-6">
+    <Stack spacing={3}>
       {/* Back link */}
-      <Link
+      <Button
+        component={Link}
         to="/candidates"
-        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+        startIcon={<ArrowBackOutlined sx={{ fontSize: 16 }} />}
+        sx={{
+          alignSelf: "flex-start",
+          fontSize: 14,
+          color: "grey.600",
+          textTransform: "none",
+          "&:hover": { color: "grey.800", bgcolor: "transparent" },
+        }}
       >
-        <ArrowLeft className="h-4 w-4" /> Back to Candidates
-      </Link>
+        Back to Candidates
+      </Button>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <Grid container spacing={3}>
         {/* Left: info card */}
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <div className="flex items-start justify-between">
-            <h2 className="text-xl font-semibold">
-              {candidate.name || "Unnamed"}
-            </h2>
-            {!editing ? (
-              <button
-                onClick={startEdit}
-                className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
-              >
-                <Pencil className="h-3.5 w-3.5" /> Edit
-              </button>
-            ) : (
-              <div className="flex gap-1">
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        <Grid size={{ xs: 12, lg: 4 }}>
+          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                {candidate.name || "Unnamed"}
+              </Typography>
+              {!editing ? (
+                <Button
+                  onClick={startEdit}
+                  variant="outlined"
+                  size="small"
+                  startIcon={<EditOutlined sx={{ fontSize: 14 }} />}
+                  sx={{
+                    fontSize: 12,
+                    textTransform: "none",
+                    borderColor: "grey.300",
+                    color: "grey.600",
+                    "&:hover": { bgcolor: "grey.50" },
+                    px: 1,
+                    py: 0.5,
+                  }}
                 >
-                  <Save className="h-3.5 w-3.5" /> {saving ? "..." : "Save"}
-                </button>
-                <button
-                  onClick={() => setEditing(false)}
-                  className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            )}
-          </div>
+                  Edit
+                </Button>
+              ) : (
+                <Stack direction="row" spacing={0.5}>
+                  <Button
+                    onClick={handleSave}
+                    disabled={saving}
+                    variant="contained"
+                    size="small"
+                    startIcon={<SaveOutlined sx={{ fontSize: 14 }} />}
+                    sx={{
+                      fontSize: 12,
+                      textTransform: "none",
+                      px: 1,
+                      py: 0.5,
+                    }}
+                  >
+                    {saving ? "..." : "Save"}
+                  </Button>
+                  <Button
+                    onClick={() => setEditing(false)}
+                    variant="outlined"
+                    size="small"
+                    sx={{
+                      fontSize: 12,
+                      textTransform: "none",
+                      borderColor: "grey.300",
+                      color: "grey.600",
+                      "&:hover": { bgcolor: "grey.50" },
+                      px: 1,
+                      py: 0.5,
+                      minWidth: "auto",
+                    }}
+                  >
+                    <CloseOutlined sx={{ fontSize: 14 }} />
+                  </Button>
+                </Stack>
+              )}
+            </Box>
 
-          {editing ? (
-            <div className="mt-4 space-y-3">
-              <EditField
-                label="Name"
-                value={form.name ?? ""}
-                onChange={(v) => updateField("name", v)}
-              />
-              <EditField
-                label="Email"
-                value={form.email ?? ""}
-                onChange={(v) => updateField("email", v)}
-              />
-              <EditField
-                label="Phone"
-                value={form.phone ?? ""}
-                onChange={(v) => updateField("phone", v)}
-              />
-              <EditField
-                label="Title"
-                value={form.current_title ?? ""}
-                onChange={(v) => updateField("current_title", v)}
-              />
-              <EditField
-                label="Company"
-                value={form.current_company ?? ""}
-                onChange={(v) => updateField("current_company", v)}
-              />
-              <EditField
-                label="Location"
-                value={form.location ?? ""}
-                onChange={(v) => updateField("location", v)}
-              />
-              <EditField
-                label="Experience (years)"
-                value={form.experience_years?.toString() ?? ""}
-                onChange={(v) =>
-                  updateField(
-                    "experience_years",
-                    v ? parseInt(v, 10) || null : null
-                  )
-                }
-                type="number"
-              />
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">
-                  Skills (comma separated)
-                </label>
-                <input
+            {editing ? (
+              <Stack spacing={2} sx={{ mt: 2 }}>
+                <TextField
+                  label="Name"
+                  size="small"
+                  fullWidth
+                  value={form.name ?? ""}
+                  onChange={(e) => updateField("name", e.target.value)}
+                />
+                <TextField
+                  label="Email"
+                  size="small"
+                  fullWidth
+                  value={form.email ?? ""}
+                  onChange={(e) => updateField("email", e.target.value)}
+                />
+                <TextField
+                  label="Phone"
+                  size="small"
+                  fullWidth
+                  value={form.phone ?? ""}
+                  onChange={(e) => updateField("phone", e.target.value)}
+                />
+                <TextField
+                  label="Title"
+                  size="small"
+                  fullWidth
+                  value={form.current_title ?? ""}
+                  onChange={(e) => updateField("current_title", e.target.value)}
+                />
+                <TextField
+                  label="Company"
+                  size="small"
+                  fullWidth
+                  value={form.current_company ?? ""}
+                  onChange={(e) => updateField("current_company", e.target.value)}
+                />
+                <TextField
+                  label="Location"
+                  size="small"
+                  fullWidth
+                  value={form.location ?? ""}
+                  onChange={(e) => updateField("location", e.target.value)}
+                />
+                <TextField
+                  label="Date of Birth"
+                  size="small"
+                  fullWidth
+                  type="date"
+                  InputLabelProps={{ shrink: true }}
+                  value={form.date_of_birth ?? ""}
+                  onChange={(e) => updateField("date_of_birth", e.target.value)}
+                />
+                <TextField
+                  label="Experience (years)"
+                  size="small"
+                  fullWidth
+                  type="number"
+                  value={form.experience_years?.toString() ?? ""}
+                  onChange={(e) =>
+                    updateField(
+                      "experience_years",
+                      e.target.value ? parseInt(e.target.value, 10) || null : null
+                    )
+                  }
+                />
+                <TextField
+                  label="Skills (comma separated)"
+                  size="small"
+                  fullWidth
                   value={(form.skills ?? []).join(", ")}
                   onChange={(e) =>
                     updateField(
@@ -224,282 +381,473 @@ export default function CandidateDetail() {
                         .filter(Boolean)
                     )
                   }
-                  className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">
-                  Notes
-                </label>
-                <textarea
+                <TextField
+                  label="Notes"
+                  size="small"
+                  fullWidth
+                  multiline
+                  rows={3}
                   value={form.notes ?? ""}
                   onChange={(e) => updateField("notes", e.target.value)}
-                  rows={3}
-                  className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
-              </div>
-            </div>
-          ) : (
-            <>
-              {candidate.current_title && (
-                <p className="text-sm text-gray-500">
-                  {candidate.current_title}
-                  {candidate.current_company
-                    ? ` at ${candidate.current_company}`
-                    : ""}
-                </p>
-              )}
+              </Stack>
+            ) : (
+              <>
+                {candidate.current_title && (
+                  <Typography variant="body2" sx={{ color: "grey.600" }}>
+                    {candidate.current_title}
+                    {candidate.current_company
+                      ? ` at ${candidate.current_company}`
+                      : ""}
+                  </Typography>
+                )}
 
-              <div className="mt-4 space-y-2 text-sm">
-                {candidate.email && (
-                  <p>
-                    <span className="text-gray-500">Email:</span>{" "}
-                    {candidate.email}
-                  </p>
-                )}
-                {candidate.phone && (
-                  <p>
-                    <span className="text-gray-500">Phone:</span>{" "}
-                    {candidate.phone}
-                  </p>
-                )}
-                {candidate.location && (
-                  <p>
-                    <span className="text-gray-500">Location:</span>{" "}
-                    {candidate.location}
-                  </p>
-                )}
-                {candidate.experience_years != null && (
-                  <p>
-                    <span className="text-gray-500">Experience:</span>{" "}
-                    {candidate.experience_years} years
-                  </p>
-                )}
-              </div>
+                <Stack spacing={1} sx={{ mt: 2, fontSize: 14 }}>
+                  {candidate.email && (
+                    <Typography variant="body2">
+                      <Box component="span" sx={{ color: "grey.600" }}>Email:</Box>{" "}
+                      {candidate.email}
+                    </Typography>
+                  )}
+                  {candidate.phone && (
+                    <Typography variant="body2">
+                      <Box component="span" sx={{ color: "grey.600" }}>Phone:</Box>{" "}
+                      {candidate.phone}
+                    </Typography>
+                  )}
+                  {candidate.location && (
+                    <Typography variant="body2">
+                      <Box component="span" sx={{ color: "grey.600" }}>Location:</Box>{" "}
+                      {candidate.location}
+                    </Typography>
+                  )}
+                  {candidate.experience_years != null && (
+                    <Typography variant="body2">
+                      <Box component="span" sx={{ color: "grey.600" }}>Experience:</Box>{" "}
+                      {candidate.experience_years} years
+                    </Typography>
+                  )}
+                  {candidate.date_of_birth && (
+                    <Typography variant="body2">
+                      <Box component="span" sx={{ color: "grey.600" }}>DOB:</Box>{" "}
+                      {candidate.date_of_birth}
+                    </Typography>
+                  )}
+                </Stack>
 
-              {/* Skills */}
-              {candidate.skills.length > 0 && (
-                <div className="mt-4">
-                  <h3 className="mb-2 text-xs font-medium uppercase text-gray-500">
-                    Skills
-                  </h3>
-                  <div className="flex flex-wrap gap-1">
-                    {candidate.skills.map((s) => (
-                      <span
-                        key={s}
-                        className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700"
+                {/* Linked Jobs */}
+                <Box sx={{ mt: 2 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ mb: 0.5, display: "block", fontWeight: 500, textTransform: "uppercase", color: "grey.600" }}
+                  >
+                    Linked Jobs ({jobMatches.length})
+                  </Typography>
+                  {jobMatches.length > 0 ? (
+                    <Stack spacing={0.75}>
+                      {jobMatches.map((m) => (
+                        <Box
+                          key={m.job_id}
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            p: 0.75,
+                            borderRadius: 1,
+                            bgcolor: selectedJobId === m.job_id ? "action.selected" : "grey.50",
+                            cursor: "pointer",
+                            "&:hover": { bgcolor: "action.hover" },
+                          }}
+                          onClick={() => setSelectedJobId(m.job_id === selectedJobId ? "" : m.job_id)}
+                        >
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 500, fontSize: 13 }}>
+                              {m.job_title || m.job_id}
+                            </Typography>
+                            {m.job_company && (
+                              <Typography variant="caption" sx={{ color: "grey.500" }}>
+                                {m.job_company}
+                              </Typography>
+                            )}
+                          </Box>
+                          <Stack direction="row" spacing={0.5} alignItems="center">
+                            {m.match_score > 0 && (
+                              <Chip
+                                label={`${Math.round(m.match_score * 100)}%`}
+                                size="small"
+                                sx={{
+                                  fontSize: 11,
+                                  height: 20,
+                                  bgcolor: m.match_score >= 0.7 ? "#d1fae5" : m.match_score >= 0.4 ? "#fef3c7" : "#fee2e2",
+                                  color: m.match_score >= 0.7 ? "#047857" : m.match_score >= 0.4 ? "#b45309" : "#dc2626",
+                                }}
+                              />
+                            )}
+                            <Button
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUnlinkJob(m.job_id);
+                              }}
+                              sx={{ minWidth: "auto", p: 0.25, color: "grey.400", "&:hover": { color: "error.main" } }}
+                            >
+                              <LinkOffOutlined sx={{ fontSize: 16 }} />
+                            </Button>
+                          </Stack>
+                        </Box>
+                      ))}
+                    </Stack>
+                  ) : (
+                    <Typography variant="body2" sx={{ color: "grey.500", fontSize: 13 }}>
+                      No linked jobs yet.
+                    </Typography>
+                  )}
+
+                  {/* Link to job */}
+                  {availableJobs.length > 0 && (
+                    <Stack direction="row" spacing={0.5} sx={{ mt: 1 }}>
+                      <TextField
+                        select
+                        size="small"
+                        value={linkJobId}
+                        onChange={(e) => setLinkJobId(e.target.value)}
+                        sx={{ flex: 1 }}
                       >
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+                        <MenuItem value="">-- Link to Job --</MenuItem>
+                        {availableJobs.map((j) => (
+                          <MenuItem key={j.id} value={j.id}>
+                            {j.title} -- {j.company}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <Button
+                        onClick={handleLinkJob}
+                        disabled={!linkJobId || linking}
+                        variant="outlined"
+                        size="small"
+                        sx={{
+                          fontSize: 12,
+                          textTransform: "none",
+                          borderColor: "grey.300",
+                          px: 1,
+                          minWidth: "auto",
+                        }}
+                      >
+                        {linking ? <CircularProgress size={14} /> : <LinkOutlined sx={{ fontSize: 16 }} />}
+                      </Button>
+                    </Stack>
+                  )}
+                </Box>
 
-              {/* Notes */}
-              <div className="mt-4">
-                <h3 className="mb-1 text-xs font-medium uppercase text-gray-500">
-                  Notes
-                </h3>
-                <p className="text-sm text-gray-600">
-                  {candidate.notes || "No notes yet."}
-                </p>
-              </div>
-            </>
-          )}
-        </div>
+                {/* Skills */}
+                {candidate.skills.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ mb: 1, display: "block", fontWeight: 500, textTransform: "uppercase", color: "grey.600" }}
+                    >
+                      Skills
+                    </Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                      {candidate.skills.map((s) => (
+                        <Chip
+                          key={s}
+                          label={s}
+                          size="small"
+                          sx={{
+                            bgcolor: "#eff6ff",
+                            color: "#1d4ed8",
+                            fontSize: 12,
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+
+                {/* Notes */}
+                <Box sx={{ mt: 2 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ mb: 0.5, display: "block", fontWeight: 500, textTransform: "uppercase", color: "grey.600" }}
+                  >
+                    Notes
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.700" }}>
+                    {candidate.notes || "No notes yet."}
+                  </Typography>
+                </Box>
+              </>
+            )}
+          </Paper>
+        </Grid>
 
         {/* Middle: match analysis */}
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="font-semibold">Match Analysis</h3>
-          </div>
+        <Grid size={{ xs: 12, lg: 4 }}>
+          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
+            <Box sx={{ mb: 2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                Match Analysis
+              </Typography>
+              {jobMatches.length > 1 && (
+                <TextField
+                  select
+                  size="small"
+                  value={selectedJobId || activeMatch?.job_id || ""}
+                  onChange={(e) => setSelectedJobId(e.target.value)}
+                  sx={{ minWidth: 150 }}
+                >
+                  {jobMatches.map((m) => (
+                    <MenuItem key={m.job_id} value={m.job_id}>
+                      {m.job_title || m.job_id}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+            </Box>
 
-          {/* Candidate Summary */}
-          {candidate.resume_summary && (
-            <div className="mb-4">
-              <h4 className="mb-1 text-xs font-medium uppercase text-gray-500">
-                Summary
-              </h4>
-              <p className="text-sm leading-relaxed text-gray-600">
-                {candidate.resume_summary}
-              </p>
-            </div>
-          )}
+            {/* Score ring + reasoning */}
+            {(hasAnalysis || analyzing || showTypewriter) ? (
+              <>
+                <Box sx={{ mb: 2, display: "flex", alignItems: "center", gap: 2 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      height: 64,
+                      width: 64,
+                      flexShrink: 0,
+                      borderRadius: "50%",
+                      border: 4,
+                      borderColor: scoreColor,
+                      color: scoreTextColor,
+                      fontSize: 18,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {scorePct}%
+                  </Box>
+                  <Typography variant="body2" sx={{ color: "grey.600" }}>
+                    {showTypewriter ? (
+                      <TypewriterText
+                        text={typewriterText}
+                        speed={18}
+                        onComplete={() => setTypewriterDone(true)}
+                      />
+                    ) : (
+                      reasoningText || "No match analysis yet."
+                    )}
+                  </Typography>
+                </Box>
 
-          {/* Top Matching Jobs */}
-          <div className="mb-4">
-            <h4 className="mb-2 text-xs font-medium uppercase text-gray-500">
-              Top Matching Jobs
-            </h4>
-            {topJobs.length > 0 ? (
-              <div className="space-y-2">
-                {topJobs.map((tj, i) => {
-                  const pct = Math.round(tj.score * 100);
-                  const isTop = i === 0;
-                  return (
-                    <div
-                      key={tj.job_id}
-                      className={`flex items-center gap-3 rounded-lg border p-3 ${
-                        isTop
-                          ? "border-blue-200 bg-blue-50/50"
-                          : "border-gray-100 bg-gray-50/50"
-                      }`}
+                {/* Strengths */}
+                {(activeMatch?.strengths ?? []).length > 0 && (
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ mb: 0.5, display: "block", fontWeight: 500, textTransform: "uppercase", color: "grey.600" }}
                     >
-                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-500">
-                        #{i + 1}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className={`truncate text-sm font-medium ${isTop ? "text-blue-700" : "text-gray-700"}`}>
-                          {tj.title}
-                        </p>
-                        {tj.company && (
-                          <p className="truncate text-xs text-gray-500">
-                            {tj.company}
-                          </p>
-                        )}
-                      </div>
-                      <div
-                        className={`flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          pct >= 70
-                            ? "bg-emerald-100 text-emerald-700"
-                            : pct >= 40
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-red-100 text-red-600"
-                        }`}
-                      >
-                        {pct}%
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                      Strengths
+                    </Typography>
+                    <Box component="ul" sx={{ listStyle: "disc inside", pl: 0, m: 0 }}>
+                      {activeMatch!.strengths.map((s, i) => (
+                        <Typography
+                          component="li"
+                          key={i}
+                          variant="body2"
+                          sx={{ color: "#047857", mb: 0.5 }}
+                        >
+                          {s}
+                        </Typography>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+
+                {/* Gaps */}
+                {(activeMatch?.gaps ?? []).length > 0 && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ mb: 0.5, display: "block", fontWeight: 500, textTransform: "uppercase", color: "grey.600" }}
+                    >
+                      Gaps
+                    </Typography>
+                    <Box component="ul" sx={{ listStyle: "disc inside", pl: 0, m: 0 }}>
+                      {activeMatch!.gaps.map((g, i) => (
+                        <Typography
+                          component="li"
+                          key={i}
+                          variant="body2"
+                          sx={{ color: "#dc2626", mb: 0.5 }}
+                        >
+                          {g}
+                        </Typography>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+              </>
             ) : (
-              <div className="flex items-center gap-2 rounded-lg border border-dashed border-gray-200 p-4 text-sm text-gray-400">
-                <Briefcase className="h-4 w-4" />
-                No jobs in the system yet.
-              </div>
+              <Typography variant="body2" sx={{ mb: 2, color: "grey.500" }}>
+                {jobMatches.length === 0
+                  ? "Link a job first, then generate analysis."
+                  : "Click the button below to generate a match analysis using AI."}
+              </Typography>
             )}
-          </div>
 
-          {/* AI Analysis (reasoning, strengths, gaps) */}
-          {(hasAnalysis || analyzing || showTypewriter) ? (
-            <>
-              <div className="mb-3">
-                <h4 className="mb-1 text-xs font-medium uppercase text-gray-500">
-                  AI Analysis
-                </h4>
-                <p className="whitespace-pre-line text-sm text-gray-600">
-                  {showTypewriter ? (
-                    <TypewriterText
-                      text={typewriterText}
-                      speed={18}
-                      onComplete={() => setTypewriterDone(true)}
-                    />
-                  ) : (
-                    reasoningText || "No analysis yet."
-                  )}
-                </p>
-              </div>
+            {/* Candidate Summary */}
+            {candidate.resume_summary && (
+              <Box sx={{ mb: 2 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ mb: 0.5, display: "block", fontWeight: 500, textTransform: "uppercase", color: "grey.600" }}
+                >
+                  Candidate Summary
+                </Typography>
+                <Typography variant="body2" sx={{ lineHeight: 1.6, color: "grey.700" }}>
+                  {candidate.resume_summary}
+                </Typography>
+              </Box>
+            )}
 
-              {/* Strengths */}
-              {candidate.strengths.length > 0 && (
-                <div className="mb-3">
-                  <h4 className="mb-1 text-xs font-medium uppercase text-gray-500">
-                    Strengths
-                  </h4>
-                  <ul className="list-inside list-disc space-y-1 text-sm text-emerald-700">
-                    {candidate.strengths.map((s, i) => (
-                      <li key={i}>{s}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Gaps */}
-              {candidate.gaps.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="mb-1 text-xs font-medium uppercase text-gray-500">
-                    Gaps
-                  </h4>
-                  <ul className="list-inside list-disc space-y-1 text-sm text-red-600">
-                    {candidate.gaps.map((g, i) => (
-                      <li key={i}>{g}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </>
-          ) : (
-            <p className="mb-4 text-sm text-gray-400">
-              {topJobs.length > 0
-                ? "Click below to generate a detailed AI analysis."
-                : "Add jobs to the system to see match analysis."}
-            </p>
-          )}
-
-          {/* Re-analyze button */}
-          {topJobs.length > 0 && (
-            <button
+            {/* Generate button */}
+            <Button
               onClick={handleAnalyze}
-              disabled={analyzing}
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-violet-700 hover:to-blue-700 disabled:opacity-50"
+              disabled={analyzing || jobMatches.length === 0}
+              fullWidth
+              variant="contained"
+              sx={{
+                background: "linear-gradient(to right, #7c3aed, #2563eb)",
+                "&:hover": {
+                  background: "linear-gradient(to right, #6d28d9, #1d4ed8)",
+                },
+                textTransform: "none",
+                fontSize: 14,
+                fontWeight: 500,
+                py: 1,
+                "&.Mui-disabled": {
+                  opacity: 0.5,
+                  color: "white",
+                  background: "linear-gradient(to right, #7c3aed, #2563eb)",
+                },
+              }}
+              startIcon={
+                analyzing ? (
+                  <CircularProgress size={16} sx={{ color: "white" }} />
+                ) : (
+                  <AutoAwesomeOutlined sx={{ fontSize: 16 }} />
+                )
+              }
             >
-              {analyzing ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  {hasAnalysis ? "Re-analyze" : "Generate Analysis"}
-                </>
-              )}
-            </button>
-          )}
-        </div>
+              {analyzing
+                ? "Analyzing..."
+                : hasAnalysis
+                  ? "Re-generate Analysis"
+                  : "Generate Analysis"}
+            </Button>
+          </Paper>
+        </Grid>
 
         {/* Right: communication timeline */}
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <h3 className="mb-4 font-semibold">Communication</h3>
-          {emails && emails.length > 0 ? (
-            <div className="space-y-3">
-              {emails.map((e) => (
-                <div
-                  key={e.id}
-                  className="rounded-lg border border-gray-100 bg-gray-50 p-3 text-sm"
-                >
-                  <p className="font-medium">{e.subject}</p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    {e.email_type} &middot;{" "}
-                    {e.sent ? `Sent ${e.sent_at ?? ""}` : "Draft"}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400">No emails yet.</p>
-          )}
+        <Grid size={{ xs: 12, lg: 4 }}>
+          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+              Communication
+            </Typography>
+            {emails && emails.length > 0 ? (
+              <Stack spacing={1.5}>
+                {emails.map((e) => (
+                  <Box
+                    key={e.id}
+                    sx={{
+                      borderRadius: 2,
+                      border: 1,
+                      borderColor: "grey.100",
+                      bgcolor: "grey.50",
+                      p: 1.5,
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {e.subject}
+                    </Typography>
+                    <Typography variant="caption" sx={{ mt: 0.5, display: "block", color: "grey.600" }}>
+                      {e.email_type} &middot;{" "}
+                      {e.sent ? `Sent ${e.sent_at ?? ""}` : "Draft"}
+                    </Typography>
+                  </Box>
+                ))}
+              </Stack>
+            ) : (
+              <Typography variant="body2" sx={{ color: "grey.500" }}>
+                No emails yet.
+              </Typography>
+            )}
 
-          {/* Action buttons */}
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              onClick={handleSendEmail}
-              className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-            >
-              <Mail className="h-3.5 w-3.5" /> Send Email
-            </button>
-            <button
-              onClick={handleDelete}
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
-            >
-              <Trash2 className="h-3.5 w-3.5" /> Delete
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+            {/* Action buttons */}
+            <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: "wrap" }}>
+              <Button
+                onClick={handleSendEmail}
+                variant="contained"
+                size="small"
+                startIcon={<MailOutline sx={{ fontSize: 14 }} />}
+                sx={{
+                  fontSize: 12,
+                  textTransform: "none",
+                  px: 1.5,
+                  py: 0.75,
+                }}
+              >
+                Send Email
+              </Button>
+              <Button
+                onClick={handleReparse}
+                disabled={reparsing}
+                variant="outlined"
+                size="small"
+                startIcon={
+                  reparsing ? (
+                    <CircularProgress size={14} />
+                  ) : (
+                    <RefreshOutlined sx={{ fontSize: 14 }} />
+                  )
+                }
+                sx={{
+                  fontSize: 12,
+                  textTransform: "none",
+                  borderColor: "grey.300",
+                  color: "grey.600",
+                  "&:hover": { bgcolor: "grey.50", borderColor: "grey.300" },
+                  px: 1.5,
+                  py: 0.75,
+                }}
+              >
+                {reparsing ? "Parsing..." : "Re-parse Resume"}
+              </Button>
+              <Button
+                onClick={handleDelete}
+                variant="outlined"
+                size="small"
+                startIcon={<DeleteOutline sx={{ fontSize: 14 }} />}
+                sx={{
+                  fontSize: 12,
+                  textTransform: "none",
+                  borderColor: "grey.300",
+                  color: "#dc2626",
+                  "&:hover": { bgcolor: "#fef2f2", borderColor: "grey.300" },
+                  px: 1.5,
+                  py: 0.75,
+                }}
+              >
+                Delete
+              </Button>
+            </Stack>
+          </Paper>
+        </Grid>
+      </Grid>
+    </Stack>
   );
 }
 
@@ -535,39 +883,25 @@ function TypewriterText({
   }, [text, speed]);
 
   return (
-    <span>
+    <Box component="span">
       {displayed}
       {displayed.length < text.length && (
-        <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-gray-400" />
+        <Box
+          component="span"
+          sx={{
+            ml: 0.5,
+            display: "inline-block",
+            height: 16,
+            width: 2,
+            bgcolor: "grey.400",
+            "@keyframes pulse": {
+              "0%, 100%": { opacity: 1 },
+              "50%": { opacity: 0 },
+            },
+            animation: "pulse 1.5s infinite",
+          }}
+        />
       )}
-    </span>
-  );
-}
-
-/* -- Edit Field ---------------------------------------------------------- */
-
-function EditField({
-  label,
-  value,
-  onChange,
-  type = "text",
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-}) {
-  return (
-    <div>
-      <label className="mb-1 block text-xs font-medium text-gray-500">
-        {label}
-      </label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-      />
-    </div>
+    </Box>
   );
 }

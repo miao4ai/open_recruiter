@@ -25,6 +25,9 @@ dependencies = [
     "APScheduler>=3.10,<4",
 ]
 
+[project.scripts]
+open-recruiter = "app.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

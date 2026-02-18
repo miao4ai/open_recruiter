@@ -38,5 +38,11 @@ Thumbs.db
 credentials.json
 token.json
 
+# Uploads (resumes)
+backend/uploads/
+
+# Build artifacts
+*.tsbuildinfo
+
 # Electron build
 release/

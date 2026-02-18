@@ -92,15 +92,24 @@ export const updateCandidate = (
     location?: string;
     status?: string;
     notes?: string;
-    job_id?: string;
+    date_of_birth?: string;
   }
 ) => api.patch<Candidate>(`/candidates/${id}`, data).then((r) => r.data);
 export const deleteCandidate = (id: string) =>
   api.delete(`/candidates/${id}`).then((r) => r.data);
+export const reparseCandidate = (id: string) =>
+  api.post<Candidate>(`/candidates/${id}/reparse`).then((r) => r.data);
 export const matchCandidates = (job_id: string, candidate_ids: string[]) =>
   api
     .post("/candidates/match", { job_id, candidate_ids })
     .then((r) => r.data);
+export const linkCandidateJob = (candidateId: string, jobId: string) => {
+  const form = new FormData();
+  form.append("job_id", jobId);
+  return api.post<Candidate>(`/candidates/${candidateId}/link-job`, form).then((r) => r.data);
+};
+export const unlinkCandidateJob = (candidateId: string, jobId: string) =>
+  api.delete(`/candidates/${candidateId}/jobs/${jobId}`).then((r) => r.data);
 
 // ── Emails ────────────────────────────────────────────────────────────────
 export const listEmails = (candidate_id?: string) =>
