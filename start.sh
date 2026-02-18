@@ -26,7 +26,7 @@ trap cleanup SIGINT SIGTERM
 
 # Start backend
 cd "$ROOT/backend"
-.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
+"$ROOT/.venv/bin/python" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
 BACKEND_PID=$!
 
 # Wait for backend to be ready (health check)

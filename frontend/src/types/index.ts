@@ -141,6 +141,7 @@ export interface Settings {
   llm_model: string;
   anthropic_api_key: string;
   openai_api_key: string;
+  gemini_api_key: string;
   email_backend: string;
   sendgrid_api_key: string;
   email_from: string;

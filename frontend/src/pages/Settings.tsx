@@ -31,11 +31,17 @@ const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
     { value: "gpt-4.1", label: "GPT-4.1" },
     { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
   ],
+  gemini: [
+    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+    { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+  ],
 };
 
 const DEFAULT_MODEL: Record<string, string> = {
   anthropic: "claude-sonnet-4-20250514",
   openai: "gpt-5.1",
+  gemini: "gemini-2.5-flash",
 };
 
 export default function Settings() {
@@ -45,6 +51,7 @@ export default function Settings() {
     llm_model: "",
     anthropic_api_key: "",
     openai_api_key: "",
+    gemini_api_key: "",
     email_backend: "console",
     sendgrid_api_key: "",
     email_from: "",
@@ -151,6 +158,7 @@ export default function Settings() {
           >
             <MenuItem value="anthropic">Anthropic</MenuItem>
             <MenuItem value="openai">OpenAI</MenuItem>
+            <MenuItem value="gemini">Google Gemini</MenuItem>
           </TextField>
           <TextField
             select
@@ -185,6 +193,17 @@ export default function Settings() {
               value={form.openai_api_key}
               onChange={handleChange}
               placeholder="sk-..."
+              fullWidth
+            />
+          )}
+          {form.llm_provider === "gemini" && (
+            <TextField
+              label="Gemini API Key"
+              name="gemini_api_key"
+              type="password"
+              value={form.gemini_api_key}
+              onChange={handleChange}
+              placeholder="AI..."
               fullWidth
             />
           )}
