@@ -9,6 +9,7 @@ import FormHelperText from "@mui/material/FormHelperText";
 import Stack from "@mui/material/Stack";
 import SaveOutlined from "@mui/icons-material/SaveOutlined";
 import ScienceOutlined from "@mui/icons-material/ScienceOutlined";
+import { useSnackbar } from "notistack";
 import { useApi } from "../hooks/useApi";
 import {
   getSettings,
@@ -17,6 +18,25 @@ import {
   testEmail,
 } from "../lib/api";
 import type { Settings as SettingsType } from "../types";
+
+const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  anthropic: [
+    { value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
+    { value: "claude-haiku-4-20250414", label: "Claude Haiku 4" },
+    { value: "claude-opus-4-20250514", label: "Claude Opus 4" },
+  ],
+  openai: [
+    { value: "gpt-5.2-pro", label: "GPT-5.2 Pro" },
+    { value: "gpt-5.1", label: "GPT-5.1" },
+    { value: "gpt-4.1", label: "GPT-4.1" },
+    { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
+  ],
+};
+
+const DEFAULT_MODEL: Record<string, string> = {
+  anthropic: "claude-sonnet-4-20250514",
+  openai: "gpt-5.1",
+};
 
 export default function Settings() {
   const { data: saved } = useApi(useCallback(() => getSettings(), []));
@@ -41,7 +61,7 @@ export default function Settings() {
     recruiter_company: "",
   });
   const [saving, setSaving] = useState(false);
-  const [testResult, setTestResult] = useState<string | null>(null);
+  const { enqueueSnackbar } = useSnackbar();
 
   useEffect(() => {
     if (saved) setForm(saved);
@@ -50,37 +70,70 @@ export default function Settings() {
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === "llm_provider") {
+      const models = MODEL_OPTIONS[value] ?? [];
+      const modelExists = models.some((m) => m.value === form.llm_model);
+      setForm({
+        ...form,
+        llm_provider: value,
+        llm_model: modelExists ? form.llm_model : (DEFAULT_MODEL[value] ?? ""),
+      });
+    } else {
+      setForm({ ...form, [name]: value });
+    }
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
       await updateSettings(form);
-      setTestResult("Settings saved.");
+      enqueueSnackbar("Settings saved.", { variant: "success" });
+    } catch {
+      enqueueSnackbar("Failed to save settings.", { variant: "error", persist: true });
     } finally {
       setSaving(false);
     }
   };
 
   const handleTestLlm = async () => {
-    setTestResult("Testing LLM...");
-    const res = await testLlm();
-    setTestResult(
-      res.status === "ok"
-        ? `LLM OK — response: "${res.response}"`
-        : `LLM Error: ${res.message}`
-    );
+    enqueueSnackbar("Saving settings & testing LLM...", { variant: "info" });
+    try {
+      await updateSettings(form);
+    } catch {
+      enqueueSnackbar("Failed to save settings.", { variant: "error", persist: true });
+      return;
+    }
+    try {
+      const res = await testLlm();
+      if (res.status === "ok") {
+        enqueueSnackbar(`LLM OK — response: "${res.response}"`, { variant: "success" });
+      } else {
+        enqueueSnackbar(`LLM Error: ${res.message}`, { variant: "error", persist: true });
+      }
+    } catch {
+      enqueueSnackbar("Failed to test LLM.", { variant: "error", persist: true });
+    }
   };
 
   const handleTestEmail = async () => {
-    setTestResult("Testing Email...");
-    const res = await testEmail();
-    setTestResult(
-      res.status === "ok"
-        ? `Email OK (${res.backend}): ${res.message}`
-        : `Email Error: ${res.message}`
-    );
+    enqueueSnackbar("Saving settings & testing Email...", { variant: "info" });
+    try {
+      await updateSettings(form);
+    } catch {
+      enqueueSnackbar("Failed to save settings.", { variant: "error", persist: true });
+      return;
+    }
+    try {
+      const res = await testEmail();
+      if (res.status === "ok") {
+        enqueueSnackbar(`Email OK (${res.backend}): ${res.message}`, { variant: "success" });
+      } else {
+        enqueueSnackbar(`Email Error: ${res.message}`, { variant: "error", persist: true });
+      }
+    } catch {
+      enqueueSnackbar("Failed to test Email.", { variant: "error", persist: true });
+    }
   };
 
   return (
@@ -100,31 +153,41 @@ export default function Settings() {
             <MenuItem value="openai">OpenAI</MenuItem>
           </TextField>
           <TextField
-            label="Model (optional)"
+            select
+            label="Model"
             name="llm_model"
             value={form.llm_model}
             onChange={handleChange}
-            placeholder="e.g. claude-sonnet-4-20250514"
             fullWidth
-          />
-          <TextField
-            label="Anthropic API Key"
-            name="anthropic_api_key"
-            type="password"
-            value={form.anthropic_api_key}
-            onChange={handleChange}
-            placeholder="sk-ant-..."
-            fullWidth
-          />
-          <TextField
-            label="OpenAI API Key"
-            name="openai_api_key"
-            type="password"
-            value={form.openai_api_key}
-            onChange={handleChange}
-            placeholder="sk-..."
-            fullWidth
-          />
+          >
+            {(MODEL_OPTIONS[form.llm_provider] ?? []).map((m) => (
+              <MenuItem key={m.value} value={m.value}>
+                {m.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          {form.llm_provider === "anthropic" && (
+            <TextField
+              label="Anthropic API Key"
+              name="anthropic_api_key"
+              type="password"
+              value={form.anthropic_api_key}
+              onChange={handleChange}
+              placeholder="sk-ant-..."
+              fullWidth
+            />
+          )}
+          {form.llm_provider === "openai" && (
+            <TextField
+              label="OpenAI API Key"
+              name="openai_api_key"
+              type="password"
+              value={form.openai_api_key}
+              onChange={handleChange}
+              placeholder="sk-..."
+              fullWidth
+            />
+          )}
           <Button
             variant="outlined"
             startIcon={<ScienceOutlined />}
@@ -324,7 +387,7 @@ export default function Settings() {
         </Section>
 
         {/* Save */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <Box>
           <Button
             variant="contained"
             startIcon={<SaveOutlined />}
@@ -333,11 +396,6 @@ export default function Settings() {
           >
             {saving ? "Saving..." : "Save Settings"}
           </Button>
-          {testResult && (
-            <Typography variant="body2" color="text.secondary">
-              {testResult}
-            </Typography>
-          )}
         </Box>
       </Stack>
     </Box>

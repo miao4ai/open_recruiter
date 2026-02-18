@@ -237,68 +237,117 @@ export default function CandidateDetail() {
         Back to Candidates
       </Button>
 
+      {/* Action toolbar */}
+      <Paper variant="outlined" sx={{ px: 2.5, py: 1.5, borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Typography variant="h6" sx={{ fontWeight: 600, mr: 1 }}>
+            {candidate.name || "Unnamed"}
+          </Typography>
+          {candidate.current_title && (
+            <Typography variant="body2" sx={{ color: "grey.500" }}>
+              {candidate.current_title}
+              {candidate.current_company ? ` at ${candidate.current_company}` : ""}
+            </Typography>
+          )}
+        </Stack>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Button
+            onClick={handleSendEmail}
+            variant="contained"
+            size="small"
+            startIcon={<MailOutline sx={{ fontSize: 14 }} />}
+            sx={{ fontSize: 12, textTransform: "none", px: 1.5, py: 0.75 }}
+          >
+            Send Email
+          </Button>
+          <Button
+            onClick={handleReparse}
+            disabled={reparsing}
+            variant="outlined"
+            size="small"
+            startIcon={
+              reparsing ? (
+                <CircularProgress size={14} />
+              ) : (
+                <RefreshOutlined sx={{ fontSize: 14 }} />
+              )
+            }
+            sx={{
+              fontSize: 12, textTransform: "none",
+              borderColor: "grey.300", color: "grey.600",
+              "&:hover": { bgcolor: "grey.50", borderColor: "grey.300" },
+              px: 1.5, py: 0.75,
+            }}
+          >
+            {reparsing ? "Parsing..." : "Re-parse Resume"}
+          </Button>
+          {!editing ? (
+            <Button
+              onClick={startEdit}
+              variant="outlined"
+              size="small"
+              startIcon={<EditOutlined sx={{ fontSize: 14 }} />}
+              sx={{
+                fontSize: 12, textTransform: "none",
+                borderColor: "grey.300", color: "grey.600",
+                "&:hover": { bgcolor: "grey.50" },
+                px: 1, py: 0.75,
+              }}
+            >
+              Edit
+            </Button>
+          ) : (
+            <Stack direction="row" spacing={0.5}>
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                variant="contained"
+                size="small"
+                startIcon={<SaveOutlined sx={{ fontSize: 14 }} />}
+                sx={{ fontSize: 12, textTransform: "none", px: 1, py: 0.75 }}
+              >
+                {saving ? "..." : "Save"}
+              </Button>
+              <Button
+                onClick={() => setEditing(false)}
+                variant="outlined"
+                size="small"
+                sx={{
+                  fontSize: 12, textTransform: "none",
+                  borderColor: "grey.300", color: "grey.600",
+                  "&:hover": { bgcolor: "grey.50" },
+                  px: 1, py: 0.75, minWidth: "auto",
+                }}
+              >
+                <CloseOutlined sx={{ fontSize: 14 }} />
+              </Button>
+            </Stack>
+          )}
+          <Button
+            onClick={handleDelete}
+            variant="outlined"
+            size="small"
+            startIcon={<DeleteOutline sx={{ fontSize: 14 }} />}
+            sx={{
+              fontSize: 12, textTransform: "none",
+              borderColor: "grey.300", color: "#dc2626",
+              "&:hover": { bgcolor: "#fef2f2", borderColor: "grey.300" },
+              px: 1.5, py: 0.75,
+            }}
+          >
+            Delete
+          </Button>
+        </Stack>
+      </Paper>
+
       <Grid container spacing={3}>
         {/* Left: info card */}
-        <Grid size={{ xs: 12, lg: 4 }}>
+        <Grid size={{ xs: 12, lg: 5 }}>
           <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
             <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                {candidate.name || "Unnamed"}
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                Profile
               </Typography>
-              {!editing ? (
-                <Button
-                  onClick={startEdit}
-                  variant="outlined"
-                  size="small"
-                  startIcon={<EditOutlined sx={{ fontSize: 14 }} />}
-                  sx={{
-                    fontSize: 12,
-                    textTransform: "none",
-                    borderColor: "grey.300",
-                    color: "grey.600",
-                    "&:hover": { bgcolor: "grey.50" },
-                    px: 1,
-                    py: 0.5,
-                  }}
-                >
-                  Edit
-                </Button>
-              ) : (
-                <Stack direction="row" spacing={0.5}>
-                  <Button
-                    onClick={handleSave}
-                    disabled={saving}
-                    variant="contained"
-                    size="small"
-                    startIcon={<SaveOutlined sx={{ fontSize: 14 }} />}
-                    sx={{
-                      fontSize: 12,
-                      textTransform: "none",
-                      px: 1,
-                      py: 0.5,
-                    }}
-                  >
-                    {saving ? "..." : "Save"}
-                  </Button>
-                  <Button
-                    onClick={() => setEditing(false)}
-                    variant="outlined"
-                    size="small"
-                    sx={{
-                      fontSize: 12,
-                      textTransform: "none",
-                      borderColor: "grey.300",
-                      color: "grey.600",
-                      "&:hover": { bgcolor: "grey.50" },
-                      px: 1,
-                      py: 0.5,
-                      minWidth: "auto",
-                    }}
-                  >
-                    <CloseOutlined sx={{ fontSize: 14 }} />
-                  </Button>
-                </Stack>
-              )}
             </Box>
 
             {editing ? (
@@ -583,8 +632,8 @@ export default function CandidateDetail() {
           </Paper>
         </Grid>
 
-        {/* Middle: match analysis */}
-        <Grid size={{ xs: 12, lg: 4 }}>
+        {/* Right: match analysis */}
+        <Grid size={{ xs: 12, lg: 7 }}>
           <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
             <Box sx={{ mb: 2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
@@ -751,13 +800,13 @@ export default function CandidateDetail() {
           </Paper>
         </Grid>
 
-        {/* Right: communication timeline */}
-        <Grid size={{ xs: 12, lg: 4 }}>
-          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
-            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-              Communication
-            </Typography>
-            {emails && emails.length > 0 ? (
+        {/* Communication history (below match analysis when there are emails) */}
+        {emails && emails.length > 0 && (
+          <Grid size={12}>
+            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+                Communication History
+              </Typography>
               <Stack spacing={1.5}>
                 {emails.map((e) => (
                   <Box
@@ -780,72 +829,9 @@ export default function CandidateDetail() {
                   </Box>
                 ))}
               </Stack>
-            ) : (
-              <Typography variant="body2" sx={{ color: "grey.500" }}>
-                No emails yet.
-              </Typography>
-            )}
-
-            {/* Action buttons */}
-            <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: "wrap" }}>
-              <Button
-                onClick={handleSendEmail}
-                variant="contained"
-                size="small"
-                startIcon={<MailOutline sx={{ fontSize: 14 }} />}
-                sx={{
-                  fontSize: 12,
-                  textTransform: "none",
-                  px: 1.5,
-                  py: 0.75,
-                }}
-              >
-                Send Email
-              </Button>
-              <Button
-                onClick={handleReparse}
-                disabled={reparsing}
-                variant="outlined"
-                size="small"
-                startIcon={
-                  reparsing ? (
-                    <CircularProgress size={14} />
-                  ) : (
-                    <RefreshOutlined sx={{ fontSize: 14 }} />
-                  )
-                }
-                sx={{
-                  fontSize: 12,
-                  textTransform: "none",
-                  borderColor: "grey.300",
-                  color: "grey.600",
-                  "&:hover": { bgcolor: "grey.50", borderColor: "grey.300" },
-                  px: 1.5,
-                  py: 0.75,
-                }}
-              >
-                {reparsing ? "Parsing..." : "Re-parse Resume"}
-              </Button>
-              <Button
-                onClick={handleDelete}
-                variant="outlined"
-                size="small"
-                startIcon={<DeleteOutline sx={{ fontSize: 14 }} />}
-                sx={{
-                  fontSize: 12,
-                  textTransform: "none",
-                  borderColor: "grey.300",
-                  color: "#dc2626",
-                  "&:hover": { bgcolor: "#fef2f2", borderColor: "grey.300" },
-                  px: 1.5,
-                  py: 0.75,
-                }}
-              >
-                Delete
-              </Button>
-            </Stack>
-          </Paper>
-        </Grid>
+            </Paper>
+          </Grid>
+        )}
       </Grid>
     </Stack>
   );
