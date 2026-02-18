@@ -11,7 +11,7 @@ Write-Host "  Starting Open Recruiter..." -ForegroundColor Cyan
 Write-Host ""
 
 # Start backend in a new window
-$backendCmd = "cd '$ROOT\backend'; '$ROOT\.venv\Scripts\python' -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+$backendCmd = "cd '$ROOT\backend'; & '$ROOT\.venv\Scripts\python' -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendCmd
 
 # Wait for backend to load (embedding model takes a few seconds)
