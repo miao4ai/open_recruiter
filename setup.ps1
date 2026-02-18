@@ -126,7 +126,7 @@ if (-not $hasNode) {
 # ── 4. Install backend dependencies ──────────────────────────────────────
 
 Write-Host "[4/6] Installing backend dependencies (Python)..." -ForegroundColor Yellow
-Push-Location "$ROOT\backend"
+Push-Location "$ROOT"
 & uv sync
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  ERROR: Backend dependency installation failed." -ForegroundColor Red
@@ -168,12 +168,18 @@ if (-not $skipEnv) {
     Write-Host "  Choose LLM provider:"
     Write-Host "    1) Anthropic (Claude)  [default]"
     Write-Host "    2) OpenAI (GPT)"
-    $llmChoice = Read-Host "  Enter 1 or 2"
+    Write-Host "    3) Gemini"
+    $llmChoice = Read-Host "  Enter 1, 2, or 3"
     if ($llmChoice -eq "2") {
         $llmProvider = "openai"
         Write-Host "  OpenAI API Key (sk-...): " -NoNewline
         $llmKey = Read-Host
         $keyLine = "OPENAI_API_KEY=$llmKey"
+    } elseif ($llmChoice -eq "3") {
+        $llmProvider = "gemini"
+        Write-Host "  Gemini API Key (AI...): " -NoNewline
+        $llmKey = Read-Host
+        $keyLine = "GEMINI_API_KEY=$llmKey"
     } else {
         $llmProvider = "anthropic"
         Write-Host "  Anthropic API Key (sk-ant-...): " -NoNewline
@@ -224,7 +230,7 @@ Write-Host "  To start Open Recruiter:" -ForegroundColor Cyan
 Write-Host "    .\start.ps1" -ForegroundColor White
 Write-Host ""
 Write-Host "  Or manually:" -ForegroundColor Cyan
-Write-Host "    Terminal 1:  cd backend && .venv\Scripts\python -m uvicorn app.main:app --port 8000 --reload"
+Write-Host "    Terminal 1:  cd backend && ..\.venv\Scripts\python -m uvicorn app.main:app --port 8000 --reload"
 Write-Host "    Terminal 2:  cd frontend && npx vite"
 Write-Host "    Open:        http://localhost:5173"
 Write-Host ""
