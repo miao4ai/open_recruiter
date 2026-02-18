@@ -29,8 +29,27 @@ cd "$ROOT/backend"
 .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
 BACKEND_PID=$!
 
-# Wait for backend to initialize
-sleep 2
+# Wait for backend to be ready (health check)
+echo -e "  ${CYAN}Waiting for backend to start...${NC}"
+RETRIES=0
+MAX_RETRIES=60
+while [ $RETRIES -lt $MAX_RETRIES ]; do
+    if curl -sf http://localhost:8000/docs >/dev/null 2>&1; then
+        echo -e "  ${GREEN}Backend is ready.${NC}"
+        break
+    fi
+    # Check if backend process died
+    if ! kill -0 $BACKEND_PID 2>/dev/null; then
+        echo -e "  ${YELLOW}Backend process exited unexpectedly.${NC}"
+        exit 1
+    fi
+    RETRIES=$((RETRIES + 1))
+    sleep 1
+done
+
+if [ $RETRIES -eq $MAX_RETRIES ]; then
+    echo -e "  ${YELLOW}Backend did not respond within ${MAX_RETRIES}s. Starting frontend anyway...${NC}"
+fi
 
 # Start frontend
 cd "$ROOT/frontend"
