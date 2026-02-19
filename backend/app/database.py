@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import uuid
 from datetime import datetime
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "open_recruiter.db"
+_data_dir = os.environ.get("OPEN_RECRUITER_DATA_DIR")
+if _data_dir:
+    _base = Path(_data_dir)
+    _base.mkdir(parents=True, exist_ok=True)
+    DB_PATH = _base / "open_recruiter.db"
+else:
+    DB_PATH = Path(__file__).resolve().parent.parent / "open_recruiter.db"
 
 
 def get_conn() -> sqlite3.Connection:
