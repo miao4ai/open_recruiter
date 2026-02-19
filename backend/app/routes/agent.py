@@ -162,6 +162,19 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
             log.error("Chat LLM call failed: %s", e)
             reply_text = f"I encountered an error: {e!s}. Please check your LLM configuration in Settings."
 
+    # Safety net: if reply_text is still raw JSON, extract message
+    if reply_text and reply_text.strip().startswith("{") and '"message"' in reply_text:
+        try:
+            _parsed = json.loads(reply_text)
+            if isinstance(_parsed, dict) and "message" in _parsed:
+                reply_text = _parsed["message"]
+                if not action_data:
+                    action_data = _parsed.get("action")
+                if not context_hint_data:
+                    context_hint_data = _parsed.get("context_hint")
+        except Exception:
+            pass
+
     # Process actions using shared helper
     response: dict = {"reply": reply_text, "session_id": session_id, "blocks": [], "suggestions": [], "context_hint": context_hint_data}
 
@@ -467,6 +480,19 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
                     reply_text = chat(cfg, system=system_prompt, messages=messages)
                 except Exception as e:
                     reply_text = f"I encountered an error: {e!s}"
+
+            # Safety net: if reply_text is still raw JSON, extract message
+            if reply_text and reply_text.strip().startswith("{") and '"message"' in reply_text:
+                try:
+                    _parsed = json.loads(reply_text)
+                    if isinstance(_parsed, dict) and "message" in _parsed:
+                        reply_text = _parsed["message"]
+                        if not action_data:
+                            action_data = _parsed.get("action")
+                        if not context_hint_data:
+                            context_hint_data = _parsed.get("context_hint")
+                except Exception:
+                    pass
 
             # Process actions (same as chat_endpoint)
             response: dict = {

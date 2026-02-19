@@ -812,6 +812,17 @@ export default function Chat() {
       content: text, created_at: new Date().toISOString(),
     }]);
 
+    // If a reply looks like raw JSON with a "message" field, extract just the text
+    const cleanReply = (text: string): string => {
+      if (text && text.trimStart().startsWith("{") && text.includes('"message"')) {
+        try {
+          const parsed = JSON.parse(text);
+          if (typeof parsed.message === "string") return parsed.message;
+        } catch { /* not JSON, use as-is */ }
+      }
+      return text;
+    };
+
     // Accumulate streamed JSON and extract the "message" field progressively
     let accumulated = "";
     const extractMessage = (raw: string): string => {
@@ -880,7 +891,7 @@ export default function Chat() {
 
       setMessages((prev) => [...prev, {
         id: response.message_id || "reply-" + Date.now(),
-        user_id: "", role: "assistant", content: response.reply,
+        user_id: "", role: "assistant", content: cleanReply(response.reply),
         created_at: new Date().toISOString(),
         action: response.action, actionStatus: response.action ? "pending" : undefined,
         blocks: response.blocks,
