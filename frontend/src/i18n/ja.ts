@@ -479,7 +479,7 @@ const ja = {
 
   // ── Job Seeker Home (Ai Chan) ──
   jobSeekerHome: {
-    greeting: "こんにちは！アイです、あなたの就職活動アシスタントです。今日は何をお手伝いしましょうか？\n\n以下のことをお手伝いできます：\n- 面接対策\n- 履歴書の添削\n- キャリアオプションの探索\n- 就職活動に関する質問への回答",
+    greeting: "こんにちは！アイです、あなたの就職活動アシスタントです。今日は何をお手伝いしましょうか？\n\n以下のことをお手伝いできます：\n- あなたのプロフィールに合った求人を検索\n- 特定のポジションとのマッチ度分析\n- 面接対策\n- 履歴書の添削\n- キャリアオプションの探索",
     noPastConversations: "過去の会話はありません",
     newChat: "新しいチャット",
     aiChan: "アイ",
@@ -495,6 +495,14 @@ const ja = {
     askAiChan: "アイに何でも聞いてください...",
     uploadResumeTitle: "履歴書アップロード",
     deleteSession: "セッションを削除",
+    searchResults: "求人検索結果",
+    matchScore: "マッチスコア",
+    strengths: "強み",
+    gaps: "ギャップ",
+    saveJob: "この求人を保存",
+    searchMore: "もっと検索",
+    viewDetails: "詳細を見る",
+    searchJobs: "求人を検索",
   },
 
   // ── Job Seeker Jobs ──

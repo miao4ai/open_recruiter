@@ -312,7 +312,40 @@ export interface ApprovalBlock {
   preview_items: { label: string; detail: string }[];
 }
 
-export type MessageBlock = MatchReportBlock | ApprovalBlock;
+export interface JobSearchResultsBlock {
+  type: "job_search_results";
+  jobs: {
+    job_id: string;
+    title: string;
+    company: string;
+    location: string;
+    salary_range: string;
+    required_skills: string[];
+    experience_years: number | null;
+    remote: boolean;
+    summary: string;
+    match_score: number;
+  }[];
+}
+
+export interface JobMatchResultBlock {
+  type: "job_match_result";
+  job: {
+    job_id: string;
+    title: string;
+    company: string;
+    location: string;
+    salary_range: string;
+  };
+  match: {
+    score: number;
+    strengths: string[];
+    gaps: string[];
+    reasoning: string;
+  };
+}
+
+export type MessageBlock = MatchReportBlock | ApprovalBlock | JobSearchResultsBlock | JobMatchResultBlock;
 
 // ── Workflow Types ──────────────────────────────────────────────────────
 

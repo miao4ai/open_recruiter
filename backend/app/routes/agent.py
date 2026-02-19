@@ -91,6 +91,7 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
     has_key = (
         (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
         or (cfg.llm_provider == "openai" and cfg.openai_api_key)
+        or (cfg.llm_provider == "gemini" and cfg.gemini_api_key)
     )
     if not has_key:
         return {"reply": "Please configure an LLM API key in Settings before using the chat assistant."}
@@ -117,7 +118,7 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
     log.info("Chat request from user %s with role '%s'", user_id, user_role)
     if user_role == "job_seeker":
         from app.prompts import CHAT_SYSTEM_JOB_SEEKER
-        context = _build_job_seeker_context(user_id)
+        context = _build_job_seeker_context(user_id, session_id=session_id)
         system_prompt = CHAT_SYSTEM_JOB_SEEKER.format(context=context)
     else:
         context = _build_chat_context(user_id, current_message=req.message)
@@ -164,9 +165,11 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
     # Process actions using shared helper
     response: dict = {"reply": reply_text, "session_id": session_id, "blocks": [], "suggestions": [], "context_hint": context_hint_data}
 
-    # GUARD: job seekers must never trigger recruiter-only actions
-    if user_role == "job_seeker":
-        action_data = None
+    # GUARD: job seekers may only trigger seeker-specific actions
+    _SEEKER_ALLOWED_ACTIONS = {"search_jobs", "analyze_job_match", "save_job"}
+    if user_role == "job_seeker" and action_data:
+        if action_data.get("type") not in _SEEKER_ALLOWED_ACTIONS:
+            action_data = None
 
     response = _process_actions(response, action_data, cfg, user_id, session_id)
 
@@ -330,6 +333,7 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
     has_key = (
         (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
         or (cfg.llm_provider == "openai" and cfg.openai_api_key)
+        or (cfg.llm_provider == "gemini" and cfg.gemini_api_key)
     )
     if not has_key:
         async def err_gen():
@@ -355,7 +359,7 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
     # Build prompt
     if user_role == "job_seeker":
         from app.prompts import CHAT_SYSTEM_JOB_SEEKER
-        context = _build_job_seeker_context(user_id)
+        context = _build_job_seeker_context(user_id, session_id=session_id)
         system_prompt = CHAT_SYSTEM_JOB_SEEKER.format(context=context)
     else:
         context = _build_chat_context(user_id, current_message=req.message)
@@ -461,8 +465,10 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
                 "blocks": [], "suggestions": [], "context_hint": context_hint_data,
             }
 
-            if user_role == "job_seeker":
-                action_data = None
+            _SEEKER_ALLOWED_ACTIONS = {"search_jobs", "analyze_job_match", "save_job"}
+            if user_role == "job_seeker" and action_data:
+                if action_data.get("type") not in _SEEKER_ALLOWED_ACTIONS:
+                    action_data = None
 
             response = _process_actions(response, action_data, cfg, user_id, session_id)
 
@@ -1135,6 +1141,171 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
             log.error("Failed to create candidate via chat: %s", e)
             response["reply"] = f"Sorry, I encountered an error creating the candidate: {e}"
 
+    # ── Job Seeker Actions ────────────────────────────────────────────────
+
+    elif action_type == "search_jobs":
+        try:
+            from app import vectorstore
+
+            query = action_data.get("query", "").strip()
+            profile = db.get_job_seeker_profile_by_user(user_id)
+
+            # Build search text: combine profile info + explicit query
+            search_parts = []
+            if query:
+                search_parts.append(query)
+            if profile:
+                if profile.get("skills"):
+                    search_parts.append(", ".join(profile["skills"][:10]))
+                if profile.get("current_title"):
+                    search_parts.append(profile["current_title"])
+                if profile.get("resume_summary"):
+                    search_parts.append(profile["resume_summary"][:500])
+            search_text = "\n".join(search_parts) if search_parts else query or "software engineer"
+
+            results = vectorstore.search_by_text("jobs", search_text, n_results=10)
+
+            jobs_list = []
+            for r in results:
+                job = db.get_job(r["job_id"])
+                if job:
+                    jobs_list.append({
+                        "job_id": job["id"],
+                        "title": job.get("title", ""),
+                        "company": job.get("company", ""),
+                        "location": job.get("location", ""),
+                        "salary_range": job.get("salary_range", ""),
+                        "required_skills": job.get("required_skills", [])[:6],
+                        "experience_years": job.get("experience_years"),
+                        "remote": job.get("remote", False),
+                        "summary": (job.get("summary") or "")[:150],
+                        "match_score": r.get("score", 0),
+                    })
+
+            if jobs_list:
+                response["blocks"] = [{"type": "job_search_results", "jobs": jobs_list}]
+                # Store results as action so context builder can find them for follow-up
+                response["action"] = {"type": "job_search_results", "jobs": jobs_list}
+                response["reply"] = f"I found {len(jobs_list)} matching positions based on your profile and search criteria. Take a look below!"
+                top3 = jobs_list[:3]
+                response["suggestions"] = [
+                    {"label": f"Analyze #{i+1}", "prompt": f"帮我分析一下这个职位: {j['title']} at {j['company']} (ID: {j['job_id']})"}
+                    for i, j in enumerate(top3)
+                ]
+            else:
+                response["reply"] = "I couldn't find any matching positions right now. Try different keywords or check back later!"
+
+        except Exception as e:
+            log.error("Job search failed: %s", e)
+            response["reply"] = f"Sorry, I encountered an error while searching: {e}"
+
+    elif action_type == "analyze_job_match":
+        try:
+            from app.llm import chat_json
+            from app.prompts import MATCHING
+
+            job_id = action_data.get("job_id", "")
+            job = db.get_job(job_id)
+            if not job:
+                response["reply"] = "I couldn't find that job. Please try searching again."
+                return response
+
+            profile = db.get_job_seeker_profile_by_user(user_id)
+            if not profile or not profile.get("name"):
+                response["reply"] = "Please upload your resume first so I can analyze how well you match this position!"
+                return response
+
+            skills = profile.get("skills", [])
+            skills_str = ", ".join(skills) if isinstance(skills, list) else str(skills)
+
+            user_msg = (
+                f"## Job Description\n{job.get('raw_text') or job.get('summary', '')}\n\n"
+                f"## Candidate Profile\n"
+                f"Name: {profile['name']}\n"
+                f"Title: {profile.get('current_title', '')}\n"
+                f"Skills: {skills_str}\n"
+                f"Experience: {profile.get('experience_years', 'N/A')} years\n"
+                f"Summary: {profile.get('resume_summary', '')}\n"
+            )
+
+            match_data = chat_json(cfg, system=MATCHING, messages=[{"role": "user", "content": user_msg}])
+            if isinstance(match_data, list):
+                match_data = match_data[0] if match_data else {}
+
+            match_result = {
+                "score": float(match_data.get("score", 0.0)),
+                "strengths": match_data.get("strengths", []),
+                "gaps": match_data.get("gaps", []),
+                "reasoning": match_data.get("reasoning", ""),
+            }
+
+            response["blocks"] = [{
+                "type": "job_match_result",
+                "job": {
+                    "job_id": job["id"],
+                    "title": job.get("title", ""),
+                    "company": job.get("company", ""),
+                    "location": job.get("location", ""),
+                    "salary_range": job.get("salary_range", ""),
+                },
+                "match": match_result,
+            }]
+            score_pct = round(match_result["score"] * 100)
+            response["reply"] = f"Here's my analysis of your fit for **{job.get('title', '')}** at **{job.get('company', '')}** — match score: **{score_pct}%**."
+            response["suggestions"] = [
+                {"label": "Save this job", "prompt": f"我想申请这个职位 (ID: {job_id})"},
+                {"label": "Search more", "prompt": "继续搜索其他职位"},
+            ]
+
+        except Exception as e:
+            log.error("Job match analysis failed: %s", e)
+            response["reply"] = f"Sorry, I encountered an error during analysis: {e}"
+
+    elif action_type == "save_job":
+        try:
+            job_id = action_data.get("job_id", "")
+            job = db.get_job(job_id)
+            if not job:
+                response["reply"] = "I couldn't find that job. Please try searching again."
+                return response
+
+            # Check if already saved
+            existing = db.list_seeker_jobs(user_id)
+            already_saved = any(sj.get("title") == job.get("title") and sj.get("company") == job.get("company") for sj in existing)
+            if already_saved:
+                response["reply"] = f"You've already saved **{job.get('title', '')}** at **{job.get('company', '')}** to your list!"
+                return response
+
+            seeker_job = {
+                "id": uuid.uuid4().hex[:8],
+                "user_id": user_id,
+                "title": job.get("title", ""),
+                "company": job.get("company", ""),
+                "posted_date": job.get("posted_date", ""),
+                "required_skills": job.get("required_skills", []),
+                "preferred_skills": job.get("preferred_skills", []),
+                "experience_years": job.get("experience_years"),
+                "location": job.get("location", ""),
+                "remote": job.get("remote", False),
+                "salary_range": job.get("salary_range", ""),
+                "summary": job.get("summary", ""),
+                "raw_text": job.get("raw_text", ""),
+                "source_url": "",
+                "status": "applied",
+                "created_at": datetime.now().isoformat(),
+            }
+            db.insert_seeker_job(seeker_job)
+
+            response["reply"] = f"I've saved **{job.get('title', '')}** at **{job.get('company', '')}** to your job list! You can view it in the My Jobs page."
+            response["suggestions"] = [
+                {"label": "Search more", "prompt": "继续搜索其他职位"},
+                {"label": "View my jobs", "prompt": "我保存了哪些职位？"},
+            ]
+
+        except Exception as e:
+            log.error("Save job failed: %s", e)
+            response["reply"] = f"Sorry, I encountered an error saving the job: {e}"
+
     return response
 
 
@@ -1296,8 +1467,8 @@ def _build_chat_context(user_id: str = "", current_message: str = "") -> str:
     return "\n".join(parts)
 
 
-def _build_job_seeker_context(user_id: str) -> str:
-    """Build context from the job seeker's profile and saved jobs."""
+def _build_job_seeker_context(user_id: str, session_id: str | None = None) -> str:
+    """Build context from the job seeker's profile, saved jobs, and recent search results."""
     parts = []
 
     # Profile / resume
@@ -1339,6 +1510,26 @@ def _build_job_seeker_context(user_id: str) -> str:
             parts.append(line)
     else:
         parts.append("\n## Saved Jobs: None")
+
+    # Recent search results — inject so LLM can resolve "第N个" references
+    if session_id:
+        recent_msgs = db.list_chat_messages(user_id, limit=10, session_id=session_id)
+        for msg in reversed(recent_msgs):
+            if msg.get("action_json"):
+                try:
+                    action = json.loads(msg["action_json"]) if isinstance(msg["action_json"], str) else msg["action_json"]
+                    if isinstance(action, dict) and action.get("type") == "job_search_results":
+                        jobs = action.get("jobs", [])
+                        if jobs:
+                            parts.append(f"\n## Recent Search Results ({len(jobs)} jobs)")
+                            for idx, j in enumerate(jobs, 1):
+                                parts.append(
+                                    f"{idx}. {j['title']} at {j['company']} "
+                                    f"(ID: {j['job_id']}, match: {round(j.get('match_score', 0) * 100)}%)"
+                                )
+                            break
+                except (json.JSONDecodeError, TypeError):
+                    pass
 
     return "\n".join(parts)
 

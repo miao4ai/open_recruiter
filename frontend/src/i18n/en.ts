@@ -480,7 +480,7 @@ const en = {
 
   // ── Job Seeker Home (Ai Chan) ──
   jobSeekerHome: {
-    greeting: "Hi there! I'm Ai Chan, your Job Seeker Assistant. How can I help you today?\n\nI can help you with things like:\n- Preparing for interviews\n- Reviewing your resume\n- Exploring career options\n- Answering questions about job searching",
+    greeting: "Hi there! I'm Ai Chan, your Job Seeker Assistant. How can I help you today?\n\nI can help you with things like:\n- Searching for matching jobs based on your profile\n- Analyzing how well you match a specific position\n- Preparing for interviews\n- Reviewing your resume\n- Exploring career options",
     noPastConversations: "No past conversations",
     newChat: "New Chat",
     aiChan: "Ai Chan",
@@ -496,6 +496,14 @@ const en = {
     askAiChan: "Ask Ai Chan anything...",
     uploadResumeTitle: "Upload resume",
     deleteSession: "Delete session",
+    searchResults: "Job Search Results",
+    matchScore: "Match Score",
+    strengths: "Strengths",
+    gaps: "Gaps",
+    saveJob: "Save This Job",
+    searchMore: "Search More Jobs",
+    viewDetails: "View Details",
+    searchJobs: "Search for jobs",
   },
 
   // ── Job Seeker Jobs ──

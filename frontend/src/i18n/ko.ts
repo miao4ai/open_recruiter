@@ -479,7 +479,7 @@ const ko = {
 
   // ── Job Seeker Home (Ai Chan) ──
   jobSeekerHome: {
-    greeting: "안녕하세요! 저는 아이, 구직 어시스턴트입니다. 오늘 무엇을 도와드릴까요?\n\n다음과 같은 것들을 도와드릴 수 있습니다:\n- 면접 준비\n- 이력서 검토\n- 커리어 옵션 탐색\n- 구직 관련 질문 답변",
+    greeting: "안녕하세요! 저는 아이, 구직 어시스턴트입니다. 오늘 무엇을 도와드릴까요?\n\n다음과 같은 것들을 도와드릴 수 있습니다:\n- 프로필에 맞는 채용공고 검색\n- 특정 포지션 매칭 분석\n- 면접 준비\n- 이력서 검토\n- 커리어 옵션 탐색",
     noPastConversations: "이전 대화가 없습니다",
     newChat: "새 대화",
     aiChan: "아이",
@@ -495,6 +495,14 @@ const ko = {
     askAiChan: "아이에게 무엇이든 물어보세요...",
     uploadResumeTitle: "이력서 업로드",
     deleteSession: "세션 삭제",
+    searchResults: "채용공고 검색 결과",
+    matchScore: "매칭 점수",
+    strengths: "강점",
+    gaps: "부족한 부분",
+    saveJob: "이 공고 저장",
+    searchMore: "더 검색하기",
+    viewDetails: "상세 보기",
+    searchJobs: "채용공고 검색",
   },
 
   // ── Job Seeker Jobs ──

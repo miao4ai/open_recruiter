@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   SendOutlined, DeleteOutline, AddOutlined, ChatBubbleOutlineOutlined, CloseOutlined, UploadOutlined,
+  WorkOutlineOutlined, LocationOnOutlined, CheckCircleOutlined, WarningAmberOutlined,
+  BookmarkBorderOutlined, SearchOutlined,
 } from "@mui/icons-material";
-import { CircularProgress } from "@mui/material";
+import { CircularProgress, LinearProgress } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { useApi } from "../hooks/useApi";
@@ -15,7 +17,14 @@ import {
   saveChatMessage,
   uploadResumeForProfile,
 } from "../lib/api";
-import type { ChatMessage, ChatSession } from "../types";
+import type { ChatMessage, ChatSession, ChatResponse, JobSearchResultsBlock, JobMatchResultBlock, MessageBlock, Suggestion } from "../types";
+
+/* ── Extended message with blocks & suggestions ──────────────────────── */
+
+interface RichMessage extends ChatMessage {
+  blocks?: MessageBlock[];
+  suggestions?: Suggestion[];
+}
 
 /* ── Ai Chan avatar ───────────────────────────────────────────────────── */
 
@@ -32,7 +41,7 @@ function AiChanAvatar({ size = "sm" }: { size?: "sm" | "lg" }) {
 
 /* ── Greeting message ─────────────────────────────────────────────────── */
 
-function makeGreeting(t: TFunction): ChatMessage {
+function makeGreeting(t: TFunction): RichMessage {
   return {
     id: "greeting-" + Date.now(),
     user_id: "",
@@ -40,6 +49,217 @@ function makeGreeting(t: TFunction): ChatMessage {
     content: t("jobSeekerHome.greeting"),
     created_at: new Date().toISOString(),
   };
+}
+
+/* ── Job Search Results Card ──────────────────────────────────────────── */
+
+function JobSearchResultsCard({
+  block,
+  onSelectJob,
+}: {
+  block: JobSearchResultsBlock;
+  onSelectJob: (jobId: string, title: string, company: string) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="mt-3 rounded-xl border border-pink-200 bg-pink-50/50 p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-pink-700">
+        <SearchOutlined className="h-4 w-4" />
+        {t("jobSeekerHome.searchResults")} ({block.jobs.length})
+      </div>
+      <div className="space-y-2">
+        {block.jobs.map((job, idx) => (
+          <div
+            key={job.job_id}
+            className="rounded-lg border border-gray-200 bg-white p-3 transition-shadow hover:shadow-md"
+          >
+            <div className="flex items-start justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pink-100 text-xs font-bold text-pink-600">
+                    {idx + 1}
+                  </span>
+                  <h4 className="truncate text-sm font-semibold text-gray-800">
+                    {job.title}
+                  </h4>
+                </div>
+                <p className="ml-7 text-xs text-gray-500">{job.company}</p>
+                <div className="ml-7 mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+                  {job.location && (
+                    <span className="flex items-center gap-0.5">
+                      <LocationOnOutlined className="h-3 w-3" />
+                      {job.location}
+                      {job.remote && " (Remote)"}
+                    </span>
+                  )}
+                  {job.salary_range && (
+                    <span className="flex items-center gap-0.5">
+                      <WorkOutlineOutlined className="h-3 w-3" />
+                      {job.salary_range}
+                    </span>
+                  )}
+                </div>
+                {job.required_skills.length > 0 && (
+                  <div className="ml-7 mt-1.5 flex flex-wrap gap-1">
+                    {job.required_skills.map((skill) => (
+                      <span
+                        key={skill}
+                        className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="ml-3 flex shrink-0 flex-col items-end gap-1.5">
+                <span className="rounded-full bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-700">
+                  {Math.round(job.match_score * 100)}%
+                </span>
+                <button
+                  onClick={() => onSelectJob(job.job_id, job.title, job.company)}
+                  className="rounded-lg bg-pink-500 px-3 py-1 text-xs font-medium text-white hover:bg-pink-600"
+                >
+                  {t("jobSeekerHome.viewDetails")}
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Job Match Result Card ────────────────────────────────────────────── */
+
+function JobMatchResultCard({
+  block,
+  onSaveJob,
+  onSearchMore,
+}: {
+  block: JobMatchResultBlock;
+  onSaveJob: (jobId: string) => void;
+  onSearchMore: () => void;
+}) {
+  const { t } = useTranslation();
+  const score = Math.round(block.match.score * 100);
+
+  return (
+    <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50/50 p-4">
+      <div className="mb-3">
+        <h4 className="text-sm font-semibold text-gray-800">
+          {block.job.title} @ {block.job.company}
+        </h4>
+        {(block.job.location || block.job.salary_range) && (
+          <p className="mt-0.5 text-xs text-gray-500">
+            {[block.job.location, block.job.salary_range].filter(Boolean).join(" | ")}
+          </p>
+        )}
+      </div>
+
+      {/* Score bar */}
+      <div className="mb-3">
+        <div className="mb-1 flex items-center justify-between text-xs">
+          <span className="font-medium text-gray-600">{t("jobSeekerHome.matchScore")}</span>
+          <span className="font-bold text-blue-600">{score}%</span>
+        </div>
+        <LinearProgress
+          variant="determinate"
+          value={score}
+          sx={{
+            height: 8,
+            borderRadius: 4,
+            bgcolor: "rgb(219 234 254)",
+            "& .MuiLinearProgress-bar": {
+              borderRadius: 4,
+              bgcolor: score >= 70 ? "rgb(34 197 94)" : score >= 40 ? "rgb(234 179 8)" : "rgb(239 68 68)",
+            },
+          }}
+        />
+      </div>
+
+      {/* Strengths */}
+      {block.match.strengths.length > 0 && (
+        <div className="mb-2">
+          <p className="mb-1 flex items-center gap-1 text-xs font-medium text-green-700">
+            <CheckCircleOutlined className="h-3.5 w-3.5" />
+            {t("jobSeekerHome.strengths")}
+          </p>
+          <ul className="ml-5 space-y-0.5 text-xs text-gray-700">
+            {block.match.strengths.map((s, i) => (
+              <li key={i} className="list-disc">{s}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Gaps */}
+      {block.match.gaps.length > 0 && (
+        <div className="mb-2">
+          <p className="mb-1 flex items-center gap-1 text-xs font-medium text-amber-700">
+            <WarningAmberOutlined className="h-3.5 w-3.5" />
+            {t("jobSeekerHome.gaps")}
+          </p>
+          <ul className="ml-5 space-y-0.5 text-xs text-gray-700">
+            {block.match.gaps.map((g, i) => (
+              <li key={i} className="list-disc">{g}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Reasoning */}
+      {block.match.reasoning && (
+        <p className="mb-3 text-xs leading-relaxed text-gray-600">
+          {block.match.reasoning}
+        </p>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => onSaveJob(block.job.job_id)}
+          className="flex items-center gap-1 rounded-lg bg-pink-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-600"
+        >
+          <BookmarkBorderOutlined className="h-3.5 w-3.5" />
+          {t("jobSeekerHome.saveJob")}
+        </button>
+        <button
+          onClick={onSearchMore}
+          className="flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+        >
+          <SearchOutlined className="h-3.5 w-3.5" />
+          {t("jobSeekerHome.searchMore")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Suggestion Chips ─────────────────────────────────────────────────── */
+
+function SuggestionChips({
+  suggestions,
+  onSelect,
+}: {
+  suggestions: Suggestion[];
+  onSelect: (prompt: string) => void;
+}) {
+  if (!suggestions || suggestions.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {suggestions.map((s, i) => (
+        <button
+          key={i}
+          onClick={() => onSelect(s.prompt)}
+          className="rounded-full border border-pink-200 bg-pink-50 px-3 py-1 text-xs text-pink-700 transition-colors hover:bg-pink-100"
+        >
+          {s.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /* ── Session Sidebar ──────────────────────────────────────────────────── */
@@ -127,7 +347,7 @@ export default function JobSeekerHome() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<RichMessage[]>([]);
   const [started, setStarted] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const didAutoSelect = useRef(false);
@@ -165,13 +385,15 @@ export default function JobSeekerHome() {
 
   /* ── Send ─────────────────────────────────────────────────────────── */
 
-  const handleSend = async () => {
-    if (!input.trim() || sending) return;
-    const userMessage = input.trim();
-    setInput("");
+  const handleSend = async (overrideMessage?: string) => {
+    const userMessage = (overrideMessage ?? input).trim();
+    if (!userMessage || sending) return;
+    if (!overrideMessage) setInput("");
     setSending(true);
 
-    const tempUser: ChatMessage = {
+    if (!started) setStarted(true);
+
+    const tempUser: RichMessage = {
       id: "temp-" + Date.now(),
       user_id: "",
       role: "user",
@@ -181,22 +403,22 @@ export default function JobSeekerHome() {
     setMessages((prev) => [...prev, tempUser]);
 
     try {
-      const res = await sendChatMessage(userMessage, activeSessionId ?? undefined);
+      const res: ChatResponse = await sendChatMessage(userMessage, activeSessionId ?? undefined);
       if (!activeSessionId && res.session_id) {
         setActiveSessionId(res.session_id);
       }
       refreshSessions();
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: res.message_id || "temp-reply-" + Date.now(),
-          user_id: "",
-          role: "assistant",
-          content: res.reply,
-          created_at: new Date().toISOString(),
-        },
-      ]);
+      const assistantMsg: RichMessage = {
+        id: res.message_id || "temp-reply-" + Date.now(),
+        user_id: "",
+        role: "assistant",
+        content: res.reply,
+        created_at: new Date().toISOString(),
+        blocks: res.blocks,
+        suggestions: res.suggestions,
+      };
+      setMessages((prev) => [...prev, assistantMsg]);
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -224,7 +446,7 @@ export default function JobSeekerHome() {
       setStarted(true);
     }
 
-    const tempMsg: ChatMessage = {
+    const tempMsg: RichMessage = {
       id: "upload-" + Date.now(),
       user_id: "",
       role: "user",
@@ -235,7 +457,7 @@ export default function JobSeekerHome() {
 
     try {
       const profile = await uploadResumeForProfile(file);
-      const successMsg: ChatMessage = {
+      const successMsg: RichMessage = {
         id: "upload-success-" + Date.now(),
         user_id: "",
         role: "assistant",
@@ -249,6 +471,9 @@ export default function JobSeekerHome() {
           `**Location:** ${profile.location || "N/A"}\n\n` +
           t("jobSeekerHome.viewProfile"),
         created_at: new Date().toISOString(),
+        suggestions: [
+          { label: t("jobSeekerHome.searchJobs"), prompt: "帮我找适合我的工作" },
+        ],
       };
       setMessages((prev) => [...prev, successMsg]);
 
@@ -311,6 +536,48 @@ export default function JobSeekerHome() {
     }
   };
 
+  /* ── Block interaction handlers ──────────────────────────────────── */
+
+  const handleSelectJob = (jobId: string, title: string, company: string) => {
+    handleSend(`帮我分析一下这个职位: ${title} at ${company} (ID: ${jobId})`);
+  };
+
+  const handleSaveJob = (jobId: string) => {
+    handleSend(`我想申请这个职位 (ID: ${jobId})`);
+  };
+
+  const handleSearchMore = () => {
+    handleSend("继续搜索其他职位");
+  };
+
+  /* ── Render blocks for a message ─────────────────────────────────── */
+
+  const renderBlocks = (msg: RichMessage) => {
+    if (!msg.blocks || msg.blocks.length === 0) return null;
+    return msg.blocks.map((block, i) => {
+      if (block.type === "job_search_results") {
+        return (
+          <JobSearchResultsCard
+            key={`block-${i}`}
+            block={block as JobSearchResultsBlock}
+            onSelectJob={handleSelectJob}
+          />
+        );
+      }
+      if (block.type === "job_match_result") {
+        return (
+          <JobMatchResultCard
+            key={`block-${i}`}
+            block={block as JobMatchResultBlock}
+            onSaveJob={handleSaveJob}
+            onSearchMore={handleSearchMore}
+          />
+        );
+      }
+      return null;
+    });
+  };
+
   /* ── Start screen ────────────────────────────────────────────────── */
 
   if (!started) {
@@ -370,20 +637,30 @@ export default function JobSeekerHome() {
         {/* Messages */}
         <div className="flex-1 space-y-4 overflow-y-auto rounded-xl border border-gray-200 bg-white p-4">
           {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
-            >
-              {msg.role === "assistant" && <AiChanAvatar />}
-              <div className="max-w-[80%]">
-                <div
-                  className={`rounded-xl px-4 py-3 ${
-                    msg.role === "user"
-                      ? "bg-pink-500 text-white"
-                      : "bg-gray-50 text-gray-800"
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+            <div key={msg.id}>
+              <div
+                className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
+              >
+                {msg.role === "assistant" && <AiChanAvatar />}
+                <div className="max-w-[80%]">
+                  <div
+                    className={`rounded-xl px-4 py-3 ${
+                      msg.role === "user"
+                        ? "bg-pink-500 text-white"
+                        : "bg-gray-50 text-gray-800"
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                  </div>
+                  {/* Render blocks (search results, match analysis) */}
+                  {msg.role === "assistant" && renderBlocks(msg)}
+                  {/* Render suggestion chips */}
+                  {msg.role === "assistant" && msg.suggestions && (
+                    <SuggestionChips
+                      suggestions={msg.suggestions}
+                      onSelect={(prompt) => handleSend(prompt)}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -433,7 +710,7 @@ export default function JobSeekerHome() {
               className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
             />
             <button
-              onClick={handleSend}
+              onClick={() => handleSend()}
               disabled={sending || !input.trim()}
               className="flex h-auto items-center justify-center rounded-xl bg-pink-500 px-4 text-white hover:bg-pink-600 disabled:opacity-50"
             >

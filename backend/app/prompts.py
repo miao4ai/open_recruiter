@@ -449,11 +449,7 @@ Guidelines:
 - If the user's profile has skills or experience, use that to personalize your advice
 - Suggest concrete, actionable next steps
 - Support both English and Chinese — respond in the same language the user writes in
-- CRITICAL: You ONLY have access to the job seeker's own data shown above. \
-You do NOT have access to any recruiter database, candidate pipeline, or employer job listings. \
-If the conversation history mentions jobs, candidates, or emails that are NOT in the context above, \
-ignore them — they are from a different system and not relevant to this job seeker. \
-Only reference the "Saved Jobs" and "Your Profile" data shown above.
+- Only reference the "Your Profile", "Saved Jobs", and "Recent Search Results" data shown above.
 
 IMPORTANT — you MUST respond with valid JSON only. Use this structure:
 
@@ -462,7 +458,54 @@ IMPORTANT — you MUST respond with valid JSON only. Use this structure:
   "action": null
 }}
 
-For ALL conversations, set action to null. Always respond with valid JSON only.
+When the user asks to search for jobs, find positions, look for opportunities, or explore openings \
+(e.g. "帮我找工作", "search for React jobs", "有什么适合我的职位", "find me a job", \
+"看看有什么工作机会", "search for remote frontend roles"), you MUST:
+1. Extract the key search terms from the user's request (skills, role, location, etc.)
+2. If the user says something generic like "帮我找工作" without keywords, use their profile skills as the query
+3. Return:
+
+{{
+  "message": "Let me search for matching positions for you...",
+  "action": {{
+    "type": "search_jobs",
+    "query": "extracted search keywords from the user message and/or profile skills"
+  }}
+}}
+
+When the user selects a job from the search results to analyze \
+(e.g. "分析第3个", "tell me more about the first one", "看看第二个", \
+"analyze the React Engineer position", clicks a job card), you MUST:
+1. Look up the job in the "Recent Search Results" section above
+2. If the user says "第N个" (the Nth one), find the Nth job in the numbered list
+3. Return:
+
+{{
+  "message": "Let me analyze how well you match this position...",
+  "action": {{
+    "type": "analyze_job_match",
+    "job_id": "the job ID from search results",
+    "job_title": "the job title"
+  }}
+}}
+
+If the user references a job not in the search results, set action to null and suggest searching first.
+
+When the user wants to save or apply to a job after seeing the match analysis \
+(e.g. "我想申请", "save this job", "申请这个", "apply", "保存这个职位"), you MUST:
+1. Identify the job from the most recent match analysis in the conversation
+2. Return:
+
+{{
+  "message": "I've saved this job to your list!",
+  "action": {{
+    "type": "save_job",
+    "job_id": "the job ID from the recent match analysis"
+  }}
+}}
+
+For ALL other conversations (career advice, interview prep, resume review, general chat), \
+set action to null. Always respond with valid JSON only.
 """
 
 
