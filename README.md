@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/BUILD-PASSING-brightgreen" />
-  <img src="https://img.shields.io/badge/RELEASE-V2026.2.17-blue" />
+  <img src="https://img.shields.io/badge/RELEASE-V1.0.0-blue" />
   <img src="https://img.shields.io/badge/PYTHON-3.11+-yellow" />
   <img src="https://img.shields.io/badge/LICENSE-MIT-purple" />
 </p>
@@ -294,6 +294,24 @@ FastAPI Backend
     ├── LLM API ───── Resume parsing, match analysis, email drafting, chat (Anthropic / OpenAI)
     └── IMAP/SMTP ─── Email sending and reply detection
 ```
+
+## Release History
+
+### V1.0.0 (2026-02-19)
+
+- Initial public release
+- Job management with PDF/DOCX upload and LLM auto-extraction
+- Candidate management with resume parsing and duplicate detection
+- AI match analysis: vector similarity + LLM deep analysis with streaming
+- Email outreach with draft/approve/send workflow and IMAP reply tracking
+- Pipeline Kanban board with drag-and-drop
+- Bot Chat (Erika Chan) with multi-step workflow execution
+- Calendar for interviews, follow-ups, and screening events
+- Slack integration for receiving resumes from channels
+- Background autonomous agents: Auto-Match, Inbox Scanner, Auto Follow-Up, Pipeline Cleanup
+- Dual-role support: Recruiter and Job Seeker
+- Windows desktop app (.exe installer via Electron + NSIS)
+- macOS / Linux one-line installer script
 
 ## License
 
