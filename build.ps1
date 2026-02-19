@@ -70,6 +70,16 @@ Write-Host "  Electron compiled." -ForegroundColor Green
 
 Write-Host "[5/5] Packaging with electron-builder..." -ForegroundColor Yellow
 Push-Location "$ProjectRoot"
+
+# Clean previous release to avoid "Access is denied" on locked DLLs
+if (Test-Path "release") {
+    Write-Host "  Cleaning previous release..." -ForegroundColor Gray
+    Remove-Item -Recurse -Force "release" -ErrorAction SilentlyContinue
+    if (Test-Path "release") {
+        Write-Warning "Could not fully remove release/ — a process may be locking files. Close Open Recruiter and retry."
+    }
+}
+
 npx electron-builder --config electron/electron-builder.json --win
 Pop-Location
 Write-Host "  Package created." -ForegroundColor Green

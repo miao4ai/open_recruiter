@@ -23,6 +23,8 @@ bundled_models = backend_dir / "models"
 
 datas = [
     *collect_data_files("litellm"),
+    *collect_data_files("tiktoken"),
+    *collect_data_files("tiktoken_ext"),
 ]
 
 # Frontend static build (served by FastAPI)
@@ -116,6 +118,11 @@ hiddenimports = [
     "multipart",
     # LLM
     "litellm",
+    # Tokenizer
+    "tiktoken",
+    "tiktoken.registry",
+    "tiktoken_ext",
+    "tiktoken_ext.openai_public",
     # Doc parsing
     "pymupdf",
     "fitz",
@@ -147,7 +154,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=[str(backend_dir / "hooks" / "rthook_tiktoken.py")],
     excludes=[
         "tkinter",
         "matplotlib",
