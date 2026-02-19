@@ -14,13 +14,9 @@
     }
   ],
   "win": {
-    "target": "nsis",
-    "icon": "electron/icons/icon.ico"
-  },
-  "nsis": {
-    "oneClick": false,
-    "allowToChangeInstallationDirectory": true,
-    "installerIcon": "electron/icons/icon.ico"
+    "target": "dir",
+    "icon": "electron/icons/icon.ico",
+    "signAndEditExecutable": false
   },
   "mac": {
     "target": "dmg",
