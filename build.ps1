@@ -3,17 +3,10 @@
 #
 # Prerequisites:
 #   - Node.js / npm
-#   - Python 3.11+
-#   - pip install pyinstaller
+#   - uv (Python package manager)
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = $PSScriptRoot
-$BackendPython = "$ProjectRoot\backend\.venv\Scripts\python.exe"
-
-if (-not (Test-Path $BackendPython)) {
-    Write-Error "Backend venv not found at backend\.venv - run 'python -m venv .venv && pip install -e .' in backend/ first"
-    exit 1
-}
 
 Write-Host "=== Open Recruiter - Windows Build ===" -ForegroundColor Cyan
 Write-Host ""
@@ -40,7 +33,7 @@ if (-not (Test-Path $ModelsDir)) {
 }
 
 Push-Location "$ProjectRoot\backend"
-& $BackendPython -c "import os; os.environ['SENTENCE_TRANSFORMERS_HOME']='models'; from sentence_transformers import SentenceTransformer; print('Downloading BAAI/bge-small-en-v1.5...'); SentenceTransformer('BAAI/bge-small-en-v1.5'); print('Model ready.')"
+uv run python -c "import os; os.environ['SENTENCE_TRANSFORMERS_HOME']='models'; from sentence_transformers import SentenceTransformer; print('Downloading BAAI/bge-small-en-v1.5...'); SentenceTransformer('BAAI/bge-small-en-v1.5'); print('Model ready.')"
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Model download failed"
     exit 1
@@ -56,7 +49,7 @@ Push-Location "$ProjectRoot\backend"
 if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
 if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
 
-& $BackendPython -m PyInstaller open_recruiter.spec --noconfirm
+uv run pyinstaller open_recruiter.spec --noconfirm
 if (-not (Test-Path "dist\backend\backend.exe")) {
     Write-Error "PyInstaller build failed - dist/backend/backend.exe not found"
     exit 1
