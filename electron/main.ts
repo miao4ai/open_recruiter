@@ -112,7 +112,7 @@ if (!gotTheLock) {
     return proc;
   }
 
-  function waitForBackend(timeout = 30000): Promise<void> {
+  function waitForBackend(timeout = 60000): Promise<void> {
     const start = Date.now();
     return new Promise((resolve, reject) => {
       const check = () => {
@@ -216,7 +216,7 @@ if (!gotTheLock) {
 <body style="font-family:system-ui;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#1a1a2e;color:#e0e0e0">
 <div style="text-align:center;max-width:500px">
   <h1 style="color:#e74c3c">Backend failed to start</h1>
-  <p>The backend process did not respond within 30 seconds.</p>
+  <p>The backend process did not respond within 60 seconds.</p>
   <p style="color:#888;font-size:14px">Check the logs or try reinstalling the application.</p>
 </div>
 </body></html>`)}`
