@@ -73,13 +73,47 @@ async def health():
 
 # PyInstaller bundles data files under sys._MEIPASS; normal dev uses relative path
 _meipass = getattr(sys, "_MEIPASS", None)
-if _meipass:
-    _FRONTEND_DIST = Path(_meipass) / "frontend" / "dist"
-else:
-    _FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+_FRONTEND_DIST: Path | None = None
 
-if _FRONTEND_DIST.is_dir():
-    app.mount("/assets", StaticFiles(directory=_FRONTEND_DIST / "assets"), name="static-assets")
+_candidates = []
+if _meipass:
+    _candidates.append(Path(_meipass) / "frontend" / "dist")
+# Also check relative to the executable (PyInstaller onedir fallback)
+_candidates.append(Path(sys.executable).parent / "_internal" / "frontend" / "dist")
+_candidates.append(Path(sys.executable).parent / "frontend" / "dist")
+# Dev mode: relative to source
+_candidates.append(Path(__file__).resolve().parent.parent.parent / "frontend" / "dist")
+
+for _candidate in _candidates:
+    if _candidate.is_dir() and (_candidate / "index.html").is_file():
+        _FRONTEND_DIST = _candidate
+        break
+
+import logging as _logging
+_logger = _logging.getLogger("open_recruiter")
+_logger.info(f"Frontend dist search paths: {[str(c) for c in _candidates]}")
+_logger.info(f"Frontend dist resolved to: {_FRONTEND_DIST}")
+
+
+@app.get("/debug/paths")
+async def debug_paths():
+    """Diagnostic endpoint to check bundled paths."""
+    return {
+        "meipass": _meipass,
+        "executable": str(Path(sys.executable)),
+        "frontend_dist": str(_FRONTEND_DIST) if _FRONTEND_DIST else None,
+        "frontend_found": _FRONTEND_DIST is not None,
+        "candidates_checked": [
+            {"path": str(c), "exists": c.is_dir(), "has_index": (c / "index.html").is_file() if c.is_dir() else False}
+            for c in _candidates
+        ],
+    }
+
+
+if _FRONTEND_DIST:
+    _assets_dir = _FRONTEND_DIST / "assets"
+    if _assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=_assets_dir), name="static-assets")
 
     @app.get("/{full_path:path}")
     async def spa_fallback(request: Request, full_path: str):
