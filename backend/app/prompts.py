@@ -484,11 +484,13 @@ When the user selects a job from the search results to analyze \
   "message": "Let me analyze how well you match this position...",
   "action": {{
     "type": "analyze_job_match",
-    "job_id": "the job ID from search results",
-    "job_title": "the job title"
+    "job_index": 3,
+    "job_title": "the job title from the numbered list"
   }}
 }}
 
+Note: job_index is the number from the search results list (1-based). \
+If the user mentions a job by title, find its index from the numbered list and include it.
 If the user references a job not in the search results, set action to null and suggest searching first.
 
 When the user wants to save or apply to a job after seeing the match analysis \
@@ -500,7 +502,8 @@ When the user wants to save or apply to a job after seeing the match analysis \
   "message": "I've saved this job to your list!",
   "action": {{
     "type": "save_job",
-    "job_id": "the job ID from the recent match analysis"
+    "job_title": "the job title",
+    "job_company": "the company name"
   }}
 }}
 

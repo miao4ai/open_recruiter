@@ -502,6 +502,7 @@ const ja = {
     saveJob: "この求人を保存",
     searchMore: "もっと検索",
     viewDetails: "詳細を見る",
+    openLink: "元のページを開く",
     searchJobs: "求人を検索",
   },
 

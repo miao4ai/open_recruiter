@@ -1145,55 +1145,42 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
 
     elif action_type == "search_jobs":
         try:
-            from app import vectorstore
+            from app.agents.job_search import search_jobs_enriched
 
             query = action_data.get("query", "").strip()
             profile = db.get_job_seeker_profile_by_user(user_id)
 
-            # Build search text: combine profile info + explicit query
-            search_parts = []
-            if query:
-                search_parts.append(query)
-            if profile:
-                if profile.get("skills"):
-                    search_parts.append(", ".join(profile["skills"][:10]))
+            # Build search query from user request + profile context
+            if not query and profile:
+                parts = []
                 if profile.get("current_title"):
-                    search_parts.append(profile["current_title"])
-                if profile.get("resume_summary"):
-                    search_parts.append(profile["resume_summary"][:500])
-            search_text = "\n".join(search_parts) if search_parts else query or "software engineer"
+                    parts.append(profile["current_title"])
+                if profile.get("skills"):
+                    parts.append(" ".join(profile["skills"][:5]))
+                query = " ".join(parts) if parts else "software engineer"
 
-            results = vectorstore.search_by_text("jobs", search_text, n_results=10)
+            location = ""
+            if profile and profile.get("location"):
+                location = profile["location"]
 
-            jobs_list = []
-            for r in results:
-                job = db.get_job(r["job_id"])
-                if job:
-                    jobs_list.append({
-                        "job_id": job["id"],
-                        "title": job.get("title", ""),
-                        "company": job.get("company", ""),
-                        "location": job.get("location", ""),
-                        "salary_range": job.get("salary_range", ""),
-                        "required_skills": job.get("required_skills", [])[:6],
-                        "experience_years": job.get("experience_years"),
-                        "remote": job.get("remote", False),
-                        "summary": (job.get("summary") or "")[:150],
-                        "match_score": r.get("score", 0),
-                    })
+            results = search_jobs_enriched(cfg, query, profile, location, n_results=10)
 
-            if jobs_list:
-                response["blocks"] = [{"type": "job_search_results", "jobs": jobs_list}]
-                # Store results as action so context builder can find them for follow-up
-                response["action"] = {"type": "job_search_results", "jobs": jobs_list}
-                response["reply"] = f"I found {len(jobs_list)} matching positions based on your profile and search criteria. Take a look below!"
-                top3 = jobs_list[:3]
+            if results:
+                # Assign indices for reference
+                for idx, r in enumerate(results):
+                    r["index"] = idx + 1
+
+                response["blocks"] = [{"type": "job_search_results", "jobs": results}]
+                # Store results so context builder can find them for follow-up
+                response["action"] = {"type": "job_search_results", "jobs": results}
+                response["reply"] = f"I found {len(results)} job postings from the web. Take a look below!"
+                top3 = results[:3]
                 response["suggestions"] = [
-                    {"label": f"Analyze #{i+1}", "prompt": f"帮我分析一下这个职位: {j['title']} at {j['company']} (ID: {j['job_id']})"}
-                    for i, j in enumerate(top3)
+                    {"label": f"Analyze #{r['index']}", "prompt": f"帮我分析一下第{r['index']}个职位: {r.get('title', '')}"}
+                    for r in top3
                 ]
             else:
-                response["reply"] = "I couldn't find any matching positions right now. Try different keywords or check back later!"
+                response["reply"] = "I couldn't find any matching job postings. Try different keywords!"
 
         except Exception as e:
             log.error("Job search failed: %s", e)
@@ -1204,10 +1191,44 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
             from app.llm import chat_json
             from app.prompts import MATCHING
 
-            job_id = action_data.get("job_id", "")
-            job = db.get_job(job_id)
-            if not job:
-                response["reply"] = "I couldn't find that job. Please try searching again."
+            # Get the job info from recent search results in session history
+            job_index = action_data.get("job_index")  # 1-based
+            job_title = action_data.get("job_title", "")
+            job_url = action_data.get("job_url", "")
+            job_snippet = action_data.get("job_snippet", "")
+            job_company = action_data.get("job_company", "")
+            job_location = action_data.get("job_location", "")
+
+            # If we don't have job details, try to find from session history
+            if not job_snippet and session_id:
+                recent_msgs = db.list_chat_messages(user_id, limit=10, session_id=session_id)
+                for msg in reversed(recent_msgs):
+                    if msg.get("action_json"):
+                        try:
+                            action = json.loads(msg["action_json"]) if isinstance(msg["action_json"], str) else msg["action_json"]
+                            if isinstance(action, dict) and action.get("type") == "job_search_results":
+                                jobs = action.get("jobs", [])
+                                # Find by index or title match
+                                target = None
+                                if job_index and 1 <= job_index <= len(jobs):
+                                    target = jobs[job_index - 1]
+                                else:
+                                    for j in jobs:
+                                        if job_title and job_title.lower() in j.get("title", "").lower():
+                                            target = j
+                                            break
+                                if target:
+                                    job_title = target.get("title", job_title)
+                                    job_company = target.get("company", job_company)
+                                    job_snippet = target.get("snippet", job_snippet)
+                                    job_url = target.get("url", job_url)
+                                    job_location = target.get("location", job_location)
+                                break
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+
+            if not job_title and not job_snippet:
+                response["reply"] = "I couldn't find the job details. Please search for jobs first!"
                 return response
 
             profile = db.get_job_seeker_profile_by_user(user_id)
@@ -1218,8 +1239,15 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
             skills = profile.get("skills", [])
             skills_str = ", ".join(skills) if isinstance(skills, list) else str(skills)
 
+            job_desc = f"Title: {job_title}\n"
+            if job_company:
+                job_desc += f"Company: {job_company}\n"
+            if job_location:
+                job_desc += f"Location: {job_location}\n"
+            job_desc += f"Description: {job_snippet}\n"
+
             user_msg = (
-                f"## Job Description\n{job.get('raw_text') or job.get('summary', '')}\n\n"
+                f"## Job Description\n{job_desc}\n\n"
                 f"## Candidate Profile\n"
                 f"Name: {profile['name']}\n"
                 f"Title: {profile.get('current_title', '')}\n"
@@ -1239,21 +1267,24 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
                 "reasoning": match_data.get("reasoning", ""),
             }
 
-            response["blocks"] = [{
+            match_block = {
                 "type": "job_match_result",
                 "job": {
-                    "job_id": job["id"],
-                    "title": job.get("title", ""),
-                    "company": job.get("company", ""),
-                    "location": job.get("location", ""),
-                    "salary_range": job.get("salary_range", ""),
+                    "title": job_title,
+                    "company": job_company,
+                    "location": job_location,
+                    "url": job_url,
+                    "snippet": job_snippet,
                 },
                 "match": match_result,
-            }]
+            }
+            response["blocks"] = [match_block]
+            # Persist blocks in action so save_job can find job details from history
+            response["action"] = {"type": "job_match_result", "blocks": [match_block]}
             score_pct = round(match_result["score"] * 100)
-            response["reply"] = f"Here's my analysis of your fit for **{job.get('title', '')}** at **{job.get('company', '')}** — match score: **{score_pct}%**."
+            response["reply"] = f"Here's my analysis of your fit for **{job_title}**" + (f" at **{job_company}**" if job_company else "") + f" — match score: **{score_pct}%**."
             response["suggestions"] = [
-                {"label": "Save this job", "prompt": f"我想申请这个职位 (ID: {job_id})"},
+                {"label": "Save this job", "prompt": f"我想保存这个职位: {job_title}"},
                 {"label": "Search more", "prompt": "继续搜索其他职位"},
             ]
 
@@ -1263,40 +1294,72 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
 
     elif action_type == "save_job":
         try:
-            job_id = action_data.get("job_id", "")
-            job = db.get_job(job_id)
-            if not job:
-                response["reply"] = "I couldn't find that job. Please try searching again."
+            # Get job details from action data or conversation context
+            job_title = action_data.get("job_title", "")
+            job_company = action_data.get("job_company", "")
+            job_url = action_data.get("job_url", "")
+            job_snippet = action_data.get("job_snippet", "")
+            job_location = action_data.get("job_location", "")
+
+            # Try to find job details from recent match result in session history
+            if not job_title and session_id:
+                recent_msgs = db.list_chat_messages(user_id, limit=10, session_id=session_id)
+                for msg in reversed(recent_msgs):
+                    if msg.get("action_json"):
+                        try:
+                            action = json.loads(msg["action_json"]) if isinstance(msg["action_json"], str) else msg["action_json"]
+                            if isinstance(action, dict):
+                                blocks = action.get("blocks", [])
+                                if isinstance(blocks, list):
+                                    for blk in blocks:
+                                        if isinstance(blk, dict) and blk.get("type") == "job_match_result":
+                                            job_info = blk.get("job", {})
+                                            job_title = job_info.get("title", "")
+                                            job_company = job_info.get("company", "")
+                                            job_url = job_info.get("url", "")
+                                            job_snippet = job_info.get("snippet", "")
+                                            job_location = job_info.get("location", "")
+                                            break
+                                    if job_title:
+                                        break
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+
+            if not job_title:
+                response["reply"] = "I'm not sure which job to save. Could you tell me the job title?"
                 return response
 
             # Check if already saved
             existing = db.list_seeker_jobs(user_id)
-            already_saved = any(sj.get("title") == job.get("title") and sj.get("company") == job.get("company") for sj in existing)
+            already_saved = any(
+                sj.get("title") == job_title and sj.get("company") == job_company
+                for sj in existing
+            )
             if already_saved:
-                response["reply"] = f"You've already saved **{job.get('title', '')}** at **{job.get('company', '')}** to your list!"
+                response["reply"] = f"You've already saved **{job_title}**" + (f" at **{job_company}**" if job_company else "") + " to your list!"
                 return response
 
             seeker_job = {
                 "id": uuid.uuid4().hex[:8],
                 "user_id": user_id,
-                "title": job.get("title", ""),
-                "company": job.get("company", ""),
-                "posted_date": job.get("posted_date", ""),
-                "required_skills": job.get("required_skills", []),
-                "preferred_skills": job.get("preferred_skills", []),
-                "experience_years": job.get("experience_years"),
-                "location": job.get("location", ""),
-                "remote": job.get("remote", False),
-                "salary_range": job.get("salary_range", ""),
-                "summary": job.get("summary", ""),
-                "raw_text": job.get("raw_text", ""),
-                "source_url": "",
-                "status": "applied",
+                "title": job_title,
+                "company": job_company,
+                "posted_date": datetime.now().strftime("%Y-%m-%d"),
+                "required_skills": [],
+                "preferred_skills": [],
+                "experience_years": None,
+                "location": job_location,
+                "remote": False,
+                "salary_range": "",
+                "summary": job_snippet,
+                "raw_text": job_snippet,
+                "source_url": job_url,
+                "status": "interested",
                 "created_at": datetime.now().isoformat(),
             }
             db.insert_seeker_job(seeker_job)
 
-            response["reply"] = f"I've saved **{job.get('title', '')}** at **{job.get('company', '')}** to your job list! You can view it in the My Jobs page."
+            response["reply"] = f"I've saved **{job_title}**" + (f" at **{job_company}**" if job_company else "") + " to your job list! You can view it in the My Jobs page."
             response["suggestions"] = [
                 {"label": "Search more", "prompt": "继续搜索其他职位"},
                 {"label": "View my jobs", "prompt": "我保存了哪些职位？"},
@@ -1521,12 +1584,15 @@ def _build_job_seeker_context(user_id: str, session_id: str | None = None) -> st
                     if isinstance(action, dict) and action.get("type") == "job_search_results":
                         jobs = action.get("jobs", [])
                         if jobs:
-                            parts.append(f"\n## Recent Search Results ({len(jobs)} jobs)")
-                            for idx, j in enumerate(jobs, 1):
-                                parts.append(
-                                    f"{idx}. {j['title']} at {j['company']} "
-                                    f"(ID: {j['job_id']}, match: {round(j.get('match_score', 0) * 100)}%)"
-                                )
+                            parts.append(f"\n## Recent Search Results ({len(jobs)} jobs from web)")
+                            for j in jobs:
+                                idx = j.get("index", 0)
+                                line = f"{idx}. {j.get('title', '')} at {j.get('company', 'Unknown')}"
+                                if j.get("location"):
+                                    line += f" ({j['location']})"
+                                if j.get("source"):
+                                    line += f" — {j['source']}"
+                                parts.append(line)
                             break
                 except (json.JSONDecodeError, TypeError):
                     pass

@@ -503,6 +503,7 @@ const en = {
     saveJob: "Save This Job",
     searchMore: "Search More Jobs",
     viewDetails: "View Details",
+    openLink: "Open original",
     searchJobs: "Search for jobs",
   },
 

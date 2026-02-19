@@ -502,6 +502,7 @@ const ko = {
     saveJob: "이 공고 저장",
     searchMore: "더 검색하기",
     viewDetails: "상세 보기",
+    openLink: "원본 보기",
     searchJobs: "채용공고 검색",
   },
 

@@ -58,7 +58,7 @@ function JobSearchResultsCard({
   onSelectJob,
 }: {
   block: JobSearchResultsBlock;
-  onSelectJob: (jobId: string, title: string, company: string) => void;
+  onSelectJob: (index: number, title: string, company: string) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -68,28 +68,29 @@ function JobSearchResultsCard({
         {t("jobSeekerHome.searchResults")} ({block.jobs.length})
       </div>
       <div className="space-y-2">
-        {block.jobs.map((job, idx) => (
+        {block.jobs.map((job) => (
           <div
-            key={job.job_id}
+            key={job.index}
             className="rounded-lg border border-gray-200 bg-white p-3 transition-shadow hover:shadow-md"
           >
             <div className="flex items-start justify-between">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pink-100 text-xs font-bold text-pink-600">
-                    {idx + 1}
+                    {job.index}
                   </span>
                   <h4 className="truncate text-sm font-semibold text-gray-800">
                     {job.title}
                   </h4>
                 </div>
-                <p className="ml-7 text-xs text-gray-500">{job.company}</p>
+                {job.company && (
+                  <p className="ml-7 text-xs text-gray-500">{job.company}</p>
+                )}
                 <div className="ml-7 mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
                   {job.location && (
                     <span className="flex items-center gap-0.5">
                       <LocationOnOutlined className="h-3 w-3" />
                       {job.location}
-                      {job.remote && " (Remote)"}
                     </span>
                   )}
                   {job.salary_range && (
@@ -98,30 +99,35 @@ function JobSearchResultsCard({
                       {job.salary_range}
                     </span>
                   )}
+                  {job.source && (
+                    <span className="text-gray-400">
+                      {job.source}
+                    </span>
+                  )}
                 </div>
-                {job.required_skills.length > 0 && (
-                  <div className="ml-7 mt-1.5 flex flex-wrap gap-1">
-                    {job.required_skills.map((skill) => (
-                      <span
-                        key={skill}
-                        className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
+                {job.snippet && (
+                  <p className="ml-7 mt-1.5 line-clamp-2 text-xs leading-relaxed text-gray-600">
+                    {job.snippet}
+                  </p>
                 )}
               </div>
               <div className="ml-3 flex shrink-0 flex-col items-end gap-1.5">
-                <span className="rounded-full bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-700">
-                  {Math.round(job.match_score * 100)}%
-                </span>
                 <button
-                  onClick={() => onSelectJob(job.job_id, job.title, job.company)}
+                  onClick={() => onSelectJob(job.index, job.title, job.company || "")}
                   className="rounded-lg bg-pink-500 px-3 py-1 text-xs font-medium text-white hover:bg-pink-600"
                 >
                   {t("jobSeekerHome.viewDetails")}
                 </button>
+                {job.url && (
+                  <a
+                    href={job.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] text-pink-500 hover:underline"
+                  >
+                    {t("jobSeekerHome.openLink")}
+                  </a>
+                )}
               </div>
             </div>
           </div>
@@ -139,7 +145,7 @@ function JobMatchResultCard({
   onSearchMore,
 }: {
   block: JobMatchResultBlock;
-  onSaveJob: (jobId: string) => void;
+  onSaveJob: (title: string, company: string) => void;
   onSearchMore: () => void;
 }) {
   const { t } = useTranslation();
@@ -149,12 +155,20 @@ function JobMatchResultCard({
     <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50/50 p-4">
       <div className="mb-3">
         <h4 className="text-sm font-semibold text-gray-800">
-          {block.job.title} @ {block.job.company}
+          {block.job.title}{block.job.company ? ` @ ${block.job.company}` : ""}
         </h4>
-        {(block.job.location || block.job.salary_range) && (
-          <p className="mt-0.5 text-xs text-gray-500">
-            {[block.job.location, block.job.salary_range].filter(Boolean).join(" | ")}
-          </p>
+        {block.job.location && (
+          <p className="mt-0.5 text-xs text-gray-500">{block.job.location}</p>
+        )}
+        {block.job.url && (
+          <a
+            href={block.job.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-0.5 inline-block text-xs text-pink-500 hover:underline"
+          >
+            {t("jobSeekerHome.openLink")}
+          </a>
         )}
       </div>
 
@@ -219,7 +233,7 @@ function JobMatchResultCard({
       {/* Action buttons */}
       <div className="flex gap-2">
         <button
-          onClick={() => onSaveJob(block.job.job_id)}
+          onClick={() => onSaveJob(block.job.title, block.job.company || "")}
           className="flex items-center gap-1 rounded-lg bg-pink-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-600"
         >
           <BookmarkBorderOutlined className="h-3.5 w-3.5" />
@@ -351,6 +365,7 @@ export default function JobSeekerHome() {
   const [started, setStarted] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const didAutoSelect = useRef(false);
+  const skipHistoryReload = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -371,8 +386,13 @@ export default function JobSeekerHome() {
   }, [sessions]);
 
   // Load messages when session changes — always prepend greeting
+  // Skip reload when the session was just created by handleSend (blocks would be lost)
   useEffect(() => {
     if (!activeSessionId) return;
+    if (skipHistoryReload.current) {
+      skipHistoryReload.current = false;
+      return;
+    }
     getChatHistory(activeSessionId).then((msgs) => {
       const greeting = makeGreeting(t);
       setMessages([greeting, ...msgs]);
@@ -405,6 +425,7 @@ export default function JobSeekerHome() {
     try {
       const res: ChatResponse = await sendChatMessage(userMessage, activeSessionId ?? undefined);
       if (!activeSessionId && res.session_id) {
+        skipHistoryReload.current = true;
         setActiveSessionId(res.session_id);
       }
       refreshSessions();
@@ -538,12 +559,12 @@ export default function JobSeekerHome() {
 
   /* ── Block interaction handlers ──────────────────────────────────── */
 
-  const handleSelectJob = (jobId: string, title: string, company: string) => {
-    handleSend(`帮我分析一下这个职位: ${title} at ${company} (ID: ${jobId})`);
+  const handleSelectJob = (index: number, title: string, company: string) => {
+    handleSend(`帮我分析一下第${index}个职位: ${title}${company ? ` at ${company}` : ""}`);
   };
 
-  const handleSaveJob = (jobId: string) => {
-    handleSend(`我想申请这个职位 (ID: ${jobId})`);
+  const handleSaveJob = (title: string, company: string) => {
+    handleSend(`我想保存这个职位: ${title}${company ? ` at ${company}` : ""}`);
   };
 
   const handleSearchMore = () => {

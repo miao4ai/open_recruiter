@@ -315,27 +315,25 @@ export interface ApprovalBlock {
 export interface JobSearchResultsBlock {
   type: "job_search_results";
   jobs: {
-    job_id: string;
+    index: number;
     title: string;
     company: string;
     location: string;
-    salary_range: string;
-    required_skills: string[];
-    experience_years: number | null;
-    remote: boolean;
-    summary: string;
-    match_score: number;
+    url: string;
+    source: string;
+    snippet: string;
+    salary_range?: string;
   }[];
 }
 
 export interface JobMatchResultBlock {
   type: "job_match_result";
   job: {
-    job_id: string;
     title: string;
     company: string;
     location: string;
-    salary_range: string;
+    url: string;
+    snippet: string;
   };
   match: {
     score: number;
