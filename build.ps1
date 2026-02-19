@@ -76,7 +76,7 @@ if (Test-Path "release") {
     Write-Host "  Cleaning previous release..." -ForegroundColor Gray
     Remove-Item -Recurse -Force "release" -ErrorAction SilentlyContinue
     if (Test-Path "release") {
-        Write-Warning "Could not fully remove release/ — a process may be locking files. Close Open Recruiter and retry."
+        Write-Warning "Could not fully remove release/ - a process may be locking files. Close Open Recruiter and retry."
     }
 }
 
