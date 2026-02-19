@@ -49,3 +49,10 @@ async def me(current_user: dict = Depends(get_current_user)):
         "role": current_user.get("role", "recruiter"),
         "created_at": current_user["created_at"],
     }
+
+
+@router.delete("/account")
+async def delete_account(current_user: dict = Depends(get_current_user)):
+    """Delete the current user's account and all associated data."""
+    db.delete_user(current_user["id"])
+    return {"status": "ok"}

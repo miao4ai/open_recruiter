@@ -17,8 +17,19 @@ import JobSeekerHome from "./pages/JobSeekerHome";
 import JobSeekerSidebar from "./components/JobSeekerSidebar";
 import JobSeekerProfile from "./pages/JobSeekerProfile";
 import JobSeekerJobs from "./pages/JobSeekerJobs";
-import { clearToken, getMe, getSetupStatus, getToken } from "./lib/api";
+import { clearToken, deleteAccount, getMe, getSetupStatus, getToken } from "./lib/api";
 import type { User } from "./types";
+
+// Electron IPC types
+declare global {
+  interface Window {
+    electronAPI?: {
+      platform: string;
+      onLogout?: (callback: () => void) => void;
+      onDeleteAccount?: (callback: () => void) => void;
+    };
+  }
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -61,6 +72,25 @@ export default function App() {
     setNeedsOnboarding(false);
   };
 
+  const handleDeleteAccount = async () => {
+    try {
+      await deleteAccount();
+    } catch {
+      // Account may already be deleted or token expired — proceed with logout
+    }
+    clearToken();
+    setUser(null);
+    setNeedsOnboarding(false);
+  };
+
+  // Listen for Electron IPC events (menu actions)
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api) return;
+    api.onLogout?.(() => handleLogout());
+    api.onDeleteAccount?.(() => handleDeleteAccount());
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (checking) {
     return (
       <Box sx={{ display: "flex", height: "100vh", alignItems: "center", justifyContent: "center" }}>
@@ -84,7 +114,7 @@ export default function App() {
       <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
         <JobSeekerSidebar />
         <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, overflow: "hidden" }}>
-          <Header user={user} onLogout={handleLogout} />
+          <Header user={user} onLogout={handleLogout} onDeleteAccount={handleDeleteAccount} />
           <Box component="main" sx={{ flexGrow: 1, overflowY: "auto", bgcolor: "background.default" }}>
             <Routes>
               <Route path="/" element={<Box sx={{ height: "100%", overflow: "hidden" }}><JobSeekerHome /></Box>} />
@@ -102,7 +132,7 @@ export default function App() {
     <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       <Sidebar />
       <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, overflow: "hidden" }}>
-        <Header user={user} onLogout={handleLogout} />
+        <Header user={user} onLogout={handleLogout} onDeleteAccount={handleDeleteAccount} />
         <Box component="main" sx={{ flexGrow: 1, overflowY: "auto", bgcolor: "background.default", p: 3 }}>
           <Routes>
             <Route path="/" element={<Chat />} />

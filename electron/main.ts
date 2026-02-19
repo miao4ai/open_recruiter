@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, Menu, dialog } from "electron";
 import { spawn, ChildProcess, execSync } from "child_process";
 import * as path from "path";
 import * as http from "http";
@@ -153,6 +153,76 @@ if (!gotTheLock) {
     backendProcess = null;
   }
 
+  function buildAppMenu() {
+    const template: Electron.MenuItemConstructorOptions[] = [
+      {
+        label: "Account",
+        submenu: [
+          {
+            label: "Log Out",
+            click: () => {
+              mainWindow?.webContents.send("logout");
+            },
+          },
+          {
+            label: "Delete Account",
+            click: async () => {
+              const result = await dialog.showMessageBox(mainWindow!, {
+                type: "warning",
+                buttons: ["Cancel", "Delete"],
+                defaultId: 0,
+                cancelId: 0,
+                title: "Delete Account",
+                message:
+                  "Are you sure you want to delete your account? This action cannot be undone. All your data will be permanently removed.",
+              });
+              if (result.response === 1) {
+                mainWindow?.webContents.send("delete-account");
+              }
+            },
+          },
+          { type: "separator" },
+          {
+            label: "Exit",
+            accelerator: process.platform === "darwin" ? "Cmd+Q" : "Alt+F4",
+            click: () => {
+              app.quit();
+            },
+          },
+        ],
+      },
+      {
+        label: "Edit",
+        submenu: [
+          { role: "undo" },
+          { role: "redo" },
+          { type: "separator" },
+          { role: "cut" },
+          { role: "copy" },
+          { role: "paste" },
+          { role: "selectAll" },
+        ],
+      },
+      {
+        label: "View",
+        submenu: [
+          { role: "reload" },
+          { role: "forceReload" },
+          { role: "toggleDevTools" },
+          { type: "separator" },
+          { role: "resetZoom" },
+          { role: "zoomIn" },
+          { role: "zoomOut" },
+          { type: "separator" },
+          { role: "togglefullscreen" },
+        ],
+      },
+    ];
+
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+  }
+
   function createWindow() {
     mainWindow = new BrowserWindow({
       width: 1400,
@@ -206,6 +276,7 @@ if (!gotTheLock) {
     }
 
     createWindow();
+    buildAppMenu();
 
     if (!backendReady && mainWindow) {
       mainWindow.loadURL(

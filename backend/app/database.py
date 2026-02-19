@@ -466,6 +466,23 @@ def get_user_by_id(user_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+def delete_user(user_id: str) -> bool:
+    """Delete a user and all their associated data."""
+    conn = get_conn()
+    conn.execute("DELETE FROM chat_messages WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM chat_sessions WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM activities WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM memories WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM workflows WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM session_summaries WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM job_seeker_profiles WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM seeker_jobs WHERE user_id = ?", (user_id,))
+    cur = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return cur.rowcount > 0
+
+
 # ── Jobs ───────────────────────────────────────────────────────────────────
 
 def insert_job(job: dict) -> None:

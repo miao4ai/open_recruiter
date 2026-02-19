@@ -41,6 +41,8 @@ export const login = (email: string, password: string, role: UserRole = "recruit
     .then((r) => r.data);
 export const getMe = () =>
   api.get<User>("/auth/me").then((r) => r.data);
+export const deleteAccount = () =>
+  api.delete("/auth/account").then((r) => r.data);
 
 // ── Jobs ──────────────────────────────────────────────────────────────────
 export const listJobs = () => api.get<Job[]>("/jobs").then((r) => r.data);

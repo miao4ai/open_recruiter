@@ -10,12 +10,13 @@ import Alert from "@mui/material/Alert";
 import Stepper from "@mui/material/Stepper";
 import Step from "@mui/material/Step";
 import StepLabel from "@mui/material/StepLabel";
+import FormHelperText from "@mui/material/FormHelperText";
 import SmartToyOutlined from "@mui/icons-material/SmartToyOutlined";
 import CheckCircleOutline from "@mui/icons-material/CheckCircleOutline";
 import ArrowForward from "@mui/icons-material/ArrowForward";
 import ArrowBack from "@mui/icons-material/ArrowBack";
 import ScienceOutlined from "@mui/icons-material/ScienceOutlined";
-import { updateSettings, testLlm } from "../lib/api";
+import { updateSettings, testLlm, testEmail } from "../lib/api";
 
 const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
   anthropic: [
@@ -60,6 +61,8 @@ const API_KEY_PLACEHOLDER: Record<string, string> = {
   gemini: "AI...",
 };
 
+const LAST_STEP = 3; // 0=provider, 1=api key, 2=email, 3=done
+
 interface Props {
   onComplete: () => void;
 }
@@ -67,11 +70,24 @@ interface Props {
 export default function Onboarding({ onComplete }: Props) {
   const { t } = useTranslation();
   const [step, setStep] = useState(0);
+
+  // LLM state
   const [provider, setProvider] = useState("anthropic");
   const [model, setModel] = useState(DEFAULT_MODEL["anthropic"]);
   const [apiKey, setApiKey] = useState("");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  // Email state
+  const [emailBackend, setEmailBackend] = useState("console");
+  const [smtpHost, setSmtpHost] = useState("");
+  const [smtpPort, setSmtpPort] = useState("587");
+  const [smtpUsername, setSmtpUsername] = useState("");
+  const [smtpPassword, setSmtpPassword] = useState("");
+  const [sendgridApiKey, setSendgridApiKey] = useState("");
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [emailTestResult, setEmailTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -82,12 +98,11 @@ export default function Onboarding({ onComplete }: Props) {
     setTestResult(null);
   };
 
-  const handleTest = async () => {
+  const handleTestLlm = async () => {
     setTesting(true);
     setTestResult(null);
     setError("");
     try {
-      // Save settings first, then test
       await updateSettings({
         llm_provider: provider,
         llm_model: model,
@@ -106,38 +121,78 @@ export default function Onboarding({ onComplete }: Props) {
     }
   };
 
+  const handleTestEmail = async () => {
+    setTestingEmail(true);
+    setEmailTestResult(null);
+    setError("");
+    try {
+      await saveEmailSettings();
+      const res = await testEmail();
+      if (res.status === "ok") {
+        setEmailTestResult({ ok: true, message: res.message || "Email sent!" });
+      } else {
+        setEmailTestResult({ ok: false, message: res.message });
+      }
+    } catch {
+      setEmailTestResult({ ok: false, message: "Network error" });
+    } finally {
+      setTestingEmail(false);
+    }
+  };
+
+  const saveEmailSettings = async () => {
+    const data: Record<string, string | number> = { email_backend: emailBackend };
+    if (emailBackend === "gmail" || emailBackend === "smtp") {
+      data.smtp_password = smtpPassword;
+      if (emailBackend === "gmail") {
+        data.smtp_host = "smtp.gmail.com";
+        data.smtp_port = 587;
+      } else {
+        data.smtp_host = smtpHost;
+        data.smtp_port = parseInt(smtpPort) || 587;
+        data.smtp_username = smtpUsername;
+      }
+    } else if (emailBackend === "sendgrid") {
+      data.sendgrid_api_key = sendgridApiKey;
+    }
+    await updateSettings(data);
+  };
+
   const handleNext = async () => {
-    if (step === 1) {
-      // Save settings before moving to step 3
-      setSaving(true);
-      setError("");
-      try {
+    setSaving(true);
+    setError("");
+    try {
+      if (step === 1) {
+        // Save LLM settings before moving to email step
         await updateSettings({
           llm_provider: provider,
           llm_model: model,
           [API_KEY_FIELD[provider]]: apiKey,
         });
-        setStep(2);
-      } catch {
-        setError(t("settings.failedToSave"));
-      } finally {
-        setSaving(false);
+      } else if (step === 2) {
+        // Save email settings before moving to done
+        await saveEmailSettings();
       }
-    } else {
       setStep(step + 1);
+    } catch {
+      setError(t("settings.failedToSave"));
+    } finally {
+      setSaving(false);
     }
   };
 
   const canProceed = () => {
     if (step === 0) return true;
     if (step === 1) return apiKey.length > 0;
+    if (step === 2) return true; // Email is optional
     return true;
   };
 
   const steps = [
     t("onboarding.step1Title"),
     t("onboarding.step2Title"),
-    t("onboarding.step3Title"),
+    t("onboarding.emailStepTitle"),
+    t("onboarding.completedTitle"),
   ];
 
   return (
@@ -301,7 +356,7 @@ export default function Onboarding({ onComplete }: Props) {
               <Button
                 variant="outlined"
                 startIcon={<ScienceOutlined />}
-                onClick={handleTest}
+                onClick={handleTestLlm}
                 disabled={!apiKey || testing}
               >
                 {testing
@@ -312,21 +367,133 @@ export default function Onboarding({ onComplete }: Props) {
           </Box>
         )}
 
-        {/* Step 2: Done */}
+        {/* Step 2: Email Configuration */}
         {step === 2 && (
+          <Box>
+            <Typography variant="h6" fontWeight={600} gutterBottom>
+              {t("onboarding.emailStepTitle")}
+            </Typography>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mb: 3 }}
+            >
+              {t("onboarding.emailStepSubtitle")}
+            </Typography>
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+              <TextField
+                select
+                label={t("settings.backend")}
+                value={emailBackend}
+                onChange={(e) => {
+                  setEmailBackend(e.target.value);
+                  setEmailTestResult(null);
+                }}
+                fullWidth
+              >
+                <MenuItem value="console">{t("settings.consoleOption")}</MenuItem>
+                <MenuItem value="gmail">{t("settings.gmailOption")}</MenuItem>
+                <MenuItem value="smtp">{t("settings.customSmtp")}</MenuItem>
+                <MenuItem value="sendgrid">{t("settings.sendgridOption")}</MenuItem>
+              </TextField>
+
+              {emailBackend === "sendgrid" && (
+                <TextField
+                  label={t("settings.sendgridApiKey")}
+                  type="password"
+                  value={sendgridApiKey}
+                  onChange={(e) => setSendgridApiKey(e.target.value)}
+                  placeholder="SG...."
+                  fullWidth
+                />
+              )}
+
+              {(emailBackend === "gmail" || emailBackend === "smtp") && (
+                <>
+                  {emailBackend === "smtp" && (
+                    <>
+                      <TextField
+                        label={t("settings.smtpHost")}
+                        value={smtpHost}
+                        onChange={(e) => setSmtpHost(e.target.value)}
+                        placeholder="smtp.example.com"
+                        fullWidth
+                      />
+                      <TextField
+                        label={t("settings.smtpPort")}
+                        type="number"
+                        value={smtpPort}
+                        onChange={(e) => setSmtpPort(e.target.value)}
+                        placeholder="587"
+                        fullWidth
+                      />
+                      <TextField
+                        label={t("settings.smtpUsername")}
+                        value={smtpUsername}
+                        onChange={(e) => setSmtpUsername(e.target.value)}
+                        placeholder="your-email@example.com"
+                        fullWidth
+                      />
+                    </>
+                  )}
+                  <Box>
+                    <TextField
+                      label={emailBackend === "gmail" ? t("settings.gmailAppPassword") : t("settings.smtpPassword")}
+                      type="password"
+                      value={smtpPassword}
+                      onChange={(e) => setSmtpPassword(e.target.value)}
+                      placeholder={emailBackend === "gmail" ? "xxxx xxxx xxxx xxxx" : "password"}
+                      fullWidth
+                    />
+                    {emailBackend === "gmail" && (
+                      <FormHelperText>
+                        {t("settings.gmailAppPasswordHint")}
+                      </FormHelperText>
+                    )}
+                  </Box>
+                </>
+              )}
+
+              {emailTestResult && (
+                <Alert severity={emailTestResult.ok ? "success" : "error"}>
+                  {emailTestResult.ok
+                    ? t("onboarding.testEmailSuccess")
+                    : t("onboarding.testEmailFailed", { message: emailTestResult.message })}
+                </Alert>
+              )}
+
+              {emailBackend !== "console" && (
+                <Button
+                  variant="outlined"
+                  startIcon={<ScienceOutlined />}
+                  onClick={handleTestEmail}
+                  disabled={testingEmail}
+                >
+                  {testingEmail
+                    ? t("onboarding.testing")
+                    : t("onboarding.testEmailBtn")}
+                </Button>
+              )}
+            </Box>
+          </Box>
+        )}
+
+        {/* Step 3: Done */}
+        {step === LAST_STEP && (
           <Box sx={{ textAlign: "center", py: 2 }}>
             <CheckCircleOutline
               sx={{ fontSize: 64, color: "success.main", mb: 2 }}
             />
             <Typography variant="h6" fontWeight={600} gutterBottom>
-              {t("onboarding.step3Title")}
+              {t("onboarding.completedTitle")}
             </Typography>
             <Typography
               variant="body2"
               color="text.secondary"
               sx={{ mb: 1 }}
             >
-              {t("onboarding.step3Subtitle")}
+              {t("onboarding.completedSubtitle")}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               {PROVIDER_INFO.find((p) => p.value === provider)?.label} —{" "}
@@ -345,7 +512,7 @@ export default function Onboarding({ onComplete }: Props) {
             gap: 2,
           }}
         >
-          {step > 0 && step < 2 ? (
+          {step > 0 && step < LAST_STEP ? (
             <Button
               startIcon={<ArrowBack />}
               onClick={() => setStep(step - 1)}
@@ -357,7 +524,7 @@ export default function Onboarding({ onComplete }: Props) {
           )}
 
           <Box sx={{ display: "flex", gap: 1 }}>
-            {step < 2 && (
+            {step < LAST_STEP && (
               <Button
                 variant="text"
                 color="inherit"
@@ -368,7 +535,7 @@ export default function Onboarding({ onComplete }: Props) {
               </Button>
             )}
 
-            {step < 2 ? (
+            {step < LAST_STEP ? (
               <Button
                 variant="contained"
                 endIcon={<ArrowForward />}
