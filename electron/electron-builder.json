@@ -5,19 +5,25 @@
     "output": "release"
   },
   "files": [
-    "electron/dist/**/*",
-    "frontend/dist/**/*",
-    "backend/**/*",
-    "!backend/.venv/**",
-    "!backend/__pycache__/**"
+    "electron/dist/**/*"
   ],
-  "mac": {
-    "target": "dmg"
-  },
+  "extraResources": [
+    {
+      "from": "backend/dist/backend",
+      "to": "backend"
+    }
+  ],
   "win": {
-    "target": "nsis"
+    "target": "dir",
+    "icon": "electron/icons/icon.ico",
+    "signAndEditExecutable": false
+  },
+  "mac": {
+    "target": "dmg",
+    "icon": "electron/icons/icon.icns"
   },
   "linux": {
-    "target": "AppImage"
+    "target": "AppImage",
+    "icon": "electron/icons"
   }
 }

@@ -23,6 +23,7 @@ dependencies = [
     "bcrypt>=4.0",
     "APScheduler>=3.10,<4",
     "ddgs>=9.0",
+    "pyinstaller>=6.0",
 ]
 
 [project.scripts]

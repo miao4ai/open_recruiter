@@ -1,9 +1,13 @@
 """FastAPI application entry point."""
 
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.auth import require_recruiter
 from app.database import init_db
@@ -62,3 +66,25 @@ app.include_router(slack_routes.router, prefix="/slack", tags=["slack"])
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# ── Serve React static build (production / Electron mode) ────────────────
+# Only mounted when frontend/dist exists (i.e. after `npm run build`).
+
+# PyInstaller bundles data files under sys._MEIPASS; normal dev uses relative path
+_meipass = getattr(sys, "_MEIPASS", None)
+if _meipass:
+    _FRONTEND_DIST = Path(_meipass) / "frontend" / "dist"
+else:
+    _FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+
+if _FRONTEND_DIST.is_dir():
+    app.mount("/assets", StaticFiles(directory=_FRONTEND_DIST / "assets"), name="static-assets")
+
+    @app.get("/{full_path:path}")
+    async def spa_fallback(request: Request, full_path: str):
+        """Serve static files or fall back to index.html for SPA routing."""
+        file_path = _FRONTEND_DIST / full_path
+        if full_path and file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(_FRONTEND_DIST / "index.html")

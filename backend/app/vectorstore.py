@@ -8,6 +8,7 @@ Both share record IDs for cross-referencing.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,11 @@ from chromadb.config import Settings as ChromaSettings
 log = logging.getLogger(__name__)
 
 # Persist ChromaDB next to the SQLite database
-CHROMA_DIR = Path(__file__).resolve().parent.parent / "chroma_data"
+_data_dir = os.environ.get("OPEN_RECRUITER_DATA_DIR")
+if _data_dir:
+    CHROMA_DIR = Path(_data_dir) / "chroma_data"
+else:
+    CHROMA_DIR = Path(__file__).resolve().parent.parent / "chroma_data"
 
 # Module-level singletons (populated by init_vectorstore)
 _client: chromadb.ClientAPI | None = None
