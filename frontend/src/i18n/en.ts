@@ -505,6 +505,10 @@ const en = {
     viewDetails: "View Details",
     openLink: "Open original",
     searchJobs: "Search for jobs",
+    promptSearchJobs: "Help me find jobs that match my profile",
+    promptAnalyzeJob: "Please analyze job #{{index}}: {{title}}{{company}}",
+    promptSaveJob: "I'd like to save this job: {{title}}{{company}}",
+    promptSearchMore: "Continue searching for more jobs",
   },
 
   // ── Job Seeker Jobs ──

@@ -504,6 +504,10 @@ const ko = {
     viewDetails: "상세 보기",
     openLink: "원본 보기",
     searchJobs: "채용공고 검색",
+    promptSearchJobs: "내 프로필에 맞는 채용공고를 찾아주세요",
+    promptAnalyzeJob: "{{index}}번 채용공고를 분석해주세요: {{title}}{{company}}",
+    promptSaveJob: "이 채용공고를 저장하고 싶습니다: {{title}}{{company}}",
+    promptSearchMore: "다른 채용공고를 계속 검색해주세요",
   },
 
   // ── Job Seeker Jobs ──

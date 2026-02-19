@@ -492,7 +492,7 @@ export default function JobSeekerHome() {
           t("jobSeekerHome.viewProfile"),
         created_at: new Date().toISOString(),
         suggestions: [
-          { label: t("jobSeekerHome.searchJobs"), prompt: "帮我找适合我的工作" },
+          { label: t("jobSeekerHome.searchJobs"), prompt: t("jobSeekerHome.promptSearchJobs") },
         ],
       };
       setMessages((prev) => [...prev, successMsg]);
@@ -562,15 +562,15 @@ export default function JobSeekerHome() {
   /* ── Block interaction handlers ──────────────────────────────────── */
 
   const handleSelectJob = (index: number, title: string, company: string) => {
-    handleSend(`帮我分析一下第${index}个职位: ${title}${company ? ` at ${company}` : ""}`);
+    handleSend(t("jobSeekerHome.promptAnalyzeJob", { index, title, company: company ? ` at ${company}` : "" }));
   };
 
   const handleSaveJob = (title: string, company: string) => {
-    handleSend(`我想保存这个职位: ${title}${company ? ` at ${company}` : ""}`);
+    handleSend(t("jobSeekerHome.promptSaveJob", { title, company: company ? ` at ${company}` : "" }));
   };
 
   const handleSearchMore = () => {
-    handleSend("继续搜索其他职位");
+    handleSend(t("jobSeekerHome.promptSearchMore"));
   };
 
   /* ── Render blocks for a message ─────────────────────────────────── */

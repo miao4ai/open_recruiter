@@ -504,6 +504,10 @@ const ja = {
     viewDetails: "詳細を見る",
     openLink: "元のページを開く",
     searchJobs: "求人を検索",
+    promptSearchJobs: "私のプロフィールに合った求人を探してください",
+    promptAnalyzeJob: "{{index}}番目の求人を分析してください: {{title}}{{company}}",
+    promptSaveJob: "この求人を保存したいです: {{title}}{{company}}",
+    promptSearchMore: "他の求人を引き続き検索してください",
   },
 
   // ── Job Seeker Jobs ──
