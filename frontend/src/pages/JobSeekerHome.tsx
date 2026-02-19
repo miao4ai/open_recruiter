@@ -365,7 +365,7 @@ export default function JobSeekerHome() {
   const [started, setStarted] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const didAutoSelect = useRef(false);
-  const skipHistoryReload = useRef(false);
+  const loadedSessionRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -386,13 +386,12 @@ export default function JobSeekerHome() {
   }, [sessions]);
 
   // Load messages when session changes — always prepend greeting
-  // Skip reload when the session was just created by handleSend (blocks would be lost)
+  // Uses loadedSessionRef to skip reload when handleSend just created the session
+  // (StrictMode-safe: ref check is idempotent across double-invocations)
   useEffect(() => {
     if (!activeSessionId) return;
-    if (skipHistoryReload.current) {
-      skipHistoryReload.current = false;
-      return;
-    }
+    if (loadedSessionRef.current === activeSessionId) return;
+    loadedSessionRef.current = activeSessionId;
     getChatHistory(activeSessionId).then((msgs) => {
       const greeting = makeGreeting(t);
       setMessages([greeting, ...msgs]);
@@ -425,7 +424,7 @@ export default function JobSeekerHome() {
     try {
       const res: ChatResponse = await sendChatMessage(userMessage, activeSessionId ?? undefined);
       if (!activeSessionId && res.session_id) {
-        skipHistoryReload.current = true;
+        loadedSessionRef.current = res.session_id;
         setActiveSessionId(res.session_id);
       }
       refreshSessions();
@@ -521,6 +520,7 @@ export default function JobSeekerHome() {
   /* ── Session handlers ────────────────────────────────────────────── */
 
   const handleNewChat = () => {
+    loadedSessionRef.current = null;
     setActiveSessionId(null);
     setMessages([makeGreeting(t)]);
     setStarted(true);
@@ -535,6 +535,7 @@ export default function JobSeekerHome() {
     e.stopPropagation();
     await deleteChatSession(id);
     if (activeSessionId === id) {
+      loadedSessionRef.current = null;
       setActiveSessionId(null);
       setMessages([]);
       setStarted(false);
@@ -544,6 +545,7 @@ export default function JobSeekerHome() {
 
   const handleClearAll = async () => {
     await clearChatHistory();
+    loadedSessionRef.current = null;
     setMessages([]);
     setActiveSessionId(null);
     setStarted(false);

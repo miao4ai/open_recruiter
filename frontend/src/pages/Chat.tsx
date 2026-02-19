@@ -740,10 +740,14 @@ export default function Chat() {
   const [backendSuggestions, setBackendSuggestions] = useState<Suggestion[]>([]);
   const [activeWorkflow, setActiveWorkflow] = useState<ActiveWorkflow | null>(null);
   const didAutoSelect = useRef(false);
+  const loadedSessionRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: sessions, refresh: refreshSessions } = useApi(useCallback(() => listChatSessions(), []));
   const { data: candidates, refresh: refreshCandidates } = useApi(useCallback(() => listCandidates(), []));
+
+  const candidatesRef = useRef(candidates);
+  candidatesRef.current = candidates;
 
   // Auto-select most recent session
   useEffect(() => {
@@ -757,16 +761,21 @@ export default function Chat() {
   }, [sessions, candidates, t]);
 
   // Load messages when session changes
+  // Uses loadedSessionRef to skip reload when handleSend just created the session
+  // Uses candidatesRef to avoid re-triggering on refreshCandidates()
   useEffect(() => {
     if (!activeSessionId) return;
+    if (loadedSessionRef.current === activeSessionId) return;
+    loadedSessionRef.current = activeSessionId;
     getChatHistory(activeSessionId).then((msgs) => {
+      const c = candidatesRef.current;
       if (msgs.length === 0) {
-        setMessages([candidates ? makeBriefing(candidates, t) : makeSimpleGreeting(t)]);
+        setMessages([c ? makeBriefing(c, t) : makeSimpleGreeting(t)]);
       } else {
         setMessages(msgs);
       }
     });
-  }, [activeSessionId, candidates, t]);
+  }, [activeSessionId, t]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -848,7 +857,10 @@ export default function Chat() {
       );
 
       setStreamingText("");
-      if (!activeSessionId && response.session_id) setActiveSessionId(response.session_id);
+      if (!activeSessionId && response.session_id) {
+        loadedSessionRef.current = response.session_id;
+        setActiveSessionId(response.session_id);
+      }
       refreshSessions();
       refreshCandidates();
 
@@ -986,6 +998,7 @@ export default function Chat() {
   /* ── Session handlers ──────────────────────────────────────────────────── */
 
   const handleNewChat = () => {
+    loadedSessionRef.current = null;
     setActiveSessionId(null);
     setMessages([candidates ? makeBriefing(candidates, t) : makeSimpleGreeting(t)]);
     setContextView({ type: "briefing" });
@@ -997,12 +1010,13 @@ export default function Chat() {
   const handleDeleteSession = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     await deleteChatSession(id);
-    if (activeSessionId === id) { setActiveSessionId(null); setMessages([]); }
+    if (activeSessionId === id) { loadedSessionRef.current = null; setActiveSessionId(null); setMessages([]); }
     refreshSessions();
   };
 
   const handleClearAll = async () => {
     await clearChatHistory();
+    loadedSessionRef.current = null;
     setMessages([]); setActiveSessionId(null); refreshSessions();
   };
 
