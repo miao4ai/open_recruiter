@@ -15,7 +15,7 @@ Write-Host ""
 
 Write-Host "[1/5] Building frontend..." -ForegroundColor Yellow
 Push-Location "$ProjectRoot\frontend"
-npm ci
+npm install
 npm run build
 if (-not (Test-Path "dist\index.html")) {
     Write-Error "Frontend build failed - dist/index.html not found"
@@ -61,7 +61,7 @@ Write-Host "  Backend bundled successfully." -ForegroundColor Green
 
 Write-Host "[4/5] Compiling Electron TypeScript..." -ForegroundColor Yellow
 Push-Location "$ProjectRoot"
-npm ci
+npm install
 npm run build:electron
 Pop-Location
 Write-Host "  Electron compiled." -ForegroundColor Green
