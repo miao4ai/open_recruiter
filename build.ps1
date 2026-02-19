@@ -34,15 +34,7 @@ if (-not (Test-Path $ModelsDir)) {
 }
 
 Push-Location "$ProjectRoot\backend"
-python -c @"
-import os, sys
-model_dir = os.path.join('models')
-os.environ['SENTENCE_TRANSFORMERS_HOME'] = model_dir
-from sentence_transformers import SentenceTransformer
-print('Downloading BAAI/bge-small-en-v1.5...')
-model = SentenceTransformer('BAAI/bge-small-en-v1.5')
-print(f'Model cached to {model_dir}')
-"@
+python -c "import os; os.environ['SENTENCE_TRANSFORMERS_HOME']='models'; from sentence_transformers import SentenceTransformer; print('Downloading BAAI/bge-small-en-v1.5...'); SentenceTransformer('BAAI/bge-small-en-v1.5'); print('Model ready.')"
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Model download failed"
     exit 1
