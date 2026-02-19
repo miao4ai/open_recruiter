@@ -196,14 +196,32 @@ if (!gotTheLock) {
 
     backendProcess = startBackend();
 
+    let backendReady = false;
     try {
       await waitForBackend();
       console.log("[electron] Backend is ready.");
+      backendReady = true;
     } catch (err) {
       console.error("[electron] Failed to start backend:", err);
     }
 
     createWindow();
+
+    if (!backendReady && mainWindow) {
+      mainWindow.loadURL(
+        `data:text/html;charset=utf-8,${encodeURIComponent(`
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Open Recruiter - Error</title></head>
+<body style="font-family:system-ui;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#1a1a2e;color:#e0e0e0">
+<div style="text-align:center;max-width:500px">
+  <h1 style="color:#e74c3c">Backend failed to start</h1>
+  <p>The backend process did not respond within 30 seconds.</p>
+  <p style="color:#888;font-size:14px">Check the logs or try reinstalling the application.</p>
+</div>
+</body></html>`)}`
+      );
+    }
   });
 
   app.on("window-all-closed", () => {
