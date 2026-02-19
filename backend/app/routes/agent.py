@@ -154,13 +154,22 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
         action_data = result.get("action") if isinstance(result, dict) else None
         context_hint_data = result.get("context_hint") if isinstance(result, dict) else None
     except Exception:
-        # Fallback to plain text chat if JSON parsing fails
-        log.warning("chat_json failed, falling back to plain text chat")
-        try:
-            reply_text = chat(cfg, system=system_prompt, messages=messages)
-        except Exception as e:
-            log.error("Chat LLM call failed: %s", e)
-            reply_text = f"I encountered an error: {e!s}. Please check your LLM configuration in Settings."
+        # Fallback: try regex extraction, then plain text chat
+        log.warning("chat_json failed, trying fallback")
+        if isinstance(result, str) and '"message"' in result:
+            import re
+            m = re.search(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)"', result)
+            if m:
+                reply_text = (m.group(1)
+                    .replace("\\n", "\n")
+                    .replace('\\"', '"')
+                    .replace("\\\\", "\\"))
+        if not reply_text:
+            try:
+                reply_text = chat(cfg, system=system_prompt, messages=messages)
+            except Exception as e:
+                log.error("Chat LLM call failed: %s", e)
+                reply_text = f"I encountered an error: {e!s}. Please check your LLM configuration in Settings."
 
     # Process actions using shared helper
     response: dict = {"reply": reply_text, "session_id": session_id, "blocks": [], "suggestions": [], "context_hint": context_hint_data}
@@ -450,8 +459,17 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
                     action_data = result.get("action") if isinstance(result, dict) else None
                     context_hint_data = result.get("context_hint") if isinstance(result, dict) else None
                 except Exception:
-                    log.warning("Stream JSON parse failed, using raw text")
-                    reply_text = full_text.strip()
+                    log.warning("Stream JSON parse failed, trying regex fallback")
+                    # Try to extract "message" field via regex even from malformed JSON
+                    import re
+                    m = re.search(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)"', full_text)
+                    if m:
+                        reply_text = (m.group(1)
+                            .replace("\\n", "\n")
+                            .replace('\\"', '"')
+                            .replace("\\\\", "\\"))
+                    else:
+                        reply_text = full_text.strip()
             elif error_occurred:
                 # Fallback to non-streaming
                 try:
