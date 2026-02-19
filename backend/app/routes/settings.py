@@ -46,6 +46,26 @@ def get_config() -> Config:
     return _build_config()
 
 
+@router.get("/setup-status")
+async def setup_status(current_user: dict = Depends(get_current_user)):
+    """Check if LLM is configured — used by the onboarding flow."""
+    cfg = _build_config()
+    provider = cfg.llm_provider
+    key_map = {
+        "anthropic": cfg.anthropic_api_key,
+        "openai": cfg.openai_api_key,
+        "gemini": cfg.gemini_api_key,
+    }
+    has_key = bool(key_map.get(provider, ""))
+    has_model = bool(cfg.llm_model)
+    return {
+        "llm_configured": has_key and has_model,
+        "llm_provider": provider,
+        "llm_model": cfg.llm_model,
+        "has_api_key": has_key,
+    }
+
+
 @router.get("", response_model=Settings)
 async def get_settings_route(current_user: dict = Depends(get_current_user)):
     cfg = _build_config()

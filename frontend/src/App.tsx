@@ -12,16 +12,18 @@ import Calendar from "./pages/Calendar";
 import Automations from "./pages/Automations";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
+import Onboarding from "./pages/Onboarding";
 import JobSeekerHome from "./pages/JobSeekerHome";
 import JobSeekerSidebar from "./components/JobSeekerSidebar";
 import JobSeekerProfile from "./pages/JobSeekerProfile";
 import JobSeekerJobs from "./pages/JobSeekerJobs";
-import { clearToken, getMe, getToken } from "./lib/api";
+import { clearToken, getMe, getSetupStatus, getToken } from "./lib/api";
 import type { User } from "./types";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
     const token = getToken();
@@ -30,14 +32,33 @@ export default function App() {
       return;
     }
     getMe()
-      .then((u) => setUser(u))
+      .then((u) => {
+        setUser(u);
+        // Check LLM setup status for recruiters
+        if (u.role === "recruiter") {
+          return getSetupStatus().then((status) => {
+            if (!status.llm_configured) setNeedsOnboarding(true);
+          }).catch(() => { /* ignore — settings check is non-critical */ });
+        }
+      })
       .catch(() => clearToken())
       .finally(() => setChecking(false));
   }, []);
 
+  const handleLogin = (u: User) => {
+    setUser(u);
+    // Check if new recruiter needs onboarding
+    if (u.role === "recruiter") {
+      getSetupStatus().then((status) => {
+        if (!status.llm_configured) setNeedsOnboarding(true);
+      }).catch(() => {});
+    }
+  };
+
   const handleLogout = () => {
     clearToken();
     setUser(null);
+    setNeedsOnboarding(false);
   };
 
   if (checking) {
@@ -49,7 +70,12 @@ export default function App() {
   }
 
   if (!user) {
-    return <Login onLogin={(u) => setUser(u)} />;
+    return <Login onLogin={handleLogin} />;
+  }
+
+  // Show onboarding wizard if recruiter hasn't configured LLM
+  if (needsOnboarding && user.role === "recruiter") {
+    return <Onboarding onComplete={() => setNeedsOnboarding(false)} />;
   }
 
   // Job seeker layout

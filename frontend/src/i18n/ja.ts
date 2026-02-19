@@ -659,6 +659,35 @@ const ja = {
       cancelWorkflow: "ワークフローをキャンセル",
     },
   },
+
+  // ── Onboarding ──
+  onboarding: {
+    welcome: "Open Recruiter へようこそ！",
+    welcomeSubtitle: "AIアシスタントを数ステップで設定しましょう。",
+    step1Title: "LLMプロバイダーを選択",
+    step1Subtitle: "候補者マッチング、メール作成などに使用するAIプロバイダーを選択してください。",
+    step2Title: "APIキーを入力",
+    step2Subtitle: "APIキーを以下に貼り付けてください。キーは安全に保存され、共有されることはありません。",
+    step3Title: "設定完了！",
+    step3Subtitle: "AIアシスタントの設定が完了しました。採用活動を始めましょう。",
+    selectProvider: "プロバイダーを選択",
+    selectModel: "モデルを選択",
+    apiKeyLabel: "APIキー",
+    testConnection: "接続テスト",
+    testing: "テスト中...",
+    testSuccess: "接続成功！",
+    testFailed: "接続失敗: {{message}}",
+    next: "次へ",
+    back: "戻る",
+    getStarted: "始める",
+    skip: "後で設定",
+    stepOf: "ステップ {{current}} / {{total}}",
+    getKeyHint: {
+      anthropic: "APIキーはconsole.anthropic.comで取得できます",
+      openai: "APIキーはplatform.openai.comで取得できます",
+      gemini: "APIキーはaistudio.google.comで取得できます",
+    },
+  },
 };
 
 export default ja;

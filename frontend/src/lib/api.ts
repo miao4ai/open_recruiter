@@ -194,6 +194,8 @@ export const searchByText = (
     .then((r) => r.data);
 
 // ── Settings ──────────────────────────────────────────────────────────────
+export const getSetupStatus = () =>
+  api.get<{ llm_configured: boolean; llm_provider: string; llm_model: string; has_api_key: boolean }>("/settings/setup-status").then((r) => r.data);
 export const getSettings = () =>
   api.get<Settings>("/settings").then((r) => r.data);
 export const updateSettings = (data: Partial<Settings>) =>

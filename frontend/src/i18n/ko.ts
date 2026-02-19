@@ -659,6 +659,35 @@ const ko = {
       cancelWorkflow: "워크플로우 취소",
     },
   },
+
+  // ── Onboarding ──
+  onboarding: {
+    welcome: "Open Recruiter에 오신 것을 환영합니다!",
+    welcomeSubtitle: "몇 단계만 거치면 AI 어시스턴트를 설정할 수 있습니다.",
+    step1Title: "LLM 제공업체 선택",
+    step1Subtitle: "후보자 매칭, 이메일 작성 등에 사용할 AI 제공업체를 선택하세요.",
+    step2Title: "API 키 입력",
+    step2Subtitle: "아래에 API 키를 붙여넣으세요. 키는 안전하게 저장되며 공유되지 않습니다.",
+    step3Title: "설정 완료!",
+    step3Subtitle: "AI 어시스턴트가 구성되었으며 채용을 도울 준비가 되었습니다.",
+    selectProvider: "제공업체 선택",
+    selectModel: "모델 선택",
+    apiKeyLabel: "API 키",
+    testConnection: "연결 테스트",
+    testing: "테스트 중...",
+    testSuccess: "연결 성공!",
+    testFailed: "연결 실패: {{message}}",
+    next: "다음",
+    back: "이전",
+    getStarted: "시작하기",
+    skip: "나중에 설정",
+    stepOf: "단계 {{current}} / {{total}}",
+    getKeyHint: {
+      anthropic: "console.anthropic.com에서 API 키를 받으세요",
+      openai: "platform.openai.com에서 API 키를 받으세요",
+      gemini: "aistudio.google.com에서 API 키를 받으세요",
+    },
+  },
 };
 
 export default ko;

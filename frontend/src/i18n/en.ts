@@ -660,6 +660,35 @@ const en = {
       cancelWorkflow: "Cancel workflow",
     },
   },
+
+  // ── Onboarding ──
+  onboarding: {
+    welcome: "Welcome to Open Recruiter!",
+    welcomeSubtitle: "Let's get your AI assistant set up in just a few steps.",
+    step1Title: "Choose Your LLM Provider",
+    step1Subtitle: "Select the AI provider you'd like to use for candidate matching, email drafting, and more.",
+    step2Title: "Enter Your API Key",
+    step2Subtitle: "Paste your API key below. Your key is stored securely and never shared.",
+    step3Title: "You're All Set!",
+    step3Subtitle: "Your AI assistant is configured and ready to help you recruit.",
+    selectProvider: "Select Provider",
+    selectModel: "Select Model",
+    apiKeyLabel: "API Key",
+    testConnection: "Test Connection",
+    testing: "Testing...",
+    testSuccess: "Connection successful!",
+    testFailed: "Connection failed: {{message}}",
+    next: "Next",
+    back: "Back",
+    getStarted: "Get Started",
+    skip: "Skip for Now",
+    stepOf: "Step {{current}} of {{total}}",
+    getKeyHint: {
+      anthropic: "Get your API key at console.anthropic.com",
+      openai: "Get your API key at platform.openai.com",
+      gemini: "Get your API key at aistudio.google.com",
+    },
+  },
 };
 
 export default en;
