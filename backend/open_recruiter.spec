@@ -10,7 +10,7 @@ Before building, run the build script to:
 """
 
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
 block_cipher = None
 
@@ -21,7 +21,9 @@ bundled_models = backend_dir / "models"
 
 # ── Data files to bundle ──────────────────────────────────────────────────
 
-datas = []
+datas = [
+    *collect_data_files("litellm"),
+]
 
 # Frontend static build (served by FastAPI)
 if frontend_dist.is_dir():
