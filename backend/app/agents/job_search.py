@@ -17,7 +17,7 @@ def search_jobs_web(
 
     Returns a list of dicts with: title, url, snippet, source.
     """
-    from duckduckgo_search import DDGS
+    from ddgs import DDGS
 
     # Build search query targeting job sites
     search_query = query
@@ -27,8 +27,8 @@ def search_jobs_web(
 
     results: list[dict[str, Any]] = []
     try:
-        with DDGS() as ddgs:
-            raw = ddgs.text(search_query, max_results=n_results * 2)
+        ddgs = DDGS()
+        raw = ddgs.text(search_query, max_results=n_results * 2)
 
         for item in raw:
             title = item.get("title", "")

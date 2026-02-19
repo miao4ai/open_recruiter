@@ -22,7 +22,7 @@ dependencies = [
     "PyJWT>=2.8",
     "bcrypt>=4.0",
     "APScheduler>=3.10,<4",
-    "duckduckgo-search>=7.0",
+    "ddgs>=9.0",
 ]
 
 [project.scripts]
