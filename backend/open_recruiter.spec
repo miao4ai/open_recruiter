@@ -10,6 +10,7 @@ Before building, run the build script to:
 """
 
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
 
@@ -97,38 +98,8 @@ hiddenimports = [
     "app.slack.pipeline",
     "app.slack.privacy",
     "app.slack.routes",
-    # ChromaDB & vector search (uses dynamic imports via config.py)
-    "chromadb",
-    "chromadb.api",
-    "chromadb.api.client",
-    "chromadb.api.shared_system_client",
-    "chromadb.config",
-    "chromadb.db",
-    "chromadb.db.impl",
-    "chromadb.db.impl.sqlite",
-    "chromadb.segment",
-    "chromadb.segment.impl",
-    "chromadb.segment.impl.manager",
-    "chromadb.segment.impl.manager.local",
-    "chromadb.segment.impl.metadata",
-    "chromadb.segment.impl.metadata.sqlite",
-    "chromadb.segment.impl.vector",
-    "chromadb.segment.impl.vector.local_hnsw",
-    "chromadb.telemetry",
-    "chromadb.telemetry.product",
-    "chromadb.telemetry.product.posthog",
-    "chromadb.ingest",
-    "chromadb.ingest.impl",
-    "chromadb.ingest.impl.simple",
-    "chromadb.quota",
-    "chromadb.quota.simple_quota_enforcer",
-    "chromadb.rate_limiting",
-    "chromadb.rate_limiting.simple_rate_limiter",
-    "chromadb.execution",
-    "chromadb.execution.executor",
-    "chromadb.execution.executor.local",
-    "chromadb.auth",
-    "chromadb.auth.noop",
+    # ChromaDB — collect ALL submodules (it uses heavy dynamic imports)
+    *collect_submodules("chromadb"),
     "hnswlib",
     # Sentence transformers / ML
     "sentence_transformers",
