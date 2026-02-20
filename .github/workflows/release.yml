@@ -54,6 +54,21 @@ jobs:
           print('Model ready.')
           "
 
+      - name: Resolve symlinks in model cache
+        working-directory: backend
+        shell: python
+        run: |
+          import os, shutil
+          for root, dirs, files in os.walk('models'):
+              for name in files:
+                  path = os.path.join(root, name)
+                  if os.path.islink(path):
+                      target = os.path.realpath(path)
+                      os.remove(path)
+                      shutil.copy2(target, path)
+                      print(f"Resolved: {path}")
+          print("All symlinks resolved.")
+
       # ── Step 3: Bundle backend with PyInstaller ─────────────────────────
       - name: Bundle backend with PyInstaller
         working-directory: backend
