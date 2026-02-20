@@ -14,17 +14,11 @@ def _configure_bundled_paths():
     if not meipass:
         return
 
-    # Pre-bundled embedding model directory
-    model_dir = os.path.join(meipass, "models")
-    if os.path.isdir(model_dir):
-        os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", model_dir)
-
-    # Writable cache for any runtime downloads (torch hub, etc.)
+    # Writable cache for any runtime downloads
     data_dir = os.environ.get("OPEN_RECRUITER_DATA_DIR", "")
     if data_dir:
         cache_dir = os.path.join(data_dir, "cache")
         os.makedirs(cache_dir, exist_ok=True)
-        os.environ.setdefault("TRANSFORMERS_CACHE", cache_dir)
         os.environ.setdefault("HF_HOME", cache_dir)
 
 

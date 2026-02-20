@@ -33,7 +33,7 @@ if frontend_dist.is_dir():
 else:
     print("WARNING: frontend/dist not found — run 'npm run build' in frontend/ first")
 
-# Pre-downloaded sentence-transformers model
+# ONNX embedding model (exported from BAAI/bge-small-en-v1.5)
 if bundled_models.is_dir():
     datas.append((str(bundled_models), "models"))
 else:
@@ -105,9 +105,10 @@ hiddenimports = [
     # ChromaDB — collect ALL submodules (it uses heavy dynamic imports)
     *collect_submodules("chromadb"),
     "hnswlib",
-    # Sentence transformers / ML
-    "sentence_transformers",
-    "torch",
+    # ONNX embedding inference
+    "onnxruntime",
+    "tokenizers",
+    "numpy",
     # Database
     "aiosqlite",
     "sqlite3",
@@ -161,22 +162,12 @@ a = Analysis(
         "PIL",
         "notebook",
         "pytest",
-        # Torch: keep only CPU inference — strip CUDA, distributed, and dev tools
-        "torch.cuda",
-        "torch.distributed",
-        "torch.testing",
-        "torch.utils.tensorboard",
-        "torch.utils.bottleneck",
-        "torch.utils.benchmark",
-        "torch.onnx",
-        "torch.optim",
-        "torch.autograd.profiler",
-        "torch.multiprocessing",
+        # Not needed at runtime — ONNX Runtime replaces PyTorch inference
+        "torch",
         "triton",
         "apex",
         "caffe2",
-        # Heavy unused sentence-transformers backends
-        "sentence_transformers.cross_encoder",
+        "sentence_transformers",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

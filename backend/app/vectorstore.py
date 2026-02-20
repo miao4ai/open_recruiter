@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,86 @@ CHAT_SUMMARIES_COLLECTION = "chat_summaries"
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 
 
+# ── ONNX Embedding Function ─────────────────────────────────────────────
+
+
+def _find_model_dir() -> str | None:
+    """Locate the ONNX embedding model directory."""
+    # PyInstaller bundle
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        d = os.path.join(meipass, "models")
+        if os.path.isdir(d):
+            return d
+    # Development: backend/models/
+    d = str(Path(__file__).resolve().parent.parent / "models")
+    if os.path.isdir(d):
+        return d
+    return None
+
+
+class _OnnxEmbeddingFunction:
+    """ChromaDB-compatible embedding function using ONNX Runtime.
+
+    Replaces SentenceTransformerEmbeddingFunction to avoid bundling PyTorch
+    (~800 MB).  Only requires onnxruntime (~30 MB) + tokenizers (~5 MB).
+    """
+
+    def __init__(self, model_dir: str) -> None:
+        import numpy as np
+        import onnxruntime as ort
+        from tokenizers import Tokenizer as HFTokenizer
+
+        self._np = np
+
+        tok_path = os.path.join(model_dir, "tokenizer.json")
+        model_path = os.path.join(model_dir, "model.onnx")
+
+        self._tokenizer = HFTokenizer.from_file(tok_path)
+        self._tokenizer.enable_padding()
+        self._tokenizer.enable_truncation(max_length=512)
+
+        self._session = ort.InferenceSession(
+            model_path,
+            providers=["CPUExecutionProvider"],
+        )
+        self._input_names = {inp.name for inp in self._session.get_inputs()}
+
+    def __call__(self, input: list[str]) -> list[list[float]]:
+        if not input:
+            return []
+
+        np = self._np
+        encoded = self._tokenizer.encode_batch(input)
+
+        input_ids = np.array([e.ids for e in encoded], dtype=np.int64)
+        attention_mask = np.array(
+            [e.attention_mask for e in encoded], dtype=np.int64
+        )
+
+        feed: dict[str, Any] = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+        }
+        if "token_type_ids" in self._input_names:
+            feed["token_type_ids"] = np.zeros_like(input_ids)
+
+        outputs = self._session.run(None, feed)
+
+        # outputs[0] shape: (batch, seq_len, hidden_size)
+        embeddings = outputs[0]
+
+        # Mean pooling with attention mask
+        mask = attention_mask[:, :, np.newaxis].astype(np.float32)
+        pooled = (embeddings * mask).sum(axis=1) / mask.sum(axis=1)
+
+        # L2 normalize
+        norms = np.linalg.norm(pooled, axis=1, keepdims=True)
+        normalized = pooled / np.maximum(norms, 1e-12)
+
+        return normalized.tolist()
+
+
 # ── Initialisation ────────────────────────────────────────────────────────
 
 
@@ -46,12 +127,23 @@ def init_vectorstore() -> None:
 
     CHROMA_DIR.mkdir(parents=True, exist_ok=True)
 
-    from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+    model_dir = _find_model_dir()
+    onnx_path = os.path.join(model_dir, "model.onnx") if model_dir else None
 
-    log.info("Loading embedding model: %s", EMBEDDING_MODEL)
-    _embedding_fn = SentenceTransformerEmbeddingFunction(
-        model_name=EMBEDDING_MODEL,
-    )
+    if onnx_path and os.path.isfile(onnx_path):
+        log.info("Loading ONNX embedding model from %s", model_dir)
+        _embedding_fn = _OnnxEmbeddingFunction(model_dir)
+    else:
+        # Fallback: sentence-transformers (for dev without ONNX export)
+        from chromadb.utils.embedding_functions import (
+            SentenceTransformerEmbeddingFunction,
+        )
+
+        log.info("Loading sentence-transformers model: %s", EMBEDDING_MODEL)
+        _embedding_fn = SentenceTransformerEmbeddingFunction(
+            model_name=EMBEDDING_MODEL,
+        )
+
     log.info("Embedding model loaded.")
 
     _client = chromadb.PersistentClient(

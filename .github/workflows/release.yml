@@ -37,41 +37,32 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      # ── Step 2: Pre-download embedding model ────────────────────────────
+      # ── Step 2: Export embedding model as ONNX ─────────────────────────
       - name: Install backend dependencies
         working-directory: backend
         run: uv sync
 
-      - name: Install PyTorch CPU-only (smaller than default)
+      - name: Install PyTorch CPU (for ONNX export only, not bundled)
         working-directory: backend
-        run: uv run pip install torch --index-url https://download.pytorch.org/whl/cpu --force-reinstall
+        run: uv run pip install torch --index-url https://download.pytorch.org/whl/cpu
 
-      - name: Pre-download embedding model
+      - name: Install ONNX export tools
+        working-directory: backend
+        run: uv run pip install "optimum[onnxruntime]"
+
+      - name: Export embedding model as ONNX
         working-directory: backend
         run: |
           uv run python -c "
-          import os
-          os.environ['SENTENCE_TRANSFORMERS_HOME'] = 'models'
-          from sentence_transformers import SentenceTransformer
-          print('Downloading BAAI/bge-small-en-v1.5...')
-          SentenceTransformer('BAAI/bge-small-en-v1.5')
-          print('Model ready.')
+          from optimum.onnxruntime import ORTModelForFeatureExtraction
+          from transformers import AutoTokenizer
+          print('Exporting BAAI/bge-small-en-v1.5 to ONNX...')
+          model = ORTModelForFeatureExtraction.from_pretrained('BAAI/bge-small-en-v1.5', export=True)
+          model.save_pretrained('models')
+          tokenizer = AutoTokenizer.from_pretrained('BAAI/bge-small-en-v1.5')
+          tokenizer.save_pretrained('models')
+          print('ONNX export complete.')
           "
-
-      - name: Resolve symlinks in model cache
-        working-directory: backend
-        shell: python
-        run: |
-          import os, shutil
-          for root, dirs, files in os.walk('models'):
-              for name in files:
-                  path = os.path.join(root, name)
-                  if os.path.islink(path):
-                      target = os.path.realpath(path)
-                      os.remove(path)
-                      shutil.copy2(target, path)
-                      print(f"Resolved: {path}")
-          print("All symlinks resolved.")
 
       # ── Step 3: Bundle backend with PyInstaller ─────────────────────────
       - name: Bundle backend with PyInstaller
