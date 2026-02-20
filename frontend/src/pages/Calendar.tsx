@@ -44,6 +44,7 @@ export default function Calendar({ role = "recruiter" }: Props) {
       ja: "ja-JP",
       ko: "ko-KR",
       zh: "zh-CN",
+      "zh-TW": "zh-TW",
       es: "es-ES",
     };
     LuxonSettings.defaultLocale = localeMap[i18n.language] || "en-US";

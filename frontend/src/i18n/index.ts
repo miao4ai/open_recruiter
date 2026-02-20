@@ -6,12 +6,13 @@ import ja from "./ja";
 import ko from "./ko";
 import es from "./es";
 import zh from "./zh";
+import zhTW from "./zh-TW";
 
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
-    resources: { en: { translation: en }, ja: { translation: ja }, ko: { translation: ko }, es: { translation: es }, zh: { translation: zh } },
+    resources: { en: { translation: en }, ja: { translation: ja }, ko: { translation: ko }, es: { translation: es }, zh: { translation: zh }, "zh-TW": { translation: zhTW } },
     fallbackLng: "en",
     interpolation: { escapeValue: false },
     detection: {

@@ -50,6 +50,7 @@ const LANGUAGES = [
   { value: "ja", label: "日本語" },
   { value: "ko", label: "한국어" },
   { value: "zh", label: "中文（简体）" },
+  { value: "zh-TW", label: "中文（繁體）" },
   { value: "es", label: "Español" },
 ];
 
@@ -161,7 +162,7 @@ export default function Settings() {
           <TextField
             select
             label={t("settings.language")}
-            value={i18n.language?.substring(0, 2) ?? "en"}
+            value={i18n.language?.startsWith("zh-TW") ? "zh-TW" : (i18n.language?.substring(0, 2) ?? "en")}
             onChange={(e) => i18n.changeLanguage(e.target.value)}
             fullWidth
           >

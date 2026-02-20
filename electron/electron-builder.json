@@ -15,6 +15,7 @@
   ],
   "win": {
     "target": "nsis",
+    "icon": "images/avartar.png",
     "signAndEditExecutable": false
   },
   "nsis": {
