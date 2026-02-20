@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ChatBubbleOutline, AccountCircleOutlined, WorkOutline } from "@mui/icons-material";
+import { ChatBubbleOutline, AccountCircleOutlined, WorkOutline, SettingsOutlined } from "@mui/icons-material";
 import clsx from "clsx";
 
 export default function JobSeekerSidebar() {
@@ -10,6 +10,7 @@ export default function JobSeekerSidebar() {
     { to: "/", icon: ChatBubbleOutline, label: t("jobSeekerSidebar.aiChan") },
     { to: "/jobs", icon: WorkOutline, label: t("jobSeekerSidebar.myJobs") },
     { to: "/profile", icon: AccountCircleOutlined, label: t("jobSeekerSidebar.myProfile") },
+    { to: "/settings", icon: SettingsOutlined, label: t("sidebar.settings") },
   ];
 
   return (
@@ -50,7 +51,7 @@ export default function JobSeekerSidebar() {
 
       {/* Footer */}
       <div className="border-t border-pink-800 px-5 py-4 text-xs text-pink-400">
-        {t("common.version")}
+        v{__APP_VERSION__}
       </div>
     </aside>
   );

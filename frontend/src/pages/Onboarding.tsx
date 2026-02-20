@@ -61,13 +61,16 @@ const API_KEY_PLACEHOLDER: Record<string, string> = {
   gemini: "AI...",
 };
 
-const LAST_STEP = 3; // 0=provider, 1=api key, 2=email, 3=done
-
 interface Props {
   onComplete: () => void;
+  role?: string;
 }
 
-export default function Onboarding({ onComplete }: Props) {
+export default function Onboarding({ onComplete, role = "recruiter" }: Props) {
+  // Job seekers skip the email step (0=provider, 1=api key, 2=done)
+  // Recruiters keep all steps (0=provider, 1=api key, 2=email, 3=done)
+  const isSeeker = role === "job_seeker";
+  const LAST_STEP = isSeeker ? 2 : 3;
   const { t } = useTranslation();
   const [step, setStep] = useState(0);
 
@@ -163,14 +166,20 @@ export default function Onboarding({ onComplete }: Props) {
     setError("");
     try {
       if (step === 1) {
-        // Save LLM settings before moving to email step
+        // Save LLM settings
         await updateSettings({
           llm_provider: provider,
           llm_model: model,
           [API_KEY_FIELD[provider]]: apiKey,
         });
+        if (isSeeker) {
+          // Job seekers skip email step → jump to done
+          setStep(LAST_STEP);
+          setSaving(false);
+          return;
+        }
       } else if (step === 2) {
-        // Save email settings before moving to done
+        // Save email settings before moving to done (recruiter only)
         await saveEmailSettings();
       }
       setStep(step + 1);
@@ -188,12 +197,9 @@ export default function Onboarding({ onComplete }: Props) {
     return true;
   };
 
-  const steps = [
-    t("onboarding.step1Title"),
-    t("onboarding.step2Title"),
-    t("onboarding.emailStepTitle"),
-    t("onboarding.completedTitle"),
-  ];
+  const steps = isSeeker
+    ? [t("onboarding.step1Title"), t("onboarding.step2Title"), t("onboarding.completedTitle")]
+    : [t("onboarding.step1Title"), t("onboarding.step2Title"), t("onboarding.emailStepTitle"), t("onboarding.completedTitle")];
 
   return (
     <Box

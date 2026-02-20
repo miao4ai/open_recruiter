@@ -4,12 +4,14 @@ import LanguageDetector from "i18next-browser-languagedetector";
 import en from "./en";
 import ja from "./ja";
 import ko from "./ko";
+import es from "./es";
+import zh from "./zh";
 
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
-    resources: { en: { translation: en }, ja: { translation: ja }, ko: { translation: ko } },
+    resources: { en: { translation: en }, ja: { translation: ja }, ko: { translation: ko }, es: { translation: es }, zh: { translation: zh } },
     fallbackLng: "en",
     interpolation: { escapeValue: false },
     detection: {

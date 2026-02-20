@@ -10,18 +10,28 @@ import Button from "@mui/material/Button";
 import Alert from "@mui/material/Alert";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+import MenuItem from "@mui/material/MenuItem";
 import SmartToyOutlined from "@mui/icons-material/SmartToyOutlined";
 import BusinessCenterOutlined from "@mui/icons-material/BusinessCenterOutlined";
 import SearchOutlined from "@mui/icons-material/SearchOutlined";
+import LanguageOutlined from "@mui/icons-material/LanguageOutlined";
 import { login, register, setToken } from "../lib/api";
 import type { User, UserRole } from "../types";
+
+const LANGUAGES = [
+  { value: "en", label: "English" },
+  { value: "ja", label: "日本語" },
+  { value: "ko", label: "한국어" },
+  { value: "zh", label: "中文（简体）" },
+  { value: "es", label: "Español" },
+];
 
 interface Props {
   onLogin: (user: User) => void;
 }
 
 export default function Login({ onLogin }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [tab, setTab] = useState(0);
   const isRegister = tab === 1;
   const [email, setEmail] = useState("");
@@ -52,7 +62,24 @@ export default function Login({ onLogin }: Props) {
   };
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", bgcolor: "background.default" }}>
+    <Box sx={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", bgcolor: "background.default", position: "relative" }}>
+      {/* Language selector — top right */}
+      <Box sx={{ position: "absolute", top: 16, right: 16, display: "flex", alignItems: "center", gap: 0.5 }}>
+        <LanguageOutlined fontSize="small" sx={{ color: "text.secondary" }} />
+        <TextField
+          select
+          size="small"
+          value={i18n.language?.substring(0, 2) ?? "en"}
+          onChange={(e) => i18n.changeLanguage(e.target.value)}
+          variant="standard"
+          sx={{ minWidth: 80 }}
+        >
+          {LANGUAGES.map((l) => (
+            <MenuItem key={l.value} value={l.value}>{l.label}</MenuItem>
+          ))}
+        </TextField>
+      </Box>
+
       <Paper elevation={3} sx={{ width: "100%", maxWidth: 440, p: 4, borderRadius: 3 }}>
         {/* Logo */}
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, mb: 4 }}>

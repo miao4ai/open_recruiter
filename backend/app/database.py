@@ -466,9 +466,15 @@ def get_user_by_id(user_id: str) -> dict | None:
     return dict(row) if row else None
 
 
-def delete_user(user_id: str) -> bool:
-    """Delete a user and all their associated data."""
+def delete_user(user_id: str, delete_records: bool = False) -> bool:
+    """Delete a user and associated data.
+
+    If *delete_records* is True, also removes recruiter business data
+    (jobs, candidates, emails, events, automation rules/logs).
+    Otherwise only user-specific data (chat, memories, etc.) is removed.
+    """
     conn = get_conn()
+    # Always: remove user-specific data
     conn.execute("DELETE FROM chat_messages WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM chat_sessions WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM activities WHERE user_id = ?", (user_id,))
@@ -477,6 +483,17 @@ def delete_user(user_id: str) -> bool:
     conn.execute("DELETE FROM session_summaries WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM job_seeker_profiles WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM seeker_jobs WHERE user_id = ?", (user_id,))
+
+    if delete_records:
+        # Also remove recruiter business data
+        conn.execute("DELETE FROM emails", ())
+        conn.execute("DELETE FROM candidate_jobs", ())
+        conn.execute("DELETE FROM candidates", ())
+        conn.execute("DELETE FROM jobs", ())
+        conn.execute("DELETE FROM events", ())
+        conn.execute("DELETE FROM automation_rules", ())
+        conn.execute("DELETE FROM automation_logs", ())
+
     cur = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
     conn.commit()
     conn.close()

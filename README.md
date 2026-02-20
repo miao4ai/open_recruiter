@@ -9,8 +9,13 @@
 <p align="center"><b>AI-Powered Recruitment Platform</b></p>
 
 <p align="center">
+  <a href="#readme"><img src="https://img.shields.io/badge/README-blue?style=for-the-badge" /></a>
+  <a href="document/USER_MANUAL.md"><img src="https://img.shields.io/badge/USER_MANUAL-green?style=for-the-badge" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-MIT-purple?style=for-the-badge" /></a>
+</p>
+<p align="center">
   <img src="https://img.shields.io/badge/BUILD-PASSING-brightgreen" />
-  <img src="https://img.shields.io/badge/RELEASE-V1.0.0-blue" />
+  <img src="https://img.shields.io/badge/RELEASE-V1.1.0-blue" />
   <img src="https://img.shields.io/badge/PYTHON-3.11+-yellow" />
   <img src="https://img.shields.io/badge/LICENSE-MIT-purple" />
 </p>

@@ -17,6 +17,9 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogActions from "@mui/material/DialogActions";
+import RadioGroup from "@mui/material/RadioGroup";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Radio from "@mui/material/Radio";
 import AccountCircleOutlined from "@mui/icons-material/AccountCircleOutlined";
 import LogoutOutlined from "@mui/icons-material/LogoutOutlined";
 import PersonRemoveOutlined from "@mui/icons-material/PersonRemoveOutlined";
@@ -25,7 +28,7 @@ import type { User } from "../types";
 interface Props {
   user: User;
   onLogout: () => void;
-  onDeleteAccount?: () => void;
+  onDeleteAccount?: (deleteRecords: boolean) => void;
 }
 
 export default function Header({ user, onLogout, onDeleteAccount }: Props) {
@@ -33,6 +36,7 @@ export default function Header({ user, onLogout, onDeleteAccount }: Props) {
   const { pathname } = useLocation();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteRecords, setDeleteRecords] = useState(false);
 
   const PAGE_TITLES: Record<string, string> = {
     "/": t("header.erikaChan"),
@@ -88,7 +92,7 @@ export default function Header({ user, onLogout, onDeleteAccount }: Props) {
               {onDeleteAccount && (
                 <>
                   <Divider />
-                  <MenuItem onClick={() => { setAnchorEl(null); setConfirmDelete(true); }}>
+                  <MenuItem onClick={() => { setAnchorEl(null); setDeleteRecords(false); setConfirmDelete(true); }}>
                     <ListItemIcon><PersonRemoveOutlined fontSize="small" color="error" /></ListItemIcon>
                     <ListItemText sx={{ color: "error.main" }}>{t("common.deleteAccount")}</ListItemText>
                   </MenuItem>
@@ -100,12 +104,27 @@ export default function Header({ user, onLogout, onDeleteAccount }: Props) {
       </AppBar>
 
       {/* Delete Account Confirmation Dialog */}
-      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
+      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{t("common.deleteAccount")}</DialogTitle>
         <DialogContent>
-          <DialogContentText>
+          <DialogContentText sx={{ mb: 2 }}>
             {t("common.deleteAccountConfirm")}
           </DialogContentText>
+          <RadioGroup
+            value={deleteRecords ? "delete" : "keep"}
+            onChange={(e) => setDeleteRecords(e.target.value === "delete")}
+          >
+            <FormControlLabel
+              value="keep"
+              control={<Radio />}
+              label={t("common.deleteKeepRecords")}
+            />
+            <FormControlLabel
+              value="delete"
+              control={<Radio color="error" />}
+              label={t("common.deleteAllRecords")}
+            />
+          </RadioGroup>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmDelete(false)}>
@@ -116,7 +135,7 @@ export default function Header({ user, onLogout, onDeleteAccount }: Props) {
             variant="contained"
             onClick={() => {
               setConfirmDelete(false);
-              onDeleteAccount?.();
+              onDeleteAccount?.(deleteRecords);
             }}
           >
             {t("common.delete")}

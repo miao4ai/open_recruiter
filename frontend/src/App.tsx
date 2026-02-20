@@ -45,12 +45,10 @@ export default function App() {
     getMe()
       .then((u) => {
         setUser(u);
-        // Check LLM setup status for recruiters
-        if (u.role === "recruiter") {
-          return getSetupStatus().then((status) => {
-            if (!status.llm_configured) setNeedsOnboarding(true);
-          }).catch(() => { /* ignore — settings check is non-critical */ });
-        }
+        // Check LLM setup status for both recruiters and job seekers
+        return getSetupStatus().then((status) => {
+          if (!status.llm_configured) setNeedsOnboarding(true);
+        }).catch(() => { /* ignore — settings check is non-critical */ });
       })
       .catch(() => clearToken())
       .finally(() => setChecking(false));
@@ -58,12 +56,10 @@ export default function App() {
 
   const handleLogin = (u: User) => {
     setUser(u);
-    // Check if new recruiter needs onboarding
-    if (u.role === "recruiter") {
-      getSetupStatus().then((status) => {
-        if (!status.llm_configured) setNeedsOnboarding(true);
-      }).catch(() => {});
-    }
+    // Check if LLM needs onboarding (both roles need LLM configured)
+    getSetupStatus().then((status) => {
+      if (!status.llm_configured) setNeedsOnboarding(true);
+    }).catch(() => {});
   };
 
   const handleLogout = () => {
@@ -72,9 +68,9 @@ export default function App() {
     setNeedsOnboarding(false);
   };
 
-  const handleDeleteAccount = async () => {
+  const handleDeleteAccount = async (deleteRecords = false) => {
     try {
-      await deleteAccount();
+      await deleteAccount(deleteRecords);
     } catch {
       // Account may already be deleted or token expired — proceed with logout
     }
@@ -103,9 +99,9 @@ export default function App() {
     return <Login onLogin={handleLogin} />;
   }
 
-  // Show onboarding wizard if recruiter hasn't configured LLM
-  if (needsOnboarding && user.role === "recruiter") {
-    return <Onboarding onComplete={() => setNeedsOnboarding(false)} />;
+  // Show onboarding wizard if LLM hasn't been configured (both roles need it)
+  if (needsOnboarding) {
+    return <Onboarding onComplete={() => setNeedsOnboarding(false)} role={user.role} />;
   }
 
   // Job seeker layout
@@ -120,6 +116,7 @@ export default function App() {
               <Route path="/" element={<Box sx={{ height: "100%", overflow: "hidden" }}><JobSeekerHome /></Box>} />
               <Route path="/jobs" element={<JobSeekerJobs />} />
               <Route path="/profile" element={<JobSeekerProfile />} />
+              <Route path="/settings" element={<Box sx={{ p: 3 }}><Settings /></Box>} />
             </Routes>
           </Box>
         </Box>

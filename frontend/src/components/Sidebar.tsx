@@ -89,7 +89,7 @@ export default function Sidebar() {
       <Divider sx={{ borderColor: "grey.700" }} />
       <Box sx={{ px: 2.5, py: 2 }}>
         <Typography variant="caption" color="grey.500">
-          {t("common.version")}
+          v{__APP_VERSION__}
         </Typography>
       </Box>
     </Drawer>
