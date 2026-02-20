@@ -15,25 +15,19 @@
   ],
   "win": {
     "target": "nsis",
-    "icon": "electron/icons/icon.ico",
     "signAndEditExecutable": false
   },
   "nsis": {
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
-    "installerIcon": "electron/icons/icon.ico",
-    "uninstallerIcon": "electron/icons/icon.ico",
-    "installerHeaderIcon": "electron/icons/icon.ico",
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
     "shortcutName": "Open Recruiter"
   },
   "mac": {
-    "target": "dmg",
-    "icon": "electron/icons/icon.icns"
+    "target": "dmg"
   },
   "linux": {
-    "target": "AppImage",
-    "icon": "electron/icons"
+    "target": "AppImage"
   }
 }

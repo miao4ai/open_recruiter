@@ -1,0 +1,93 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      # ── Step 1: Build frontend ──────────────────────────────────────────
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      # ── Step 2: Pre-download embedding model ────────────────────────────
+      - name: Install backend dependencies
+        working-directory: backend
+        run: uv sync
+
+      - name: Pre-download embedding model
+        working-directory: backend
+        run: |
+          uv run python -c "
+          import os
+          os.environ['SENTENCE_TRANSFORMERS_HOME'] = 'models'
+          from sentence_transformers import SentenceTransformer
+          print('Downloading BAAI/bge-small-en-v1.5...')
+          SentenceTransformer('BAAI/bge-small-en-v1.5')
+          print('Model ready.')
+          "
+
+      # ── Step 3: Bundle backend with PyInstaller ─────────────────────────
+      - name: Bundle backend with PyInstaller
+        working-directory: backend
+        run: uv run pyinstaller open_recruiter.spec --noconfirm
+
+      - name: Verify PyInstaller output
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "backend/dist/backend/backend.exe")) {
+            Write-Error "PyInstaller build failed - backend.exe not found"
+            exit 1
+          }
+          Write-Host "backend.exe OK"
+
+      # ── Step 4: Compile Electron + package installer ────────────────────
+      - name: Install root npm dependencies
+        run: npm ci
+
+      - name: Compile Electron TypeScript
+        run: npm run build:electron
+
+      - name: Package with electron-builder
+        run: npx electron-builder --config electron/electron-builder.json --win
+
+      # ── Upload / Release ────────────────────────────────────────────────
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-recruiter-windows-installer
+          path: release/*.exe
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.exe
+          generate_release_notes: true
