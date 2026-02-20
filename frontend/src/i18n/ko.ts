@@ -66,6 +66,7 @@ const ko = {
     aiChan: "아이",
     myJobs: "내 채용공고",
     myProfile: "내 프로필",
+    calendar: "캘린더",
   },
 
   // ── Header ──
@@ -328,6 +329,15 @@ const ko = {
     notesPlaceholder: "이 이벤트에서 필요한 것...",
     update: "수정",
     create: "생성",
+    // react-big-calendar toolbar
+    previous: "이전",
+    next: "다음",
+    viewMonth: "월",
+    viewWeek: "주",
+    viewDay: "일",
+    viewAgenda: "일정",
+    noEventsInRange: "이 기간에 이벤트가 없습니다.",
+    timezone: "시간대",
   },
 
   // ── Automations ──

@@ -66,6 +66,7 @@ const zh = {
     aiChan: "Ai Chan",
     myJobs: "我的职位",
     myProfile: "我的简介",
+    calendar: "日历",
   },
 
   // ── Header ──
@@ -329,6 +330,15 @@ const zh = {
     notesPlaceholder: "此事件需要做的事情...",
     update: "更新",
     create: "创建",
+    // react-big-calendar toolbar
+    previous: "上一页",
+    next: "下一页",
+    viewMonth: "月",
+    viewWeek: "周",
+    viewDay: "日",
+    viewAgenda: "议程",
+    noEventsInRange: "此范围内没有事件。",
+    timezone: "时区",
   },
 
   // ── Automations ──
@@ -342,7 +352,7 @@ const zh = {
     noRules: "暂无自动化规则。",
     runNow: "立即执行",
     executionHistory: "执行历史",
-    noExecutions: "暂无执行记录。启用一条规则或点击"立即执行"。",
+    noExecutions: "暂无执行记录。启用一条规则或点击\u201c立即执行\u201d。",
     // Table headers
     time: "时间",
     rule: "规则",
@@ -458,7 +468,7 @@ const zh = {
     approvedChip: "已批准",
     repliedChip: "已回复",
     approve: "批准",
-    noPending: "暂无待处理邮件。点击"撰写邮件"来创建一封。",
+    noPending: "暂无待处理邮件。点击\u201c撰写邮件\u201d来创建一封。",
     noSent: "暂无已发送邮件。",
     checking: "检查中...",
     checkForReplies: "检查回复",
@@ -648,8 +658,8 @@ const zh = {
 
   // ── Search placeholders ──
   searchPlaceholders: {
-    jobs: "搜索职位 — 试试"高级 React 开发者"或"机器学习初创公司"...",
-    candidates: "搜索候选人 — 试试"有5年经验的 Python 后端"或"React 开发者"...",
+    jobs: "搜索职位 — 试试\u201c高级 React 开发者\u201d或\u201c机器学习初创公司\u201d...",
+    candidates: "搜索候选人 — 试试\u201c有5年经验的 Python 后端\u201d或\u201cReact 开发者\u201d...",
   },
 
   // ── Components ──

@@ -66,6 +66,7 @@ const ja = {
     aiChan: "アイ",
     myJobs: "マイ求人",
     myProfile: "マイプロフィール",
+    calendar: "カレンダー",
   },
 
   // ── Header ──
@@ -328,6 +329,15 @@ const ja = {
     notesPlaceholder: "このイベントで必要なこと...",
     update: "更新",
     create: "作成",
+    // react-big-calendar toolbar
+    previous: "前へ",
+    next: "次へ",
+    viewMonth: "月",
+    viewWeek: "週",
+    viewDay: "日",
+    viewAgenda: "予定一覧",
+    noEventsInRange: "この期間にイベントはありません。",
+    timezone: "タイムゾーン",
   },
 
   // ── Automations ──

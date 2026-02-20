@@ -51,6 +51,7 @@ export default function Header({ user, onLogout, onDeleteAccount }: Props) {
   const JOB_SEEKER_TITLES: Record<string, string> = {
     "/": t("header.aiChan"),
     "/jobs": t("header.myJobs"),
+    "/calendar": t("header.calendar"),
     "/profile": t("header.myProfile"),
   };
 

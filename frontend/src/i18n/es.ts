@@ -66,6 +66,7 @@ const es = {
     aiChan: "Ai Chan",
     myJobs: "Mis empleos",
     myProfile: "Mi perfil",
+    calendar: "Calendario",
   },
 
   // ── Header ──
@@ -329,6 +330,15 @@ const es = {
     notesPlaceholder: "Qué debe suceder en este evento...",
     update: "Actualizar",
     create: "Crear",
+    // react-big-calendar toolbar
+    previous: "Anterior",
+    next: "Siguiente",
+    viewMonth: "Mes",
+    viewWeek: "Semana",
+    viewDay: "Día",
+    viewAgenda: "Agenda",
+    noEventsInRange: "No hay eventos en este rango.",
+    timezone: "Zona horaria",
   },
 
   // ── Automations ──

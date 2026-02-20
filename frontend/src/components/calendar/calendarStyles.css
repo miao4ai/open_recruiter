@@ -1,0 +1,94 @@
+/* Override react-big-calendar to match app theme */
+
+.rbc-calendar {
+  font-family: "Inter", "SF Pro Display", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Toolbar buttons */
+.rbc-toolbar button {
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.375rem 0.75rem;
+  border-color: #d1d5db;
+  color: #4b5563;
+}
+
+.rbc-toolbar button:hover {
+  background-color: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.rbc-toolbar button.rbc-active {
+  background-color: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+
+.rbc-toolbar button.rbc-active:hover {
+  background-color: #1d4ed8;
+  color: white;
+}
+
+/* Button groups */
+.rbc-btn-group > button:first-child {
+  border-radius: 0.5rem 0 0 0.5rem;
+}
+
+.rbc-btn-group > button:last-child {
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+/* Today's cell highlight */
+.rbc-today {
+  background-color: #eff6ff;
+}
+
+/* Header cells */
+.rbc-header {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  padding: 0.5rem 0;
+}
+
+/* Off-range dates (days outside current month) */
+.rbc-off-range-bg {
+  background-color: #f9fafb;
+}
+
+/* Events */
+.rbc-event {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.rbc-event:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+/* Show more link */
+.rbc-show-more {
+  color: #2563eb;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* Agenda view */
+.rbc-agenda-view table {
+  font-size: 0.875rem;
+}
+
+/* Current time indicator */
+.rbc-current-time-indicator {
+  background-color: #ef4444;
+}
+
+/* Toolbar label (month/year text) */
+.rbc-toolbar-label {
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: #111827;
+}

@@ -115,6 +115,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Box sx={{ height: "100%", overflow: "hidden" }}><JobSeekerHome /></Box>} />
               <Route path="/jobs" element={<JobSeekerJobs />} />
+              <Route path="/calendar" element={<Box sx={{ p: 3, height: "100%" }}><Calendar role="job_seeker" /></Box>} />
               <Route path="/profile" element={<JobSeekerProfile />} />
               <Route path="/settings" element={<Box sx={{ p: 3 }}><Settings /></Box>} />
             </Routes>
@@ -137,7 +138,7 @@ export default function App() {
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/candidates" element={<Candidates />} />
             <Route path="/candidates/:id" element={<CandidateDetail />} />
-            <Route path="/calendar" element={<Calendar />} />
+            <Route path="/calendar" element={<Calendar role="recruiter" />} />
             <Route path="/automations" element={<Automations />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
