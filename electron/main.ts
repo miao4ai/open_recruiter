@@ -8,6 +8,7 @@ import * as fs from "fs";
 let backendProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
 let backendPort = 8000;
+let backendLogPath = "";
 
 // ---------------------------------------------------------------------------
 // Single-instance lock — prevent multiple app windows
@@ -83,13 +84,20 @@ if (!gotTheLock) {
 
   function startBackend(): ChildProcess {
     const { command, args, cwd } = getBackendCommand();
+    const dataDir = getDataDir();
     const env = {
       ...process.env,
-      OPEN_RECRUITER_DATA_DIR: getDataDir(),
+      OPEN_RECRUITER_DATA_DIR: dataDir,
     };
 
+    // Write backend logs to a file for diagnostics
+    backendLogPath = path.join(dataDir, "backend.log");
+    const logStream = fs.createWriteStream(backendLogPath, { flags: "w" });
+    logStream.write(`[${new Date().toISOString()}] Starting: ${command} ${args.join(" ")}\n`);
+    logStream.write(`[${new Date().toISOString()}] CWD: ${cwd}\n\n`);
+
     console.log(`[electron] Starting backend: ${command} ${args.join(" ")}`);
-    console.log(`[electron] Data dir: ${env.OPEN_RECRUITER_DATA_DIR}`);
+    console.log(`[electron] Log file: ${backendLogPath}`);
 
     const proc = spawn(command, args, {
       cwd,
@@ -98,15 +106,21 @@ if (!gotTheLock) {
     });
 
     proc.stdout?.on("data", (data: Buffer) => {
-      console.log(`[backend] ${data.toString().trim()}`);
+      const text = data.toString();
+      console.log(`[backend] ${text.trim()}`);
+      logStream.write(text);
     });
 
     proc.stderr?.on("data", (data: Buffer) => {
-      console.log(`[backend] ${data.toString().trim()}`);
+      const text = data.toString();
+      console.log(`[backend] ${text.trim()}`);
+      logStream.write(text);
     });
 
     proc.on("close", (code: number | null) => {
       console.log(`[backend] exited with code ${code}`);
+      logStream.write(`\n[Process exited with code ${code}]\n`);
+      logStream.end();
     });
 
     return proc;
@@ -288,7 +302,8 @@ if (!gotTheLock) {
 <div style="text-align:center;max-width:500px">
   <h1 style="color:#e74c3c">Backend failed to start</h1>
   <p>The backend process did not respond within 120 seconds.</p>
-  <p style="color:#888;font-size:14px">Check the logs or try reinstalling the application.</p>
+  <p style="color:#aaa;font-size:13px;word-break:break-all">Log file: ${backendLogPath.replace(/\\/g, "/")}</p>
+  <p style="color:#888;font-size:13px">Open the log file above to see the error details.</p>
 </div>
 </body></html>`)}`
       );

@@ -15,6 +15,7 @@ dependencies = [
     "sse-starlette>=2.2",
     "aiosqlite>=0.20",
     "chromadb>=0.5",
+    "sentence-transformers>=3.0",
     "onnxruntime>=1.17",
     "tokenizers>=0.19",
     "slack-bolt>=1.18",

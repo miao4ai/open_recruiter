@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+import logging
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -17,11 +18,17 @@ from app.slack import routes as slack_routes
 from app.slack.bot import init_slack_app
 from app.vectorstore import init_vectorstore
 
+log = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    init_vectorstore()
+
+    try:
+        init_vectorstore()
+    except Exception:
+        log.exception("Failed to initialise vector store — semantic search will be unavailable")
 
     # Initialize Slack bot (gracefully skips if tokens not configured)
     from app.routes.settings import get_config
