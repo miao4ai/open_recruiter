@@ -31,7 +31,7 @@ jobs:
       # ── Step 1: Build frontend ──────────────────────────────────────────
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm ci
+        run: npm install
 
       - name: Build frontend
         working-directory: frontend
@@ -70,7 +70,7 @@ jobs:
 
       # ── Step 4: Compile Electron + package installer ────────────────────
       - name: Install root npm dependencies
-        run: npm ci
+        run: npm install
 
       - name: Compile Electron TypeScript
         run: npm run build:electron
