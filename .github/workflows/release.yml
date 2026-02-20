@@ -42,27 +42,24 @@ jobs:
         working-directory: backend
         run: uv sync
 
-      - name: Install PyTorch CPU (for ONNX export only, not bundled)
-        working-directory: backend
-        run: uv run pip install torch --index-url https://download.pytorch.org/whl/cpu
-
-      - name: Install ONNX export tools
-        working-directory: backend
-        run: uv run pip install "optimum[onnxruntime]"
+      - name: Install ONNX export tools (system Python, not bundled)
+        shell: bash
+        run: |
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install "optimum[onnxruntime]"
 
       - name: Export embedding model as ONNX
         working-directory: backend
+        shell: python
         run: |
-          uv run python -c "
           from optimum.onnxruntime import ORTModelForFeatureExtraction
           from transformers import AutoTokenizer
-          print('Exporting BAAI/bge-small-en-v1.5 to ONNX...')
-          model = ORTModelForFeatureExtraction.from_pretrained('BAAI/bge-small-en-v1.5', export=True)
-          model.save_pretrained('models')
-          tokenizer = AutoTokenizer.from_pretrained('BAAI/bge-small-en-v1.5')
-          tokenizer.save_pretrained('models')
-          print('ONNX export complete.')
-          "
+          print("Exporting BAAI/bge-small-en-v1.5 to ONNX...")
+          model = ORTModelForFeatureExtraction.from_pretrained("BAAI/bge-small-en-v1.5", export=True)
+          model.save_pretrained("models")
+          tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-small-en-v1.5")
+          tokenizer.save_pretrained("models")
+          print("ONNX export complete.")
 
       # ── Step 3: Bundle backend with PyInstaller ─────────────────────────
       - name: Bundle backend with PyInstaller
