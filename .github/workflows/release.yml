@@ -91,7 +91,7 @@ jobs:
         run: npm run build:electron
 
       - name: Package with electron-builder
-        run: npx electron-builder --config electron/electron-builder.json --win
+        run: npx electron-builder --config electron/electron-builder.json --win --publish never
 
       # ── Upload / Release ────────────────────────────────────────────────
       - name: Upload installer artifact
