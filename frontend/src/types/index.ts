@@ -68,7 +68,7 @@ export interface CandidateJobMatch {
   updated_at: string;
 }
 
-export type PipelineViewMode = "candidate" | "employer";
+export type PipelineViewMode = "candidate" | "jobs";
 
 export interface PipelineEntry {
   candidate_id: string;
@@ -281,7 +281,7 @@ export type ContextView =
   | { type: "briefing" }
   | { type: "candidate"; id: string }
   | { type: "job"; id: string }
-  | { type: "pipeline_stage"; stage: CandidateStatus }
+  | { type: "pipeline_stage"; stage: CandidateStatus; viewMode?: PipelineViewMode }
   | { type: "events" }
   | { type: "comparison"; candidate_ids: [string, string] };
 

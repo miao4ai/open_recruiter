@@ -27,7 +27,7 @@ import {
 import { Link } from "react-router-dom";
 import { useApi } from "../hooks/useApi";
 import { listJobs, listCandidates, listEmails, listEvents, listPipelineEntries } from "../lib/api";
-import type { Job, Candidate, Email, CalendarEvent, EventType, PipelineEntry } from "../types";
+import type { Job, Candidate, Email, CalendarEvent, EventType, PipelineEntry, PipelineViewMode } from "../types";
 import { PIPELINE_COLUMNS } from "../types";
 import type { TFunction } from "i18next";
 
@@ -597,6 +597,7 @@ export default function Dashboard() {
   const { data: emails } = useApi(useCallback(() => listEmails(), []));
   const { data: events } = useApi(useCallback(() => listEvents(), []));
   const { data: pipelineEntries } = useApi(useCallback(() => listPipelineEntries(), []));
+  const [kanbanView, setKanbanView] = useState<PipelineViewMode>("candidate");
 
   const totalJobs = jobs?.length ?? 0;
   const totalCandidates = candidates?.length ?? 0;
@@ -607,12 +608,33 @@ export default function Dashboard() {
 
   // Group pipeline entries by status (per candidate-job pair)
   const hasPipelineEntries = pipelineEntries && pipelineEntries.length > 0;
-  const grouped: Record<string, PipelineEntry[] | typeof candidates> = {};
+
+  // Candidate view: group by status, each card = candidate-job pair
+  const candidateGrouped: Record<string, PipelineEntry[] | typeof candidates> = {};
   for (const col of PIPELINE_COLUMNS) {
     if (hasPipelineEntries) {
-      grouped[col.key] = pipelineEntries.filter((e: PipelineEntry) => e.pipeline_status === col.key);
+      candidateGrouped[col.key] = pipelineEntries.filter((e: PipelineEntry) => e.pipeline_status === col.key);
     } else {
-      grouped[col.key] = candidates?.filter((c) => c.status === col.key) ?? [];
+      candidateGrouped[col.key] = candidates?.filter((c) => c.status === col.key) ?? [];
+    }
+  }
+
+  // Jobs view: group by status → then by job, each card = job with candidate count
+  type JobGroup = { job_id: string; job_title: string; job_company: string; candidates: PipelineEntry[] };
+  const jobsGrouped: Record<string, JobGroup[]> = {};
+  for (const col of PIPELINE_COLUMNS) {
+    if (hasPipelineEntries) {
+      const entries = pipelineEntries.filter((e: PipelineEntry) => e.pipeline_status === col.key);
+      const map = new Map<string, JobGroup>();
+      for (const e of entries) {
+        if (!map.has(e.job_id)) {
+          map.set(e.job_id, { job_id: e.job_id, job_title: e.job_title, job_company: e.job_company, candidates: [] });
+        }
+        map.get(e.job_id)!.candidates.push(e);
+      }
+      jobsGrouped[col.key] = Array.from(map.values());
+    } else {
+      jobsGrouped[col.key] = [];
     }
   }
 
@@ -659,9 +681,40 @@ export default function Dashboard() {
 
       {/* Pipeline Kanban */}
       <Box>
-        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-          {t("dashboard.pipeline")}
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            {t("dashboard.pipeline")}
+          </Typography>
+          {/* Candidate / Jobs toggle */}
+          <Box sx={{ display: "flex", border: "1px solid", borderColor: "grey.200", borderRadius: 2, bgcolor: "grey.50", overflow: "hidden" }}>
+            <Button
+              size="small"
+              onClick={() => setKanbanView("candidate")}
+              startIcon={<PersonOutline sx={{ fontSize: 14 }} />}
+              sx={{
+                px: 1.5, py: 0.25, fontSize: "0.7rem", fontWeight: 500, textTransform: "none", borderRadius: 0,
+                ...(kanbanView === "candidate"
+                  ? { bgcolor: "white", color: "primary.main", boxShadow: "0 1px 2px rgba(0,0,0,0.1)" }
+                  : { color: "grey.500" }),
+              }}
+            >
+              {t("pipeline.viewCandidate")}
+            </Button>
+            <Button
+              size="small"
+              onClick={() => setKanbanView("jobs")}
+              startIcon={<WorkOutline sx={{ fontSize: 14 }} />}
+              sx={{
+                px: 1.5, py: 0.25, fontSize: "0.7rem", fontWeight: 500, textTransform: "none", borderRadius: 0,
+                ...(kanbanView === "jobs"
+                  ? { bgcolor: "white", color: "primary.main", boxShadow: "0 1px 2px rgba(0,0,0,0.1)" }
+                  : { color: "grey.500" }),
+              }}
+            >
+              {t("pipeline.viewJobs")}
+            </Button>
+          </Box>
+        </Box>
         <Box
           sx={{
             display: "flex",
@@ -698,7 +751,9 @@ export default function Dashboard() {
                     variant="caption"
                     sx={{ ml: 0.75, color: "grey.400" }}
                   >
-                    {grouped[col.key]?.length ?? 0}
+                    {kanbanView === "jobs"
+                      ? (jobsGrouped[col.key]?.length ?? 0)
+                      : (candidateGrouped[col.key]?.length ?? 0)}
                   </Typography>
                 </Typography>
               </Box>
@@ -708,17 +763,16 @@ export default function Dashboard() {
                   flexDirection: "column",
                   gap: 1,
                   p: 1,
+                  maxHeight: 320,
+                  overflowY: "auto",
                 }}
               >
-                {grouped[col.key]?.length ? (
-                  grouped[col.key]?.map((item: any) => {
-                    const isPipelineEntry = "candidate_name" in item;
-                    const name = isPipelineEntry ? item.candidate_name : item.name;
-                    const score = item.match_score;
-                    const key = isPipelineEntry ? `${item.candidate_id}:${item.job_id}` : item.id;
-                    return (
+                {kanbanView === "jobs" ? (
+                  /* ── Jobs view: each card = a job ─────────────────────── */
+                  jobsGrouped[col.key]?.length ? (
+                    jobsGrouped[col.key].map((group) => (
                       <Paper
-                        key={key}
+                        key={group.job_id}
                         variant="outlined"
                         sx={{
                           borderColor: "grey.100",
@@ -727,35 +781,90 @@ export default function Dashboard() {
                           borderRadius: 1.5,
                         }}
                       >
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {name || t("common.unnamed")}
+                        <Typography variant="body2" sx={{ fontWeight: 500, color: "primary.dark" }}>
+                          {group.job_title || t("common.unnamed")}
                         </Typography>
-                        {isPipelineEntry && item.job_title && (
-                          <Typography variant="caption" sx={{ color: "primary.main", fontWeight: 500 }}>
-                            {item.job_title}{item.job_company ? ` · ${item.job_company}` : ""}
+                        {group.job_company && (
+                          <Typography variant="caption" sx={{ color: "grey.500", display: "block" }}>
+                            {group.job_company}
                           </Typography>
                         )}
-                        <Typography variant="caption" sx={{ color: "grey.500", display: "block" }}>
-                          {t("dashboard.score")}:{" "}
-                          {score
-                            ? `${Math.round(score * 100)}%`
-                            : "\u2014"}
+                        <Typography variant="caption" sx={{ color: "grey.400", display: "block", mt: 0.5 }}>
+                          {t("pipeline.candidateCount", { count: group.candidates.length })}
                         </Typography>
+                        {/* Candidate names */}
+                        <Box sx={{ mt: 0.5, display: "flex", flexDirection: "column", gap: 0.25 }}>
+                          {group.candidates.slice(0, 3).map((c) => (
+                            <Typography key={c.candidate_id} variant="caption" sx={{ color: "grey.600", fontSize: "0.65rem" }}>
+                              • {c.candidate_name}
+                              {c.match_score > 0 && ` (${Math.round(c.match_score * 100)}%)`}
+                            </Typography>
+                          ))}
+                          {group.candidates.length > 3 && (
+                            <Typography variant="caption" sx={{ color: "grey.400", fontSize: "0.6rem" }}>
+                              +{group.candidates.length - 3} {t("common.more")}
+                            </Typography>
+                          )}
+                        </Box>
                       </Paper>
-                    );
-                  })
+                    ))
+                  ) : (
+                    <Typography
+                      variant="caption"
+                      sx={{ px: 1, py: 2, textAlign: "center", color: "grey.400" }}
+                    >
+                      {t("dashboard.noJobs")}
+                    </Typography>
+                  )
                 ) : (
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      px: 1,
-                      py: 2,
-                      textAlign: "center",
-                      color: "grey.400",
-                    }}
-                  >
-                    {t("dashboard.noCandidates")}
-                  </Typography>
+                  /* ── Candidate view: each card = candidate-job pair ──── */
+                  candidateGrouped[col.key]?.length ? (
+                    candidateGrouped[col.key]?.map((item: any) => {
+                      const isPipelineEntry = "candidate_name" in item;
+                      const name = isPipelineEntry ? item.candidate_name : item.name;
+                      const score = item.match_score;
+                      const key = isPipelineEntry ? `${item.candidate_id}:${item.job_id}` : item.id;
+                      return (
+                        <Paper
+                          key={key}
+                          variant="outlined"
+                          sx={{
+                            borderColor: "grey.100",
+                            bgcolor: "grey.50",
+                            p: 1,
+                            borderRadius: 1.5,
+                          }}
+                        >
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {name || t("common.unnamed")}
+                          </Typography>
+                          {isPipelineEntry && item.job_title && (
+                            <Typography variant="caption" sx={{ color: "primary.main", fontWeight: 500 }}>
+                              {item.job_title}{item.job_company ? ` · ${item.job_company}` : ""}
+                            </Typography>
+                          )}
+                          <Typography variant="caption" sx={{ color: "grey.500", display: "block" }}>
+                            {t("dashboard.score")}:{" "}
+                            {score
+                              ? `${Math.round(score * 100)}%`
+                              : "\u2014"}
+                          </Typography>
+                        </Paper>
+                      );
+                    })
+                  ) : (
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        px: 1,
+                        py: 2,
+                        textAlign: "center",
+                        color: "grey.400",
+                      }}
+                    >
+                      {t("dashboard.noCandidates")}
+                    </Typography>
+                  )
                 )}
               </Box>
             </Paper>

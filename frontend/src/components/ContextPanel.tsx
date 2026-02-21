@@ -17,6 +17,7 @@ import {
   NotificationsOutlined,
   AutoAwesomeOutlined,
   ArrowForwardOutlined,
+  PersonOutlined,
 } from "@mui/icons-material";
 import {
   DndContext,
@@ -33,7 +34,7 @@ import {
   getCandidate, getJob, listCandidates, listEmails, listEvents, listJobs,
   getNotifications, updateCandidate, listPipelineEntries, updatePipelineStatus,
 } from "../lib/api";
-import type { Candidate, CandidateStatus, ContextView, CalendarEvent, Notification, PipelineEntry } from "../types";
+import type { Candidate, CandidateStatus, ContextView, CalendarEvent, Notification, PipelineEntry, PipelineViewMode } from "../types";
 import { PIPELINE_COLUMNS } from "../types";
 import DraggableCandidateCard from "./DraggableCandidateCard";
 
@@ -81,7 +82,7 @@ export default function ContextPanel({ view, onClose, onViewCandidate, onViewJob
           <JobView id={view.id} onViewCandidate={onViewCandidate} onSendPrompt={onSendPrompt} />
         )}
         {view.type === "pipeline_stage" && (
-          <PipelineStageView stage={view.stage} onViewCandidate={onViewCandidate} onSendPrompt={onSendPrompt} />
+          <PipelineStageView stage={view.stage} viewMode={view.viewMode} onViewCandidate={onViewCandidate} onViewJob={onViewJob} onSendPrompt={onSendPrompt} />
         )}
         {view.type === "events" && (
           <EventsView onSendPrompt={onSendPrompt} />
@@ -557,16 +558,21 @@ function StageDropTarget({ stageKey, label }: { stageKey: string; label: string 
 
 function PipelineStageView({
   stage,
+  viewMode,
   onViewCandidate,
+  onViewJob,
   onSendPrompt,
 }: {
   stage: CandidateStatus;
+  viewMode?: PipelineViewMode;
   onViewCandidate: (id: string) => void;
+  onViewJob: (id: string) => void;
   onSendPrompt: (prompt: string) => void;
 }) {
   const { data: allCandidates, refresh: refreshCandidates } = useApi(useCallback(() => listCandidates(), []));
   const { data: pipelineEntries, refresh: refreshPipeline } = useApi(useCallback(() => listPipelineEntries(), []));
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
 
   const refresh = () => { refreshCandidates(); refreshPipeline(); };
 
@@ -583,7 +589,28 @@ function PipelineStageView({
 
   // Prefer pipeline entries, fall back to candidates if no entries exist at all
   const hasPipelineEntries = pipelineEntries && pipelineEntries.length > 0;
-  const displayCount = hasPipelineEntries ? stageEntries.length : stageCandidates.length;
+
+  // Jobs view: group entries by job
+  const jobGroups = useMemo(() => {
+    if (viewMode !== "jobs" || !hasPipelineEntries) return [];
+    const map = new Map<string, { job_id: string; job_title: string; job_company: string; candidates: PipelineEntry[] }>();
+    for (const entry of stageEntries) {
+      if (!map.has(entry.job_id)) {
+        map.set(entry.job_id, {
+          job_id: entry.job_id,
+          job_title: entry.job_title,
+          job_company: entry.job_company,
+          candidates: [],
+        });
+      }
+      map.get(entry.job_id)!.candidates.push(entry);
+    }
+    return Array.from(map.values());
+  }, [viewMode, hasPipelineEntries, stageEntries]);
+
+  const displayCount = viewMode === "jobs" && hasPipelineEntries
+    ? jobGroups.length
+    : hasPipelineEntries ? stageEntries.length : stageCandidates.length;
 
   const { t } = useTranslation();
   const stageLabel = PIPELINE_COLUMNS.find((p) => p.key === stage)?.labelKey
@@ -661,8 +688,97 @@ function PipelineStageView({
     }
   };
 
+  const toggleJobExpand = (jobId: string) => {
+    setExpandedJobs((prev) => {
+      const next = new Set(prev);
+      if (next.has(jobId)) next.delete(jobId);
+      else next.add(jobId);
+      return next;
+    });
+  };
+
   if (!allCandidates && !pipelineEntries) return <LoadingDots />;
 
+  // ── Jobs view ──────────────────────────────────────────────────────────
+  if (viewMode === "jobs" && hasPipelineEntries) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-gray-500">
+          {t("pipeline.jobsInStage", { count: jobGroups.length })}{" "}
+          <span className="font-semibold text-gray-700">{stageLabel}</span>
+        </p>
+
+        {jobGroups.length > 0 ? (
+          <div className="space-y-2">
+            {jobGroups.map((group) => {
+              const isExpanded = expandedJobs.has(group.job_id);
+              return (
+                <div key={group.job_id} className="rounded-lg border border-gray-200 bg-white">
+                  {/* Job header */}
+                  <button
+                    onClick={() => toggleJobExpand(group.job_id)}
+                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-gray-50"
+                  >
+                    <WorkOutline sx={{ fontSize: 16 }} className="text-blue-500" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-gray-800">{group.job_title}</p>
+                      {group.job_company && (
+                        <p className="truncate text-xs text-gray-400">{group.job_company}</p>
+                      )}
+                    </div>
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600">
+                      {group.candidates.length}
+                    </span>
+                    <ChevronRightOutlined
+                      sx={{ fontSize: 14 }}
+                      className={`text-gray-300 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                    />
+                  </button>
+
+                  {/* Candidate list (expandable) */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 px-3 py-2">
+                      <div className="max-h-48 space-y-1 overflow-y-auto">
+                        {group.candidates.map((entry) => (
+                          <button
+                            key={`${entry.candidate_id}:${entry.job_id}`}
+                            onClick={() => onViewCandidate(entry.candidate_id)}
+                            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-gray-50"
+                          >
+                            <PersonOutlined sx={{ fontSize: 14 }} className="text-gray-400" />
+                            <span className="min-w-0 flex-1 truncate font-medium text-gray-700">
+                              {entry.candidate_name}
+                            </span>
+                            {entry.match_score > 0 && (
+                              <span className={`text-[10px] font-semibold ${
+                                entry.match_score >= 0.7 ? "text-green-600" : entry.match_score >= 0.4 ? "text-amber-600" : "text-red-500"
+                              }`}>
+                                {Math.round(entry.match_score * 100)}%
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => onViewJob(group.job_id)}
+                        className="mt-2 w-full rounded-md bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-600 hover:bg-blue-100"
+                      >
+                        {t("pipeline.viewJobDetails")}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="py-6 text-center text-sm text-gray-400">{t("pipeline.noJobsInStage")}</p>
+        )}
+      </div>
+    );
+  }
+
+  // ── Candidate view (default) ───────────────────────────────────────────
   return (
     <div className="space-y-3">
       <p className="text-sm text-gray-500">

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronRightOutlined, PersonOutlined, BusinessOutlined } from "@mui/icons-material";
+import { ChevronRightOutlined, PersonOutlined, WorkOutline } from "@mui/icons-material";
 import type { Candidate, CandidateStatus, PipelineEntry, PipelineViewMode } from "../types";
 import { PIPELINE_COLUMNS } from "../types";
 
@@ -37,9 +37,22 @@ export default function PipelineBar({
   const counts = useMemo(() => {
     const c: Partial<Record<CandidateStatus, number>> = {};
     if (pipelineEntries && pipelineEntries.length > 0) {
-      for (const entry of pipelineEntries) {
-        const s = entry.pipeline_status as CandidateStatus;
-        c[s] = (c[s] || 0) + 1;
+      if (viewMode === "jobs") {
+        // Jobs view: count unique jobs per stage
+        const jobSets: Partial<Record<CandidateStatus, Set<string>>> = {};
+        for (const entry of pipelineEntries) {
+          const s = entry.pipeline_status as CandidateStatus;
+          if (!jobSets[s]) jobSets[s] = new Set();
+          jobSets[s]!.add(entry.job_id);
+        }
+        for (const [s, set] of Object.entries(jobSets)) {
+          c[s as CandidateStatus] = set!.size;
+        }
+      } else {
+        for (const entry of pipelineEntries) {
+          const s = entry.pipeline_status as CandidateStatus;
+          c[s] = (c[s] || 0) + 1;
+        }
       }
     } else {
       for (const cand of candidates) {
@@ -47,11 +60,18 @@ export default function PipelineBar({
       }
     }
     return c;
-  }, [candidates, pipelineEntries]);
+  }, [candidates, pipelineEntries, viewMode]);
 
-  const total = pipelineEntries && pipelineEntries.length > 0
-    ? pipelineEntries.length
-    : candidates.length;
+  const total = useMemo(() => {
+    if (pipelineEntries && pipelineEntries.length > 0) {
+      if (viewMode === "jobs") {
+        const uniqueJobs = new Set(pipelineEntries.map((e) => e.job_id));
+        return uniqueJobs.size;
+      }
+      return pipelineEntries.length;
+    }
+    return candidates.length;
+  }, [pipelineEntries, candidates, viewMode]);
 
   return (
     <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3 py-2">
@@ -70,15 +90,15 @@ export default function PipelineBar({
             {t("pipeline.viewCandidate")}
           </button>
           <button
-            onClick={() => onViewModeChange("employer")}
+            onClick={() => onViewModeChange("jobs")}
             className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium transition-all ${
-              viewMode === "employer"
+              viewMode === "jobs"
                 ? "bg-white text-blue-600 shadow-sm"
                 : "text-gray-400 hover:text-gray-600"
             }`}
           >
-            <BusinessOutlined sx={{ fontSize: 13 }} />
-            {t("pipeline.viewEmployer")}
+            <WorkOutline sx={{ fontSize: 13 }} />
+            {t("pipeline.viewJobs")}
           </button>
         </div>
       )}

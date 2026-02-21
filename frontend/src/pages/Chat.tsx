@@ -1041,7 +1041,7 @@ export default function Chat() {
     if (pipelineStage === stage) {
       setPipelineStage(null); setContextView({ type: "briefing" });
     } else {
-      setPipelineStage(stage); setContextView({ type: "pipeline_stage", stage });
+      setPipelineStage(stage); setContextView({ type: "pipeline_stage", stage, viewMode: pipelineViewMode });
     }
   };
 

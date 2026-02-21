@@ -114,7 +114,7 @@ export const unlinkCandidateJob = (candidateId: string, jobId: string) =>
   api.delete(`/candidates/${candidateId}/jobs/${jobId}`).then((r) => r.data);
 
 // ── Pipeline ─────────────────────────────────────────────────────────────
-export const listPipelineEntries = (view: "candidate" | "employer" = "candidate") =>
+export const listPipelineEntries = (view: "candidate" | "jobs" = "candidate") =>
   api.get("/candidates/pipeline", { params: { view } }).then((r) => r.data);
 
 export const updatePipelineStatus = (candidateId: string, jobId: string, pipelineStatus: string) =>
