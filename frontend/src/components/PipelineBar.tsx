@@ -34,26 +34,31 @@ export default function PipelineBar({
   const { t } = useTranslation();
 
   // Use pipeline entries (per-job) if available, otherwise fall back to candidates
+  // Separate real candidate entries from placeholder job-only entries
+  const candidateEntries = useMemo(
+    () => (pipelineEntries || []).filter((e) => e.candidate_id),
+    [pipelineEntries]
+  );
+  const hasRealEntries = candidateEntries.length > 0;
+
   const counts = useMemo(() => {
     const c: Partial<Record<CandidateStatus, number>> = {};
-    if (pipelineEntries && pipelineEntries.length > 0) {
-      if (viewMode === "jobs") {
-        // Jobs view: count unique jobs per stage
-        const jobSets: Partial<Record<CandidateStatus, Set<string>>> = {};
-        for (const entry of pipelineEntries) {
-          const s = entry.pipeline_status as CandidateStatus;
-          if (!jobSets[s]) jobSets[s] = new Set();
-          jobSets[s]!.add(entry.job_id);
-        }
-        for (const [s, set] of Object.entries(jobSets)) {
-          c[s as CandidateStatus] = set!.size;
-        }
-      } else {
-        for (const entry of pipelineEntries) {
-          if (!entry.candidate_id) continue; // skip placeholder job-only entries
-          const s = entry.pipeline_status as CandidateStatus;
-          c[s] = (c[s] || 0) + 1;
-        }
+    if (viewMode === "jobs" && pipelineEntries && pipelineEntries.length > 0) {
+      // Jobs view: count unique jobs per stage (including placeholder entries)
+      const jobSets: Partial<Record<CandidateStatus, Set<string>>> = {};
+      for (const entry of pipelineEntries) {
+        const s = entry.pipeline_status as CandidateStatus;
+        if (!jobSets[s]) jobSets[s] = new Set();
+        jobSets[s]!.add(entry.job_id);
+      }
+      for (const [s, set] of Object.entries(jobSets)) {
+        c[s as CandidateStatus] = set!.size;
+      }
+    } else if (hasRealEntries) {
+      // Candidate view with real pipeline entries
+      for (const entry of candidateEntries) {
+        const s = entry.pipeline_status as CandidateStatus;
+        c[s] = (c[s] || 0) + 1;
       }
     } else if (viewMode !== "jobs") {
       // Candidate view fallback: count from candidates array
@@ -61,22 +66,17 @@ export default function PipelineBar({
         c[cand.status] = (c[cand.status] || 0) + 1;
       }
     }
-    // Jobs view with no entries → all counts stay 0
     return c;
-  }, [candidates, pipelineEntries, viewMode]);
+  }, [candidates, pipelineEntries, candidateEntries, hasRealEntries, viewMode]);
 
   const total = useMemo(() => {
-    if (pipelineEntries && pipelineEntries.length > 0) {
-      if (viewMode === "jobs") {
-        const uniqueJobs = new Set(pipelineEntries.map((e) => e.job_id));
-        return uniqueJobs.size;
-      }
-      // Candidate view: exclude placeholder job-only entries
-      return pipelineEntries.filter((e) => e.candidate_id).length;
+    if (viewMode === "jobs" && pipelineEntries && pipelineEntries.length > 0) {
+      const uniqueJobs = new Set(pipelineEntries.map((e) => e.job_id));
+      return uniqueJobs.size;
     }
-    // Jobs view with no entries → total 0; Candidate view → candidate count
+    if (hasRealEntries) return candidateEntries.length;
     return viewMode === "jobs" ? 0 : candidates.length;
-  }, [pipelineEntries, candidates, viewMode]);
+  }, [pipelineEntries, candidateEntries, hasRealEntries, candidates, viewMode]);
 
   return (
     <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3 py-2">

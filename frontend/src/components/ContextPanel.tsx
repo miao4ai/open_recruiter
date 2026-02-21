@@ -590,12 +590,14 @@ function PipelineStageView({
     [allCandidates, stage]
   );
 
-  // Prefer pipeline entries, fall back to candidates if no entries exist at all
-  const hasPipelineEntries = pipelineEntries && pipelineEntries.length > 0;
+  // Has any pipeline entries at all (including placeholders) — used for Jobs view
+  const hasAnyEntries = pipelineEntries && pipelineEntries.length > 0;
+  // Has real candidate-job entries (not just job placeholders) — used for Candidate view
+  const hasRealEntries = (pipelineEntries || []).some((e: PipelineEntry) => e.candidate_id);
 
   // Jobs view: group entries by job
   const jobGroups = useMemo(() => {
-    if (viewMode !== "jobs" || !hasPipelineEntries) return [];
+    if (viewMode !== "jobs" || !hasAnyEntries) return [];
     const map = new Map<string, { job_id: string; job_title: string; job_company: string; candidates: PipelineEntry[] }>();
     for (const entry of stageEntries) {
       if (!map.has(entry.job_id)) {
@@ -612,11 +614,11 @@ function PipelineStageView({
       }
     }
     return Array.from(map.values());
-  }, [viewMode, hasPipelineEntries, stageEntries]);
+  }, [viewMode, hasAnyEntries, stageEntries]);
 
-  const displayCount = viewMode === "jobs" && hasPipelineEntries
+  const displayCount = viewMode === "jobs" && hasAnyEntries
     ? jobGroups.length
-    : hasPipelineEntries ? stageEntries.length : stageCandidates.length;
+    : hasRealEntries ? stageEntries.length : stageCandidates.length;
 
   const { t } = useTranslation();
   const stageLabel = PIPELINE_COLUMNS.find((p) => p.key === stage)?.labelKey
@@ -629,10 +631,10 @@ function PipelineStageView({
   );
 
   const activeDragEntry = useMemo(
-    () => hasPipelineEntries
+    () => hasRealEntries
       ? stageEntries.find((e: PipelineEntry) => `${e.candidate_id}:${e.job_id}` === activeDragId)
       : null,
-    [stageEntries, activeDragId, hasPipelineEntries]
+    [stageEntries, activeDragId, hasRealEntries]
   );
 
   const activeDragCandidate = useMemo(
@@ -650,7 +652,7 @@ function PipelineStageView({
     if (targetStage === stage) return;
 
     // Pipeline entry drag (candidate:job pair)
-    if (hasPipelineEntries && dragId.includes(":")) {
+    if (hasRealEntries && dragId.includes(":")) {
       const [candidateId, jobId] = dragId.split(":");
       const entry = stageEntries.find((e: PipelineEntry) => e.candidate_id === candidateId && e.job_id === jobId);
       if (!entry) return;
@@ -706,7 +708,7 @@ function PipelineStageView({
   if (!allCandidates && !pipelineEntries) return <LoadingDots />;
 
   // ── Jobs view ──────────────────────────────────────────────────────────
-  if (viewMode === "jobs" && hasPipelineEntries) {
+  if (viewMode === "jobs" && hasAnyEntries) {
     return (
       <div className="space-y-3">
         <p className="text-sm text-gray-500">
@@ -798,7 +800,7 @@ function PipelineStageView({
         onDragStart={(event) => setActiveDragId(event.active.id as string)}
         onDragEnd={handleDragEnd}
       >
-        {hasPipelineEntries ? (
+        {hasRealEntries ? (
           stageEntries.length > 0 ? (
             <div className="space-y-2">
               {stageEntries.map((entry: PipelineEntry) => (
