@@ -241,6 +241,9 @@ const en = {
     briefingNew: "  • {{count}} new — ready for review",
     briefingContacted: "  • {{count}} awaiting reply ({{names}}{{more}})",
     briefingInterviews: "  • {{count}} interviews scheduled",
+    briefingJobs: "\n**Jobs**: {{count}} active jobs",
+    briefingJobsMatched: "  • {{count}} jobs have matched candidates",
+    briefingJobsEmpty: "  • {{count}} jobs need candidates ({{names}}{{more}})",
     briefingHelp: "How can I help you today?",
     simpleGreeting: "Hi! 👋 Welcome to Open Recruiter — I'm Erika, your recruiting assistant. How can I help you today? 🎯",
     // Suggestions

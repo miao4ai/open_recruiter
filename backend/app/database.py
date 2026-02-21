@@ -872,6 +872,8 @@ def list_pipeline_entries() -> list[dict]:
 
     Tries candidate_jobs first; falls back to the legacy candidates.job_id column
     so the Jobs view works even for databases that haven't fully migrated yet.
+    Also includes jobs with 0 candidates as placeholder entries so they appear
+    in the "new" stage of the Jobs pipeline view.
     """
     conn = get_conn()
     rows = conn.execute("""
@@ -896,8 +898,30 @@ def list_pipeline_entries() -> list[dict]:
             ORDER BY c.match_score DESC
         """).fetchall()
 
+    results = [dict(r) for r in rows]
+
+    # Add jobs that have no candidate_jobs entries yet (they appear as "new")
+    linked_job_ids = {r["job_id"] for r in results}
+    unlinked = conn.execute("""
+        SELECT id, title, company FROM jobs
+        WHERE id NOT IN (SELECT DISTINCT job_id FROM candidate_jobs)
+        ORDER BY created_at DESC
+    """).fetchall()
+    for j in unlinked:
+        if j["id"] not in linked_job_ids:
+            results.append({
+                "candidate_id": "",
+                "job_id": j["id"],
+                "match_score": 0.0,
+                "pipeline_status": "new",
+                "candidate_name": "",
+                "candidate_title": "",
+                "job_title": j["title"],
+                "job_company": j["company"],
+            })
+
     conn.close()
-    return [dict(r) for r in rows]
+    return results
 
 
 def _row_to_candidate_job(row) -> dict:

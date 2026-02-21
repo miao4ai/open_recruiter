@@ -1526,6 +1526,25 @@ def _build_chat_context(user_id: str = "", current_message: str = "") -> str:
     else:
         parts.append("## Jobs: None")
 
+    # Pipeline summary (per-job status)
+    pipeline = db.list_pipeline_entries()
+    if pipeline:
+        from collections import defaultdict
+        stage_counts: dict[str, int] = defaultdict(int)
+        job_stage: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
+        for entry in pipeline:
+            stage = entry.get("pipeline_status", "new")
+            stage_counts[stage] += 1
+            if entry.get("candidate_name"):
+                jid = entry["job_id"]
+                jlabel = f"{entry.get('job_title', '')} at {entry.get('job_company', '')}"
+                job_stage[jlabel][stage].append(entry["candidate_name"])
+        parts.append(f"\n## Pipeline Summary")
+        parts.append("Stages: " + ", ".join(f"{s}: {c}" for s, c in stage_counts.items()))
+        for jlabel, stages in list(job_stage.items())[:5]:
+            stage_info = ", ".join(f"{s}: {len(names)}" for s, names in stages.items())
+            parts.append(f"- {jlabel} — {stage_info}")
+
     # Candidates summary
     candidates = db.list_candidates()
     if candidates:

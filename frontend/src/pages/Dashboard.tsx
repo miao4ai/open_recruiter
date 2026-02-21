@@ -630,7 +630,10 @@ export default function Dashboard() {
         if (!map.has(e.job_id)) {
           map.set(e.job_id, { job_id: e.job_id, job_title: e.job_title, job_company: e.job_company, candidates: [] });
         }
-        map.get(e.job_id)!.candidates.push(e);
+        // Skip placeholder entries (jobs with no candidates yet)
+        if (e.candidate_id) {
+          map.get(e.job_id)!.candidates.push(e);
+        }
       }
       jobsGrouped[col.key] = Array.from(map.values());
     } else {

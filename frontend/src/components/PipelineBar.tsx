@@ -50,6 +50,7 @@ export default function PipelineBar({
         }
       } else {
         for (const entry of pipelineEntries) {
+          if (!entry.candidate_id) continue; // skip placeholder job-only entries
           const s = entry.pipeline_status as CandidateStatus;
           c[s] = (c[s] || 0) + 1;
         }
@@ -70,7 +71,8 @@ export default function PipelineBar({
         const uniqueJobs = new Set(pipelineEntries.map((e) => e.job_id));
         return uniqueJobs.size;
       }
-      return pipelineEntries.length;
+      // Candidate view: exclude placeholder job-only entries
+      return pipelineEntries.filter((e) => e.candidate_id).length;
     }
     // Jobs view with no entries → total 0; Candidate view → candidate count
     return viewMode === "jobs" ? 0 : candidates.length;

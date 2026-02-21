@@ -577,9 +577,12 @@ function PipelineStageView({
   const refresh = () => { refreshCandidates(); refreshPipeline(); };
 
   // Use pipeline entries (per-job) if available, fall back to candidates
+  // Filter out placeholder entries (jobs with no candidates) in candidate view
   const stageEntries = useMemo(
-    () => (pipelineEntries || []).filter((e: PipelineEntry) => e.pipeline_status === stage),
-    [pipelineEntries, stage]
+    () => (pipelineEntries || []).filter((e: PipelineEntry) =>
+      e.pipeline_status === stage && (viewMode === "jobs" || e.candidate_id)
+    ),
+    [pipelineEntries, stage, viewMode]
   );
 
   const stageCandidates = useMemo(
@@ -603,7 +606,10 @@ function PipelineStageView({
           candidates: [],
         });
       }
-      map.get(entry.job_id)!.candidates.push(entry);
+      // Skip placeholder entries (jobs with no candidates yet)
+      if (entry.candidate_id) {
+        map.get(entry.job_id)!.candidates.push(entry);
+      }
     }
     return Array.from(map.values());
   }, [viewMode, hasPipelineEntries, stageEntries]);

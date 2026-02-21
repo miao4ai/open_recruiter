@@ -240,6 +240,9 @@ const ja = {
     briefingNew: "  • {{count}}名が新規 — レビュー待ち",
     briefingContacted: "  • {{count}}名が返信待ち（{{names}}{{more}}）",
     briefingInterviews: "  • {{count}}件の面接予定",
+    briefingJobs: "\n**求人**: {{count}}件のアクティブな求人",
+    briefingJobsMatched: "  • {{count}}件の求人に候補者がマッチ",
+    briefingJobsEmpty: "  • {{count}}件の求人が候補者を必要としています（{{names}}{{more}}）",
     briefingHelp: "今日は何をお手伝いしましょうか？",
     simpleGreeting: "こんにちは！👋 Open Recruiterへようこそ — 私はエリカ、あなたの採用アシスタントです。何かお手伝いできることはありますか？🎯",
     // Suggestions

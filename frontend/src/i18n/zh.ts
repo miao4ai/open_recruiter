@@ -241,6 +241,9 @@ const zh = {
     briefingNew: "  • {{count}} 位新候选人 — 待审核",
     briefingContacted: "  • {{count}} 位等待回复（{{names}}{{more}}）",
     briefingInterviews: "  • {{count}} 场面试已安排",
+    briefingJobs: "\n**职位**: {{count}} 个活跃职位",
+    briefingJobsMatched: "  • {{count}} 个职位已有匹配候选人",
+    briefingJobsEmpty: "  • {{count}} 个职位需要候选人（{{names}}{{more}}）",
     briefingHelp: "今天我能为您做些什么？",
     simpleGreeting: "您好！👋 欢迎使用 Open Recruiter — 我是 Erika，您的招聘助手。今天我能为您做些什么？🎯",
     // Suggestions

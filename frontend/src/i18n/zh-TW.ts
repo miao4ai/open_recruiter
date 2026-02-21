@@ -241,6 +241,9 @@ const zhTW = {
     briefingNew: "  \u2022 {{count}} 位新候選人 — 待審核",
     briefingContacted: "  \u2022 {{count}} 位等待回覆（{{names}}{{more}}）",
     briefingInterviews: "  \u2022 {{count}} 場面試已排定",
+    briefingJobs: "\n**職位**: {{count}} 個活躍職位",
+    briefingJobsMatched: "  \u2022 {{count}} 個職位已有匹配候選人",
+    briefingJobsEmpty: "  \u2022 {{count}} 個職位需要候選人（{{names}}{{more}}）",
     briefingHelp: "今天我能為您做些什麼？",
     simpleGreeting: "您好！👋 歡迎使用 Open Recruiter — 我是 Erika，您的招募助理。今天我能為您做些什麼？🎯",
     // Suggestions

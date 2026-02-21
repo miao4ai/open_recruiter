@@ -240,6 +240,9 @@ const ko = {
     briefingNew: "  • {{count}}명 신규 — 검토 대기",
     briefingContacted: "  • {{count}}명 답변 대기 ({{names}}{{more}})",
     briefingInterviews: "  • {{count}}건의 면접 예정",
+    briefingJobs: "\n**채용공고**: {{count}}개 활성 공고",
+    briefingJobsMatched: "  • {{count}}개 공고에 매칭된 후보자 있음",
+    briefingJobsEmpty: "  • {{count}}개 공고에 후보자 필요 ({{names}}{{more}})",
     briefingHelp: "오늘 무엇을 도와드릴까요?",
     simpleGreeting: "안녕하세요! 👋 Open Recruiter에 오신 것을 환영합니다 — 저는 에리카, 채용 어시스턴트입니다. 무엇을 도와드릴까요? 🎯",
     // Suggestions

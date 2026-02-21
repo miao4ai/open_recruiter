@@ -59,7 +59,7 @@ import type {
 
 /* ── Greeting / Daily Briefing ──────────────────────────────────────────── */
 
-function makeBriefing(candidates: Candidate[], t: TFunction): ChatMessage {
+function makeBriefing(candidates: Candidate[], t: TFunction, jobs?: Job[]): ChatMessage {
   const dateStr = new Date().toLocaleDateString("en-US", {
     year: "numeric", month: "long", day: "numeric",
   });
@@ -70,6 +70,18 @@ function makeBriefing(candidates: Candidate[], t: TFunction): ChatMessage {
 
   const lines = [t("chat.briefingIntro", { date: dateStr })];
 
+  // Jobs summary
+  if (jobs && jobs.length > 0) {
+    const withCandidates = jobs.filter((j) => (j.candidate_count ?? 0) > 0).length;
+    lines.push(t("chat.briefingJobs", { count: jobs.length }));
+    if (withCandidates > 0)
+      lines.push(t("chat.briefingJobsMatched", { count: withCandidates }));
+    const emptyJobs = jobs.filter((j) => (j.candidate_count ?? 0) === 0);
+    if (emptyJobs.length > 0)
+      lines.push(t("chat.briefingJobsEmpty", { count: emptyJobs.length, names: emptyJobs.slice(0, 3).map((j) => `${j.title} (${j.company})`).join(", "), more: emptyJobs.length > 3 ? "..." : "" }));
+  }
+
+  // Candidates summary
   lines.push(t("chat.briefingPipeline", { count: total }));
   if (newCount > 0) lines.push(t("chat.briefingNew", { count: newCount }));
   if (contacted.length > 0)
@@ -749,9 +761,12 @@ export default function Chat() {
 
   const { data: sessions, refresh: refreshSessions } = useApi(useCallback(() => listChatSessions(), []));
   const { data: candidates, refresh: refreshCandidates } = useApi(useCallback(() => listCandidates(), []));
+  const { data: jobs } = useApi(useCallback(() => listJobs(), []));
 
   const candidatesRef = useRef(candidates);
   candidatesRef.current = candidates;
+  const jobsRef = useRef(jobs);
+  jobsRef.current = jobs;
 
   // Auto-select most recent session
   useEffect(() => {
@@ -760,9 +775,9 @@ export default function Chat() {
     if (sessions.length > 0) {
       setActiveSessionId(sessions[0].id);
     } else {
-      setMessages([candidates ? makeBriefing(candidates, t) : makeSimpleGreeting(t)]);
+      setMessages([candidates ? makeBriefing(candidates, t, jobs ?? undefined) : makeSimpleGreeting(t)]);
     }
-  }, [sessions, candidates, t]);
+  }, [sessions, candidates, jobs, t]);
 
   // Load messages when session changes
   // Uses loadedSessionRef to skip reload when handleSend just created the session
@@ -774,7 +789,7 @@ export default function Chat() {
     getChatHistory(activeSessionId).then((msgs) => {
       const c = candidatesRef.current;
       if (msgs.length === 0) {
-        setMessages([c ? makeBriefing(c, t) : makeSimpleGreeting(t)]);
+        setMessages([c ? makeBriefing(c, t, jobsRef.current ?? undefined) : makeSimpleGreeting(t)]);
       } else {
         setMessages(msgs);
       }
@@ -1015,7 +1030,7 @@ export default function Chat() {
   const handleNewChat = () => {
     loadedSessionRef.current = null;
     setActiveSessionId(null);
-    setMessages([candidates ? makeBriefing(candidates, t) : makeSimpleGreeting(t)]);
+    setMessages([candidates ? makeBriefing(candidates, t, jobs ?? undefined) : makeSimpleGreeting(t)]);
     setContextView({ type: "briefing" });
     setPipelineStage(null);
   };
