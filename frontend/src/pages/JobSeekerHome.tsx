@@ -5,6 +5,7 @@ import {
   BookmarkBorderOutlined, SearchOutlined,
 } from "@mui/icons-material";
 import { CircularProgress, LinearProgress } from "@mui/material";
+import EmojiPickerButton from "../components/EmojiPickerButton";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { useApi } from "../hooks/useApi";
@@ -731,6 +732,10 @@ export default function JobSeekerHome() {
               placeholder={t("jobSeekerHome.askAiChan")}
               rows={2}
               className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+            />
+            <EmojiPickerButton
+              variant="tailwind"
+              onEmojiSelect={(emoji) => setInput((prev) => prev + emoji)}
             />
             <button
               onClick={() => handleSend()}

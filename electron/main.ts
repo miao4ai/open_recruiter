@@ -238,9 +238,11 @@ if (!gotTheLock) {
   }
 
   function createWindow() {
+    // Use .ico on Windows for proper taskbar/title bar icon, .png elsewhere
+    const iconExt = process.platform === "win32" ? "avartar.ico" : "avartar.png";
     const iconPath = app.isPackaged
-      ? path.join(process.resourcesPath, "images", "avartar.png")
-      : path.join(__dirname, "..", "images", "avartar.png");
+      ? path.join(process.resourcesPath, "images", iconExt)
+      : path.join(__dirname, "..", "images", iconExt);
     const appIcon = nativeImage.createFromPath(iconPath);
 
     mainWindow = new BrowserWindow({

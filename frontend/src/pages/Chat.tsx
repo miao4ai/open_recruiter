@@ -47,6 +47,7 @@ import {
   saveChatMessage,
 } from "../lib/api";
 import PipelineBar from "../components/PipelineBar";
+import EmojiPickerButton from "../components/EmojiPickerButton";
 import ContextPanel from "../components/ContextPanel";
 import SmartActionBar from "../components/SmartActionBar";
 import MessageBlocks from "../components/MessageBlocks";
@@ -1209,7 +1210,7 @@ export default function Chat() {
 
           <SmartActionBar suggestions={suggestions} onSelect={(p) => handleSend(p)} />
 
-          <Box sx={{ display: "flex", gap: 1, pt: 0.5 }}>
+          <Box sx={{ display: "flex", gap: 1, pt: 0.5, alignItems: "flex-end" }}>
             <TextField
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -1229,6 +1230,7 @@ export default function Chat() {
                 "& .MuiInputBase-input": { fontSize: "0.875rem", py: 1.25, px: 2 },
               }}
             />
+            <EmojiPickerButton onEmojiSelect={(emoji) => setInput((prev) => prev + emoji)} />
             <IconButton
               onClick={() => handleSend()}
               disabled={sending || !input.trim()}
