@@ -31,9 +31,9 @@ import {
 import { useApi } from "../hooks/useApi";
 import {
   getCandidate, getJob, listCandidates, listEmails, listEvents, listJobs,
-  getNotifications, updateCandidate,
+  getNotifications, updateCandidate, listPipelineEntries, updatePipelineStatus,
 } from "../lib/api";
-import type { Candidate, CandidateStatus, ContextView, CalendarEvent, Notification } from "../types";
+import type { Candidate, CandidateStatus, ContextView, CalendarEvent, Notification, PipelineEntry } from "../types";
 import { PIPELINE_COLUMNS } from "../types";
 import DraggableCandidateCard from "./DraggableCandidateCard";
 
@@ -564,13 +564,26 @@ function PipelineStageView({
   onViewCandidate: (id: string) => void;
   onSendPrompt: (prompt: string) => void;
 }) {
-  const { data: allCandidates, refresh } = useApi(useCallback(() => listCandidates(), []));
+  const { data: allCandidates, refresh: refreshCandidates } = useApi(useCallback(() => listCandidates(), []));
+  const { data: pipelineEntries, refresh: refreshPipeline } = useApi(useCallback(() => listPipelineEntries(), []));
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const refresh = () => { refreshCandidates(); refreshPipeline(); };
+
+  // Use pipeline entries (per-job) if available, fall back to candidates
+  const stageEntries = useMemo(
+    () => (pipelineEntries || []).filter((e: PipelineEntry) => e.pipeline_status === stage),
+    [pipelineEntries, stage]
+  );
 
   const stageCandidates = useMemo(
     () => (allCandidates || []).filter((c) => c.status === stage),
     [allCandidates, stage]
   );
+
+  // Prefer pipeline entries, fall back to candidates if no entries exist at all
+  const hasPipelineEntries = pipelineEntries && pipelineEntries.length > 0;
+  const displayCount = hasPipelineEntries ? stageEntries.length : stageCandidates.length;
 
   const { t } = useTranslation();
   const stageLabel = PIPELINE_COLUMNS.find((p) => p.key === stage)?.labelKey
@@ -580,6 +593,13 @@ function PipelineStageView({
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
+
+  const activeDragEntry = useMemo(
+    () => hasPipelineEntries
+      ? stageEntries.find((e: PipelineEntry) => `${e.candidate_id}:${e.job_id}` === activeDragId)
+      : null,
+    [stageEntries, activeDragId, hasPipelineEntries]
   );
 
   const activeDragCandidate = useMemo(
@@ -593,17 +613,40 @@ function PipelineStageView({
     if (!over) return;
 
     const targetStage = over.id as string;
-    const candidateId = active.id as string;
-    const candidate = stageCandidates.find((c) => c.id === candidateId);
-    if (!candidate || targetStage === stage) return;
+    const dragId = active.id as string;
+    if (targetStage === stage) return;
 
-    // Update via API
+    // Pipeline entry drag (candidate:job pair)
+    if (hasPipelineEntries && dragId.includes(":")) {
+      const [candidateId, jobId] = dragId.split(":");
+      const entry = stageEntries.find((e: PipelineEntry) => e.candidate_id === candidateId && e.job_id === jobId);
+      if (!entry) return;
+      try {
+        await updatePipelineStatus(candidateId, jobId, targetStage);
+        refresh();
+      } catch { /* feedback handled by chat */ }
+      const name = entry.candidate_name;
+      if (targetStage === "contacted") {
+        onSendPrompt(`I moved ${name} to Contacted. Draft an outreach email for ${name}?`);
+      } else if (targetStage === "interview_scheduled") {
+        onSendPrompt(`I moved ${name} to Interview Scheduled. When should I schedule the interview with ${name}?`);
+      } else if (targetStage === "rejected") {
+        onSendPrompt(`I moved ${name} to Rejected. Should I send a rejection email to ${name}?`);
+      } else if (targetStage === "offer_sent") {
+        onSendPrompt(`I moved ${name} to Offer Sent. Should I draft an offer email for ${name}?`);
+      } else {
+        onSendPrompt(`I've moved ${name} to the ${targetStage.replace("_", " ")} stage.`);
+      }
+      return;
+    }
+
+    // Legacy: single candidate drag
+    const candidate = stageCandidates.find((c) => c.id === dragId);
+    if (!candidate) return;
     try {
-      await updateCandidate(candidateId, { status: targetStage });
+      await updateCandidate(dragId, { status: targetStage });
       refresh();
-    } catch { /* chat prompt handles feedback */ }
-
-    // Conversational follow-up
+    } catch { /* feedback handled by chat */ }
     const name = candidate.name;
     if (targetStage === "contacted") {
       onSendPrompt(`I moved ${name} to Contacted. Draft an outreach email for ${name}?`);
@@ -618,12 +661,12 @@ function PipelineStageView({
     }
   };
 
-  if (!allCandidates) return <LoadingDots />;
+  if (!allCandidates && !pipelineEntries) return <LoadingDots />;
 
   return (
     <div className="space-y-3">
       <p className="text-sm text-gray-500">
-        {t("pipeline.candidatesInStage", { count: stageCandidates.length })}{" "}
+        {t("pipeline.candidatesInStage", { count: displayCount })}{" "}
         <span className="font-semibold text-gray-700">{stageLabel}</span>
       </p>
 
@@ -633,18 +676,36 @@ function PipelineStageView({
         onDragStart={(event) => setActiveDragId(event.active.id as string)}
         onDragEnd={handleDragEnd}
       >
-        {stageCandidates.length > 0 ? (
-          <div className="space-y-2">
-            {stageCandidates.map((c) => (
-              <DraggableCandidateCard
-                key={c.id}
-                candidate={c}
-                onViewCandidate={onViewCandidate}
-              />
-            ))}
-          </div>
+        {hasPipelineEntries ? (
+          stageEntries.length > 0 ? (
+            <div className="space-y-2">
+              {stageEntries.map((entry: PipelineEntry) => (
+                <DraggableCandidateCard
+                  key={`${entry.candidate_id}:${entry.job_id}`}
+                  candidate={{ id: entry.candidate_id, name: entry.candidate_name, current_title: entry.candidate_title, status: entry.pipeline_status } as Candidate}
+                  dragId={`${entry.candidate_id}:${entry.job_id}`}
+                  jobLabel={`${entry.job_title}${entry.job_company ? ` · ${entry.job_company}` : ""}`}
+                  onViewCandidate={onViewCandidate}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="py-6 text-center text-sm text-gray-400">{t("pipeline.noCandidatesInStage")}</p>
+          )
         ) : (
-          <p className="py-6 text-center text-sm text-gray-400">{t("pipeline.noCandidatesInStage")}</p>
+          stageCandidates.length > 0 ? (
+            <div className="space-y-2">
+              {stageCandidates.map((c) => (
+                <DraggableCandidateCard
+                  key={c.id}
+                  candidate={c}
+                  onViewCandidate={onViewCandidate}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="py-6 text-center text-sm text-gray-400">{t("pipeline.noCandidatesInStage")}</p>
+          )
         )}
 
         {/* Drop zone: stage targets (visible during drag) */}
@@ -663,18 +724,23 @@ function PipelineStageView({
 
         {/* Drag overlay */}
         <DragOverlay>
-          {activeDragCandidate && (
+          {activeDragEntry ? (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 shadow-lg">
+              <p className="text-sm font-semibold text-blue-900">{activeDragEntry.candidate_name}</p>
+              <p className="text-xs text-blue-600">{activeDragEntry.job_title}{activeDragEntry.job_company ? ` · ${activeDragEntry.job_company}` : ""}</p>
+            </div>
+          ) : activeDragCandidate ? (
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 shadow-lg">
               <p className="text-sm font-semibold text-blue-900">{activeDragCandidate.name}</p>
               <p className="text-xs text-blue-600">{activeDragCandidate.current_title}</p>
             </div>
-          )}
+          ) : null}
         </DragOverlay>
       </DndContext>
 
       {/* Stage-specific actions */}
       <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-3">
-        {stage === "new" && stageCandidates.length > 0 && (
+        {stage === "new" && displayCount > 0 && (
           <button
             onClick={() => onSendPrompt("Send outreach emails to all new candidates")}
             className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
@@ -682,7 +748,7 @@ function PipelineStageView({
             {t("pipeline.outreachAllNew")}
           </button>
         )}
-        {stage === "contacted" && stageCandidates.length > 0 && (
+        {stage === "contacted" && displayCount > 0 && (
           <button
             onClick={() => onSendPrompt("Follow up with stale contacted candidates")}
             className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"

@@ -42,6 +42,7 @@ import {
   deleteChatSession,
   listJobs,
   listCandidates,
+  listPipelineEntries,
   updateChatMessageStatus,
   saveChatMessage,
 } from "../lib/api";
@@ -52,7 +53,7 @@ import MessageBlocks from "../components/MessageBlocks";
 import WorkflowTracker from "../components/WorkflowTracker";
 import type {
   ActiveWorkflow, Candidate, CandidateStatus, ChatMessage, ChatSession,
-  ContextView, Email, Job, MarketReport, MessageBlock, Suggestion, WorkflowStepEvent,
+  ContextView, Email, Job, MarketReport, MessageBlock, PipelineEntry, PipelineViewMode, Suggestion, WorkflowStepEvent,
 } from "../types";
 
 /* ── Greeting / Daily Briefing ──────────────────────────────────────────── */
@@ -736,6 +737,8 @@ export default function Chat() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [contextView, setContextView] = useState<ContextView | null>({ type: "briefing" });
   const [pipelineStage, setPipelineStage] = useState<CandidateStatus | null>(null);
+  const [pipelineViewMode, setPipelineViewMode] = useState<PipelineViewMode>("candidate");
+  const { data: pipelineEntries, refresh: refreshPipeline } = useApi(useCallback(() => listPipelineEntries(pipelineViewMode), [pipelineViewMode]));
   const [streamingText, setStreamingText] = useState("");
   const [backendSuggestions, setBackendSuggestions] = useState<Suggestion[]>([]);
   const [activeWorkflow, setActiveWorkflow] = useState<ActiveWorkflow | null>(null);
@@ -1053,7 +1056,14 @@ export default function Chat() {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", gap: 1.5 }}>
       {/* Pipeline Bar */}
-      <PipelineBar candidates={candidates ?? []} activeStage={pipelineStage} onStageClick={handleStageClick} />
+      <PipelineBar
+        candidates={candidates ?? []}
+        pipelineEntries={pipelineEntries ?? []}
+        viewMode={pipelineViewMode}
+        onViewModeChange={setPipelineViewMode}
+        activeStage={pipelineStage}
+        onStageClick={handleStageClick}
+      />
 
       {/* Workflow Tracker */}
       {activeWorkflow && (

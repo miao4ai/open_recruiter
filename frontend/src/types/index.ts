@@ -63,9 +63,22 @@ export interface CandidateJobMatch {
   match_reasoning: string;
   strengths: string[];
   gaps: string[];
-  status: string;
+  pipeline_status: CandidateStatus;
   created_at: string;
   updated_at: string;
+}
+
+export type PipelineViewMode = "candidate" | "employer";
+
+export interface PipelineEntry {
+  candidate_id: string;
+  candidate_name: string;
+  candidate_title: string;
+  job_id: string;
+  job_title: string;
+  job_company: string;
+  pipeline_status: CandidateStatus;
+  match_score: number;
 }
 
 export interface Candidate {

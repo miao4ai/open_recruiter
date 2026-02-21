@@ -4,12 +4,14 @@ import type { Candidate } from "../types";
 
 interface Props {
   candidate: Candidate;
+  dragId?: string;
+  jobLabel?: string;
   onViewCandidate: (id: string) => void;
 }
 
-export default function DraggableCandidateCard({ candidate: c, onViewCandidate }: Props) {
+export default function DraggableCandidateCard({ candidate: c, dragId, jobLabel, onViewCandidate }: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: c.id,
+    id: dragId ?? c.id,
     data: { candidate: c },
   });
 
@@ -32,6 +34,11 @@ export default function DraggableCandidateCard({ candidate: c, onViewCandidate }
           {c.current_title || "N/A"}
           {c.current_company ? ` at ${c.current_company}` : ""}
         </p>
+        {jobLabel && (
+          <p className="mt-0.5 truncate text-[11px] font-medium text-blue-600">
+            {jobLabel}
+          </p>
+        )}
         {c.skills.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {c.skills.slice(0, 3).map((s) => (

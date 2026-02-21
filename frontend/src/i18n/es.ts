@@ -594,6 +594,8 @@ const es = {
     noCandidatesInStage: "No hay candidatos en esta etapa",
     outreachAllNew: "Contactar a todos los nuevos",
     followUpStale: "Seguimiento a inactivos",
+    viewCandidate: "Candidato",
+    viewEmployer: "Empleador",
   },
 
   // ── Context Panel ──

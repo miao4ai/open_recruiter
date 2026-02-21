@@ -124,9 +124,13 @@ class CandidateJobMatch(BaseModel):
     match_reasoning: str = ""
     strengths: list[str] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
-    status: str = "new"
+    pipeline_status: str = "new"
     created_at: str = ""
     updated_at: str = ""
+
+
+class PipelineStatusUpdate(BaseModel):
+    pipeline_status: str
 
 class Candidate(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])

@@ -11,6 +11,10 @@
     {
       "from": "backend/dist/backend",
       "to": "backend"
+    },
+    {
+      "from": "images",
+      "to": "images"
     }
   ],
   "win": {

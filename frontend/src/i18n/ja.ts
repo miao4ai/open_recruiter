@@ -593,6 +593,8 @@ const ja = {
     noCandidatesInStage: "このステージに候補者はいません",
     outreachAllNew: "全新規にアウトリーチ",
     followUpStale: "フォローアップ",
+    viewCandidate: "候補者",
+    viewEmployer: "企業",
   },
 
   // ── Context Panel ──

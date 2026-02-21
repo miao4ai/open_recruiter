@@ -83,6 +83,7 @@ def init_db() -> None:
             match_reasoning TEXT DEFAULT '',
             strengths TEXT DEFAULT '[]',   -- JSON array
             gaps TEXT DEFAULT '[]',        -- JSON array
+            pipeline_status TEXT DEFAULT 'new',
             created_at TEXT,
             updated_at TEXT,
             UNIQUE(candidate_id, job_id)
@@ -376,12 +377,33 @@ def init_db() -> None:
             match_reasoning TEXT DEFAULT '',
             strengths TEXT DEFAULT '[]',
             gaps TEXT DEFAULT '[]',
+            pipeline_status TEXT DEFAULT 'new',
             created_at TEXT,
             updated_at TEXT,
             UNIQUE(candidate_id, job_id)
         )
     """)
     conn.commit()
+
+    # Migration: add pipeline_status column to candidate_jobs
+    try:
+        conn.execute("ALTER TABLE candidate_jobs ADD COLUMN pipeline_status TEXT DEFAULT 'new'")
+        conn.commit()
+    except Exception:
+        pass  # Column already exists
+
+    # Data migration: copy candidates.status → candidate_jobs.pipeline_status
+    try:
+        conn.execute("""
+            UPDATE candidate_jobs SET pipeline_status = (
+                SELECT status FROM candidates WHERE candidates.id = candidate_jobs.candidate_id
+            ) WHERE pipeline_status = 'new' AND EXISTS (
+                SELECT 1 FROM candidates WHERE candidates.id = candidate_jobs.candidate_id AND candidates.status != 'new'
+            )
+        """)
+        conn.commit()
+    except Exception:
+        pass
 
     # Data migration: move existing candidate.job_id → candidate_jobs
     try:
@@ -713,6 +735,7 @@ def update_candidate(cid: str, updates: dict) -> bool:
     conn = get_conn()
     sets = []
     params = []
+    new_status = updates.get("status")
     for k, v in updates.items():
         if k in ("skills",):
             v = json.dumps(v)
@@ -725,6 +748,12 @@ def update_candidate(cid: str, updates: dict) -> bool:
         return False
     params.append(cid)
     conn.execute(f"UPDATE candidates SET {', '.join(sets)} WHERE id = ?", params)
+    # Sync status → all candidate_jobs.pipeline_status
+    if new_status:
+        conn.execute(
+            "UPDATE candidate_jobs SET pipeline_status = ?, updated_at = ? WHERE candidate_id = ?",
+            (new_status, updates.get("updated_at", datetime.now().isoformat()), cid),
+        )
     conn.commit()
     conn.close()
     return True
@@ -764,13 +793,14 @@ def insert_candidate_job(cj: dict) -> None:
     conn = get_conn()
     conn.execute(
         """INSERT INTO candidate_jobs
-           (id, candidate_id, job_id, match_score, match_reasoning, strengths, gaps, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           (id, candidate_id, job_id, match_score, match_reasoning, strengths, gaps, pipeline_status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             cj.get("id", uuid.uuid4().hex[:8]),
             cj["candidate_id"], cj["job_id"],
             cj.get("match_score", 0.0), cj.get("match_reasoning", ""),
             json.dumps(cj.get("strengths", [])), json.dumps(cj.get("gaps", [])),
+            cj.get("pipeline_status", "new"),
             cj.get("created_at", datetime.now().isoformat()),
             cj.get("updated_at", datetime.now().isoformat()),
         ),
@@ -837,6 +867,22 @@ def delete_candidate_job(candidate_id: str, job_id: str) -> bool:
     return cur.rowcount > 0
 
 
+def list_pipeline_entries() -> list[dict]:
+    """Return all candidate-job pairs with candidate+job info for pipeline views."""
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT cj.candidate_id, cj.job_id, cj.match_score, cj.pipeline_status,
+               c.name as candidate_name, c.current_title as candidate_title,
+               j.title as job_title, j.company as job_company
+        FROM candidate_jobs cj
+        INNER JOIN candidates c ON cj.candidate_id = c.id
+        INNER JOIN jobs j ON cj.job_id = j.id
+        ORDER BY cj.match_score DESC
+    """).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def _row_to_candidate_job(row) -> dict:
     d = dict(row)
     d["strengths"] = json.loads(d.get("strengths") or "[]")
@@ -844,6 +890,7 @@ def _row_to_candidate_job(row) -> dict:
     d["match_score"] = d.get("match_score") or 0.0
     d.setdefault("job_title", "")
     d.setdefault("job_company", "")
+    d.setdefault("pipeline_status", "new")
     return d
 
 

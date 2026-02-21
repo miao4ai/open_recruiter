@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Q
 from app import database as db
 from app import vectorstore
 from app.auth import get_current_user
-from app.models import Candidate, CandidateUpdate, MatchRequest
+from app.models import Candidate, CandidateUpdate, MatchRequest, PipelineStatusUpdate
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -29,6 +29,53 @@ async def list_candidates_route(
     _user: dict = Depends(get_current_user),
 ):
     return db.list_candidates(job_id=job_id, status=status)
+
+
+_STATUS_ORDER = [
+    "new", "contacted", "replied", "screening",
+    "interview_scheduled", "interviewed", "offer_sent", "hired",
+    "rejected", "withdrawn",
+]
+
+
+def _sync_candidate_global_status(candidate_id: str) -> None:
+    """Set candidate.status to the most advanced pipeline_status across all jobs."""
+    cjs = db.list_candidate_jobs(candidate_id=candidate_id)
+    if not cjs:
+        return
+    statuses = [cj.get("pipeline_status", "new") for cj in cjs]
+    active = [s for s in statuses if s not in ("rejected", "withdrawn")]
+    if not active:
+        best = statuses[0]
+    else:
+        best = max(active, key=lambda s: _STATUS_ORDER.index(s) if s in _STATUS_ORDER else 0)
+    db.update_candidate(candidate_id, {"status": best, "updated_at": datetime.now().isoformat()})
+
+
+@router.get("/pipeline")
+async def list_pipeline(
+    view: str = Query("candidate"),
+    _user: dict = Depends(get_current_user),
+):
+    """Return pipeline entries (candidate-job pairs) for the pipeline bar."""
+    return db.list_pipeline_entries()
+
+
+@router.patch("/pipeline/{candidate_id}/{job_id}")
+async def update_pipeline_status(
+    candidate_id: str,
+    job_id: str,
+    body: PipelineStatusUpdate,
+    _user: dict = Depends(get_current_user),
+):
+    """Update pipeline status for a specific candidate-job pair."""
+    if not db.update_candidate_job(candidate_id, job_id, {
+        "pipeline_status": body.pipeline_status,
+        "updated_at": datetime.now().isoformat(),
+    }):
+        raise HTTPException(status_code=404, detail="Candidate-job link not found")
+    _sync_candidate_global_status(candidate_id)
+    return {"status": "updated"}
 
 
 @router.post("/upload")

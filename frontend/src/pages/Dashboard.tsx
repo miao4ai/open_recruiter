@@ -26,8 +26,8 @@ import {
 } from "@mui/material";
 import { Link } from "react-router-dom";
 import { useApi } from "../hooks/useApi";
-import { listJobs, listCandidates, listEmails, listEvents } from "../lib/api";
-import type { Job, Candidate, Email, CalendarEvent, EventType } from "../types";
+import { listJobs, listCandidates, listEmails, listEvents, listPipelineEntries } from "../lib/api";
+import type { Job, Candidate, Email, CalendarEvent, EventType, PipelineEntry } from "../types";
 import { PIPELINE_COLUMNS } from "../types";
 import type { TFunction } from "i18next";
 
@@ -596,6 +596,7 @@ export default function Dashboard() {
   );
   const { data: emails } = useApi(useCallback(() => listEmails(), []));
   const { data: events } = useApi(useCallback(() => listEvents(), []));
+  const { data: pipelineEntries } = useApi(useCallback(() => listPipelineEntries(), []));
 
   const totalJobs = jobs?.length ?? 0;
   const totalCandidates = candidates?.length ?? 0;
@@ -604,10 +605,15 @@ export default function Dashboard() {
   const interviews =
     candidates?.filter((c) => c.status === "interview_scheduled").length ?? 0;
 
-  // Group candidates by status for pipeline
-  const grouped: Record<string, typeof candidates> = {};
+  // Group pipeline entries by status (per candidate-job pair)
+  const hasPipelineEntries = pipelineEntries && pipelineEntries.length > 0;
+  const grouped: Record<string, PipelineEntry[] | typeof candidates> = {};
   for (const col of PIPELINE_COLUMNS) {
-    grouped[col.key] = candidates?.filter((c) => c.status === col.key) ?? [];
+    if (hasPipelineEntries) {
+      grouped[col.key] = pipelineEntries.filter((e: PipelineEntry) => e.pipeline_status === col.key);
+    } else {
+      grouped[col.key] = candidates?.filter((c) => c.status === col.key) ?? [];
+    }
   }
 
   return (
@@ -705,28 +711,39 @@ export default function Dashboard() {
                 }}
               >
                 {grouped[col.key]?.length ? (
-                  grouped[col.key]?.map((c) => (
-                    <Paper
-                      key={c.id}
-                      variant="outlined"
-                      sx={{
-                        borderColor: "grey.100",
-                        bgcolor: "grey.50",
-                        p: 1,
-                        borderRadius: 1.5,
-                      }}
-                    >
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {c.name || t("common.unnamed")}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: "grey.500" }}>
-                        {t("dashboard.score")}:{" "}
-                        {c.match_score
-                          ? `${Math.round(c.match_score * 100)}%`
-                          : "\u2014"}
-                      </Typography>
-                    </Paper>
-                  ))
+                  grouped[col.key]?.map((item: any) => {
+                    const isPipelineEntry = "candidate_name" in item;
+                    const name = isPipelineEntry ? item.candidate_name : item.name;
+                    const score = item.match_score;
+                    const key = isPipelineEntry ? `${item.candidate_id}:${item.job_id}` : item.id;
+                    return (
+                      <Paper
+                        key={key}
+                        variant="outlined"
+                        sx={{
+                          borderColor: "grey.100",
+                          bgcolor: "grey.50",
+                          p: 1,
+                          borderRadius: 1.5,
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {name || t("common.unnamed")}
+                        </Typography>
+                        {isPipelineEntry && item.job_title && (
+                          <Typography variant="caption" sx={{ color: "primary.main", fontWeight: 500 }}>
+                            {item.job_title}{item.job_company ? ` · ${item.job_company}` : ""}
+                          </Typography>
+                        )}
+                        <Typography variant="caption" sx={{ color: "grey.500", display: "block" }}>
+                          {t("dashboard.score")}:{" "}
+                          {score
+                            ? `${Math.round(score * 100)}%`
+                            : "\u2014"}
+                        </Typography>
+                      </Paper>
+                    );
+                  })
                 ) : (
                   <Typography
                     variant="caption"

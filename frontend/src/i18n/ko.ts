@@ -593,6 +593,8 @@ const ko = {
     noCandidatesInStage: "이 단계에 후보자가 없습니다",
     outreachAllNew: "전체 신규 아웃리치",
     followUpStale: "후속 조치",
+    viewCandidate: "후보자",
+    viewEmployer: "기업",
   },
 
   // ── Context Panel ──

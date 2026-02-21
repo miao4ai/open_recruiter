@@ -594,6 +594,8 @@ const en = {
     noCandidatesInStage: "No candidates in this stage",
     outreachAllNew: "Outreach All New",
     followUpStale: "Follow-up Stale",
+    viewCandidate: "Candidate",
+    viewEmployer: "Employer",
   },
 
   // ── Context Panel ──

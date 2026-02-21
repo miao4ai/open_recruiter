@@ -238,12 +238,17 @@ if (!gotTheLock) {
   }
 
   function createWindow() {
+    const iconPath = app.isPackaged
+      ? path.join(process.resourcesPath, "images", "avartar.png")
+      : path.join(__dirname, "..", "images", "avartar.png");
+
     mainWindow = new BrowserWindow({
       width: 1400,
       height: 900,
       minWidth: 900,
       minHeight: 600,
       title: "Open Recruiter",
+      icon: iconPath,
       webPreferences: {
         preload: path.join(__dirname, "preload.js"),
         contextIsolation: true,

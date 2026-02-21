@@ -594,6 +594,8 @@ const zh = {
     noCandidatesInStage: "此阶段暂无候选人",
     outreachAllNew: "联系所有新候选人",
     followUpStale: "跟进滞留候选人",
+    viewCandidate: "候选人",
+    viewEmployer: "雇主",
   },
 
   // ── Context Panel ──

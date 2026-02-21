@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronRightOutlined } from "@mui/icons-material";
-import type { Candidate, CandidateStatus } from "../types";
+import { ChevronRightOutlined, PersonOutlined, BusinessOutlined } from "@mui/icons-material";
+import type { Candidate, CandidateStatus, PipelineEntry, PipelineViewMode } from "../types";
 import { PIPELINE_COLUMNS } from "../types";
 
 const STAGE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
@@ -16,24 +16,73 @@ const STAGE_COLORS: Record<string, { bg: string; text: string; dot: string }> = 
 
 interface Props {
   candidates: Candidate[];
+  pipelineEntries?: PipelineEntry[];
+  viewMode?: PipelineViewMode;
+  onViewModeChange?: (mode: PipelineViewMode) => void;
   activeStage: CandidateStatus | null;
   onStageClick: (stage: CandidateStatus) => void;
 }
 
-export default function PipelineBar({ candidates, activeStage, onStageClick }: Props) {
+export default function PipelineBar({
+  candidates,
+  pipelineEntries,
+  viewMode = "candidate",
+  onViewModeChange,
+  activeStage,
+  onStageClick,
+}: Props) {
   const { t } = useTranslation();
+
+  // Use pipeline entries (per-job) if available, otherwise fall back to candidates
   const counts = useMemo(() => {
     const c: Partial<Record<CandidateStatus, number>> = {};
-    for (const cand of candidates) {
-      c[cand.status] = (c[cand.status] || 0) + 1;
+    if (pipelineEntries && pipelineEntries.length > 0) {
+      for (const entry of pipelineEntries) {
+        const s = entry.pipeline_status as CandidateStatus;
+        c[s] = (c[s] || 0) + 1;
+      }
+    } else {
+      for (const cand of candidates) {
+        c[cand.status] = (c[cand.status] || 0) + 1;
+      }
     }
     return c;
-  }, [candidates]);
+  }, [candidates, pipelineEntries]);
 
-  const total = candidates.length;
+  const total = pipelineEntries && pipelineEntries.length > 0
+    ? pipelineEntries.length
+    : candidates.length;
 
   return (
     <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3 py-2">
+      {/* View mode toggle */}
+      {onViewModeChange && (
+        <div className="mr-2 flex items-center rounded-lg border border-gray-200 bg-gray-50">
+          <button
+            onClick={() => onViewModeChange("candidate")}
+            className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium transition-all ${
+              viewMode === "candidate"
+                ? "bg-white text-blue-600 shadow-sm"
+                : "text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            <PersonOutlined sx={{ fontSize: 13 }} />
+            {t("pipeline.viewCandidate")}
+          </button>
+          <button
+            onClick={() => onViewModeChange("employer")}
+            className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium transition-all ${
+              viewMode === "employer"
+                ? "bg-white text-blue-600 shadow-sm"
+                : "text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            <BusinessOutlined sx={{ fontSize: 13 }} />
+            {t("pipeline.viewEmployer")}
+          </button>
+        </div>
+      )}
+
       <span className="mr-2 text-xs font-medium text-gray-400">
         {t("pipeline.label")}
         <span className="ml-1 text-gray-300">({total})</span>

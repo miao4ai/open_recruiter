@@ -594,6 +594,8 @@ const zhTW = {
     noCandidatesInStage: "此階段尚無候選人",
     outreachAllNew: "聯繫所有新候選人",
     followUpStale: "追蹤停滯候選人",
+    viewCandidate: "候選人",
+    viewEmployer: "雇主",
   },
 
   // ── Context Panel ──
