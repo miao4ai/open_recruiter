@@ -240,7 +240,7 @@ const zh = {
     briefingContacted: "  • {{count}} 位等待回复（{{names}}{{more}}）",
     briefingInterviews: "  • {{count}} 场面试已安排",
     briefingHelp: "今天我能为您做些什么？",
-    simpleGreeting: "您好！欢迎使用 Open Recruiter — 我是 Erika，您的招聘助手。今天我能为您做些什么？",
+    simpleGreeting: "您好！👋 欢迎使用 Open Recruiter — 我是 Erika，您的招聘助手。今天我能为您做些什么？🎯",
     // Suggestions
     checkForReplies: "检查回复",
     review: "审核 {{name}}",
@@ -496,7 +496,7 @@ const zh = {
 
   // ── Job Seeker Home (Ai Chan) ──
   jobSeekerHome: {
-    greeting: "您好！我是 Ai Chan，您的求职助手。今天我能为您做些什么？\n\n我可以帮助您：\n- 根据您的个人资料搜索匹配的职位\n- 分析您与特定职位的匹配程度\n- 准备面试\n- 审阅您的简历\n- 探索职业选择",
+    greeting: "您好！👋 我是 Ai Chan，您的求职助手。今天我能为您做些什么？🚀\n\n我可以帮助您：\n- 🔍 根据您的个人资料搜索匹配的职位\n- 🎯 分析您与特定职位的匹配程度\n- 💬 准备面试\n- 📄 审阅您的简历\n- 🌟 探索职业选择",
     noPastConversations: "暂无历史对话",
     newChat: "新建对话",
     aiChan: "Ai Chan",

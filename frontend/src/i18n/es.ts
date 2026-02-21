@@ -240,7 +240,7 @@ const es = {
     briefingContacted: "  • {{count}} esperando respuesta ({{names}}{{more}})",
     briefingInterviews: "  • {{count}} entrevistas programadas",
     briefingHelp: "¿En qué puedo ayudarle hoy?",
-    simpleGreeting: "¡Hola! Bienvenido/a a Open Recruiter — soy Erika, su asistente de reclutamiento. ¿En qué puedo ayudarle hoy?",
+    simpleGreeting: "¡Hola! 👋 Bienvenido/a a Open Recruiter — soy Erika, su asistente de reclutamiento. ¿En qué puedo ayudarle hoy? 🎯",
     // Suggestions
     checkForReplies: "Verificar respuestas",
     review: "Revisar {{name}}",
@@ -496,7 +496,7 @@ const es = {
 
   // ── Job Seeker Home (Ai Chan) ──
   jobSeekerHome: {
-    greeting: "¡Hola! Soy Ai Chan, tu asistente de búsqueda de empleo. ¿En qué puedo ayudarte hoy?\n\nPuedo ayudarte con cosas como:\n- Buscar empleos que coincidan con tu perfil\n- Analizar qué tan bien coincides con un puesto específico\n- Prepararte para entrevistas\n- Revisar tu currículum\n- Explorar opciones de carrera",
+    greeting: "¡Hola! 👋 Soy Ai Chan, tu asistente de búsqueda de empleo. ¿En qué puedo ayudarte hoy? 🚀\n\nPuedo ayudarte con cosas como:\n- 🔍 Buscar empleos que coincidan con tu perfil\n- 🎯 Analizar qué tan bien coincides con un puesto específico\n- 💬 Prepararte para entrevistas\n- 📄 Revisar tu currículum\n- 🌟 Explorar opciones de carrera",
     noPastConversations: "No hay conversaciones anteriores",
     newChat: "Nueva conversación",
     aiChan: "Ai Chan",

@@ -128,6 +128,7 @@ Guidelines:
 - When recommending actions, explain your reasoning briefly
 - You can analyze match scores, skills gaps, and suggest which candidates to prioritize
 - Support both English and Chinese — respond in the same language the user writes in
+- Use emojis naturally in your replies to make conversations lively and friendly (e.g. 👋 🎯 ✅ 📧 📊 💡 🔥 ⭐ 🤝 📝)
 """
 
 CHAT_SYSTEM_WITH_ACTIONS = """\
@@ -147,6 +148,7 @@ Guidelines:
 - When recommending actions, explain your reasoning briefly
 - You can analyze match scores, skills gaps, and suggest which candidates to prioritize
 - Support both English and Chinese — respond in the same language the user writes in
+- Use emojis naturally in your replies to make conversations lively and friendly (e.g. 👋 🎯 ✅ 📧 📊 💡 🔥 ⭐ 🤝 📝)
 
 IMPORTANT — you MUST respond with valid JSON only. Use this structure:
 
@@ -450,6 +452,7 @@ Guidelines:
 - Suggest concrete, actionable next steps
 - Support both English and Chinese — respond in the same language the user writes in
 - Only reference the "Your Profile", "Saved Jobs", and "Recent Search Results" data shown above.
+- Use emojis naturally in your replies to be warm and encouraging (e.g. 👋 🎯 ✅ 💪 🌟 💼 📄 🎉 💡 🚀)
 
 IMPORTANT — you MUST respond with valid JSON only. Use this structure:
 

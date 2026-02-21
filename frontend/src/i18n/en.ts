@@ -240,7 +240,7 @@ const en = {
     briefingContacted: "  • {{count}} awaiting reply ({{names}}{{more}})",
     briefingInterviews: "  • {{count}} interviews scheduled",
     briefingHelp: "How can I help you today?",
-    simpleGreeting: "Hi! Welcome to Open Recruiter — I'm Erika, your recruiting assistant. How can I help you today?",
+    simpleGreeting: "Hi! 👋 Welcome to Open Recruiter — I'm Erika, your recruiting assistant. How can I help you today? 🎯",
     // Suggestions
     checkForReplies: "Check for replies",
     review: "Review {{name}}",
@@ -496,7 +496,7 @@ const en = {
 
   // ── Job Seeker Home (Ai Chan) ──
   jobSeekerHome: {
-    greeting: "Hi there! I'm Ai Chan, your Job Seeker Assistant. How can I help you today?\n\nI can help you with things like:\n- Searching for matching jobs based on your profile\n- Analyzing how well you match a specific position\n- Preparing for interviews\n- Reviewing your resume\n- Exploring career options",
+    greeting: "Hi there! 👋 I'm Ai Chan, your Job Seeker Assistant. How can I help you today? 🚀\n\nI can help you with things like:\n- 🔍 Searching for matching jobs based on your profile\n- 🎯 Analyzing how well you match a specific position\n- 💬 Preparing for interviews\n- 📄 Reviewing your resume\n- 🌟 Exploring career options",
     noPastConversations: "No past conversations",
     newChat: "New Chat",
     aiChan: "Ai Chan",

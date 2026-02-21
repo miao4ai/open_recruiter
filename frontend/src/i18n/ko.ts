@@ -239,7 +239,7 @@ const ko = {
     briefingContacted: "  • {{count}}명 답변 대기 ({{names}}{{more}})",
     briefingInterviews: "  • {{count}}건의 면접 예정",
     briefingHelp: "오늘 무엇을 도와드릴까요?",
-    simpleGreeting: "안녕하세요! Open Recruiter에 오신 것을 환영합니다 — 저는 에리카, 채용 어시스턴트입니다. 무엇을 도와드릴까요?",
+    simpleGreeting: "안녕하세요! 👋 Open Recruiter에 오신 것을 환영합니다 — 저는 에리카, 채용 어시스턴트입니다. 무엇을 도와드릴까요? 🎯",
     // Suggestions
     checkForReplies: "답변 확인",
     review: "{{name}} 검토",
@@ -495,7 +495,7 @@ const ko = {
 
   // ── Job Seeker Home (Ai Chan) ──
   jobSeekerHome: {
-    greeting: "안녕하세요! 저는 아이, 구직 어시스턴트입니다. 오늘 무엇을 도와드릴까요?\n\n다음과 같은 것들을 도와드릴 수 있습니다:\n- 프로필에 맞는 채용공고 검색\n- 특정 포지션 매칭 분석\n- 면접 준비\n- 이력서 검토\n- 커리어 옵션 탐색",
+    greeting: "안녕하세요! 👋 저는 아이, 구직 어시스턴트입니다. 오늘 무엇을 도와드릴까요? 🚀\n\n다음과 같은 것들을 도와드릴 수 있습니다:\n- 🔍 프로필에 맞는 채용공고 검색\n- 🎯 특정 포지션 매칭 분석\n- 💬 면접 준비\n- 📄 이력서 검토\n- 🌟 커리어 옵션 탐색",
     noPastConversations: "이전 대화가 없습니다",
     newChat: "새 대화",
     aiChan: "아이",

@@ -240,7 +240,7 @@ const zhTW = {
     briefingContacted: "  \u2022 {{count}} 位等待回覆（{{names}}{{more}}）",
     briefingInterviews: "  \u2022 {{count}} 場面試已排定",
     briefingHelp: "今天我能為您做些什麼？",
-    simpleGreeting: "您好！歡迎使用 Open Recruiter — 我是 Erika，您的招募助理。今天我能為您做些什麼？",
+    simpleGreeting: "您好！👋 歡迎使用 Open Recruiter — 我是 Erika，您的招募助理。今天我能為您做些什麼？🎯",
     // Suggestions
     checkForReplies: "檢查回覆",
     review: "審核 {{name}}",
@@ -496,7 +496,7 @@ const zhTW = {
 
   // ── Job Seeker Home (Ai Chan) ──
   jobSeekerHome: {
-    greeting: "您好！我是 Ai Chan，您的求職助理。今天我能為您做些什麼？\n\n我可以協助您：\n- 根據您的個人檔案搜尋符合的職缺\n- 分析您與特定職位的配對程度\n- 準備面試\n- 審閱您的履歷\n- 探索職涯選項",
+    greeting: "您好！👋 我是 Ai Chan，您的求職助理。今天我能為您做些什麼？🚀\n\n我可以協助您：\n- 🔍 根據您的個人檔案搜尋符合的職缺\n- 🎯 分析您與特定職位的配對程度\n- 💬 準備面試\n- 📄 審閱您的履歷\n- 🌟 探索職涯選項",
     noPastConversations: "尚無歷史對話",
     newChat: "新增對話",
     aiChan: "Ai Chan",

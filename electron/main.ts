@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog } from "electron";
+import { app, BrowserWindow, Menu, dialog, nativeImage } from "electron";
 import { spawn, ChildProcess, execSync } from "child_process";
 import * as path from "path";
 import * as http from "http";
@@ -241,6 +241,7 @@ if (!gotTheLock) {
     const iconPath = app.isPackaged
       ? path.join(process.resourcesPath, "images", "avartar.png")
       : path.join(__dirname, "..", "images", "avartar.png");
+    const appIcon = nativeImage.createFromPath(iconPath);
 
     mainWindow = new BrowserWindow({
       width: 1400,
@@ -248,7 +249,7 @@ if (!gotTheLock) {
       minWidth: 900,
       minHeight: 600,
       title: "Open Recruiter",
-      icon: iconPath,
+      icon: appIcon,
       webPreferences: {
         preload: path.join(__dirname, "preload.js"),
         contextIsolation: true,

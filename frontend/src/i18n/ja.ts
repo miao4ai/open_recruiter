@@ -239,7 +239,7 @@ const ja = {
     briefingContacted: "  • {{count}}名が返信待ち（{{names}}{{more}}）",
     briefingInterviews: "  • {{count}}件の面接予定",
     briefingHelp: "今日は何をお手伝いしましょうか？",
-    simpleGreeting: "こんにちは！Open Recruiterへようこそ — 私はエリカ、あなたの採用アシスタントです。何かお手伝いできることはありますか？",
+    simpleGreeting: "こんにちは！👋 Open Recruiterへようこそ — 私はエリカ、あなたの採用アシスタントです。何かお手伝いできることはありますか？🎯",
     // Suggestions
     checkForReplies: "返信を確認",
     review: "{{name}}をレビュー",
@@ -495,7 +495,7 @@ const ja = {
 
   // ── Job Seeker Home (Ai Chan) ──
   jobSeekerHome: {
-    greeting: "こんにちは！アイです、あなたの就職活動アシスタントです。今日は何をお手伝いしましょうか？\n\n以下のことをお手伝いできます：\n- あなたのプロフィールに合った求人を検索\n- 特定のポジションとのマッチ度分析\n- 面接対策\n- 履歴書の添削\n- キャリアオプションの探索",
+    greeting: "こんにちは！👋 アイです、あなたの就職活動アシスタントです。今日は何をお手伝いしましょうか？🚀\n\n以下のことをお手伝いできます：\n- 🔍 あなたのプロフィールに合った求人を検索\n- 🎯 特定のポジションとのマッチ度分析\n- 💬 面接対策\n- 📄 履歴書の添削\n- 🌟 キャリアオプションの探索",
     noPastConversations: "過去の会話はありません",
     newChat: "新しいチャット",
     aiChan: "アイ",
