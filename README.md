@@ -11,11 +11,12 @@
 <p align="center">
   <a href="#readme"><img src="https://img.shields.io/badge/README-blue?style=for-the-badge" /></a>
   <a href="document/USER_MANUAL.md"><img src="https://img.shields.io/badge/USER_MANUAL-green?style=for-the-badge" /></a>
+  <a href="document/release.md"><img src="https://img.shields.io/badge/RELEASE_NOTES-orange?style=for-the-badge" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-MIT-purple?style=for-the-badge" /></a>
 </p>
 <p align="center">
   <img src="https://img.shields.io/badge/BUILD-PASSING-brightgreen" />
-  <img src="https://img.shields.io/badge/RELEASE-V1.1.0-blue" />
+  <img src="https://img.shields.io/badge/RELEASE-V1.2.0-blue" />
   <img src="https://img.shields.io/badge/PYTHON-3.11+-yellow" />
   <img src="https://img.shields.io/badge/LICENSE-MIT-purple" />
 </p>
@@ -300,23 +301,15 @@ FastAPI Backend
     └── IMAP/SMTP ─── Email sending and reply detection
 ```
 
-## Release History
+## Releases
 
-### V1.0.0 (2026-02-19)
+| Version | Date | Highlights |
+|---------|------|------------|
+| [V1.2.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.2.0) | 2026-02-21 | Per-job pipeline status, Candidate/Jobs toggle, emoji picker |
+| [V1.1.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.1.0) | 2026-02-20 | i18n (6 languages), ONNX Runtime migration, CI/CD, calendar overhaul |
+| [V1.0.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.0.0) | 2026-02-20 | Initial release |
 
-- Initial public release
-- Job management with PDF/DOCX upload and LLM auto-extraction
-- Candidate management with resume parsing and duplicate detection
-- AI match analysis: vector similarity + LLM deep analysis with streaming
-- Email outreach with draft/approve/send workflow and IMAP reply tracking
-- Pipeline Kanban board with drag-and-drop
-- Bot Chat (Erika Chan) with multi-step workflow execution
-- Calendar for interviews, follow-ups, and screening events
-- Slack integration for receiving resumes from channels
-- Background autonomous agents: Auto-Match, Inbox Scanner, Auto Follow-Up, Pipeline Cleanup
-- Dual-role support: Recruiter and Job Seeker
-- Windows desktop app (.exe installer via Electron + NSIS)
-- macOS / Linux one-line installer script
+For detailed release notes, see [document/release.md](document/release.md).
 
 ## License
 

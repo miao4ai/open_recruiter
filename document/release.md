@@ -1,0 +1,74 @@
+# Release Notes
+
+Detailed release notes for each version of Open Recruiter.
+
+Download installers from the [GitHub Releases](https://github.com/miao4ai/open_recruiter/releases) page.
+
+---
+
+## V1.2.0 (2026-02-21)
+
+### Per-Job Pipeline Status
+- Each candidate-job pair now has its own pipeline stage (e.g., "replied" for Job A, "contacted" for Job B)
+- New `candidate_jobs.pipeline_status` column with automatic data migration from legacy global status
+- Backend fallback: when `candidate_jobs` is empty, falls back to legacy `candidates.job_id` join
+
+### Candidate / Jobs Toggle
+- Pipeline bar now features a **Candidate / Jobs** segmented toggle
+- **Candidate view** — counts candidates per stage (original behavior)
+- **Jobs view** — counts unique jobs per stage; clicking a stage shows job cards with expandable candidate lists
+- Dashboard Kanban also supports the toggle with job-grouped cards
+
+### New API Endpoints
+- `GET /candidates/pipeline?view=candidate|jobs` — returns pipeline entries with candidate and job details
+- `PATCH /candidates/pipeline/{candidate_id}/{job_id}` — updates per-job pipeline status
+
+### Chat Enhancements
+- Emoji picker added to chat input
+
+### Bug Fixes
+- Fixed Windows runtime icon (desktop shortcut and taskbar now show correct icon)
+- Fixed `electron-builder.json` to use `.ico` format for Windows exe icon embedding
+
+---
+
+## V1.1.0 (2026-02-20)
+
+### Internationalization
+- Added Chinese (Simplified), Chinese (Traditional), Japanese, Korean, Spanish translations
+- Full i18n coverage across all pages and components using i18next
+
+### Calendar Overhaul
+- Replaced React Big Calendar with a custom calendar component
+- Improved CSS styling and event layout
+
+### Performance & Size Optimization
+- Migrated from PyTorch to ONNX Runtime for embeddings — installer size reduced from ~1.3 GB to ~500 MB
+- Faster startup with lighter runtime dependencies
+
+### CI/CD
+- GitHub Actions release workflow (`release.yml`) — triggered by `v*` tags or manual `workflow_dispatch`
+- Automated Windows installer builds with electron-builder
+
+### Bug Fixes
+- Backend startup diagnostics and resilience improvements
+- Fixed system Python detection for ONNX export in CI
+- Windows installer icon now displays correctly (NSIS installer)
+
+---
+
+## V1.0.0 (2026-02-20)
+
+### Initial Release
+- **Job Management** — create, edit, delete job postings with PDF/DOCX upload and LLM auto-extraction
+- **Candidate Management** — resume upload (PDF/DOCX/TXT) with auto-extraction, duplicate detection, inline editing
+- **AI Match Analysis** — vector similarity (ChromaDB + BAAI/bge-small-en-v1.5) + LLM deep analysis with streaming
+- **Email Outreach** — draft/approve/send workflow, resume attachments, per-candidate email history, IMAP reply tracking
+- **Pipeline Kanban** — visual board (New → Contacted → Replied → Screening → Interview → Offer → Hired) with drag-and-drop
+- **Bot Chat (Erika Chan)** — context-aware AI assistant with multi-step workflow execution and SSE streaming
+- **Calendar** — schedule interviews, follow-ups, offers, and screening events
+- **Slack Integration** — receive resumes from channels, auto-parse, PII filtering, top-3 job match suggestions
+- **Background Agents** — Auto-Match, Inbox Scanner, Auto Follow-Up, Pipeline Cleanup (APScheduler)
+- **Dual-Role Support** — Recruiter and Job Seeker modes
+- **Desktop App** — Windows installer via Electron + NSIS
+- **One-Line Installer** — macOS / Linux setup script
