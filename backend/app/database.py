@@ -868,7 +868,11 @@ def delete_candidate_job(candidate_id: str, job_id: str) -> bool:
 
 
 def list_pipeline_entries() -> list[dict]:
-    """Return all candidate-job pairs with candidate+job info for pipeline views."""
+    """Return all candidate-job pairs with candidate+job info for pipeline views.
+
+    Tries candidate_jobs first; falls back to the legacy candidates.job_id column
+    so the Jobs view works even for databases that haven't fully migrated yet.
+    """
     conn = get_conn()
     rows = conn.execute("""
         SELECT cj.candidate_id, cj.job_id, cj.match_score, cj.pipeline_status,
@@ -879,6 +883,19 @@ def list_pipeline_entries() -> list[dict]:
         INNER JOIN jobs j ON cj.job_id = j.id
         ORDER BY cj.match_score DESC
     """).fetchall()
+
+    if not rows:
+        # Fallback: build entries from candidates that have a legacy job_id link
+        rows = conn.execute("""
+            SELECT c.id as candidate_id, c.job_id, c.match_score, c.status as pipeline_status,
+                   c.name as candidate_name, c.current_title as candidate_title,
+                   j.title as job_title, j.company as job_company
+            FROM candidates c
+            INNER JOIN jobs j ON c.job_id = j.id
+            WHERE c.job_id != '' AND c.job_id IS NOT NULL
+            ORDER BY c.match_score DESC
+        """).fetchall()
+
     conn.close()
     return [dict(r) for r in rows]
 

@@ -54,11 +54,13 @@ export default function PipelineBar({
           c[s] = (c[s] || 0) + 1;
         }
       }
-    } else {
+    } else if (viewMode !== "jobs") {
+      // Candidate view fallback: count from candidates array
       for (const cand of candidates) {
         c[cand.status] = (c[cand.status] || 0) + 1;
       }
     }
+    // Jobs view with no entries → all counts stay 0
     return c;
   }, [candidates, pipelineEntries, viewMode]);
 
@@ -70,7 +72,8 @@ export default function PipelineBar({
       }
       return pipelineEntries.length;
     }
-    return candidates.length;
+    // Jobs view with no entries → total 0; Candidate view → candidate count
+    return viewMode === "jobs" ? 0 : candidates.length;
   }, [pipelineEntries, candidates, viewMode]);
 
   return (
