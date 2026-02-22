@@ -18,6 +18,20 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Regex to strip trailing ```json {...} ``` blocks the LLM sometimes embeds inside the message
+import re
+_TRAILING_JSON_BLOCK_RE = re.compile(
+    r'\s*```(?:json)?\s*\{[^`]*"message"\s*:[^`]*\}\s*```\s*$',
+    re.DOTALL,
+)
+
+
+def _strip_embedded_json(text: str) -> str:
+    """Remove trailing markdown JSON code blocks that echo the response structure."""
+    if "```" in text and '"message"' in text:
+        return _TRAILING_JSON_BLOCK_RE.sub("", text).rstrip()
+    return text
+
 
 @router.post("/run")
 async def run_agent(req: AgentRequest, _user: dict = Depends(require_recruiter)):
@@ -176,6 +190,9 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
                     context_hint_data = _parsed.get("context_hint")
         except Exception:
             pass
+
+    # Strip trailing JSON code blocks the LLM sometimes embeds inside the message
+    reply_text = _strip_embedded_json(reply_text)
 
     # Process actions using shared helper
     response: dict = {"reply": reply_text, "session_id": session_id, "blocks": [], "suggestions": [], "context_hint": context_hint_data}
@@ -497,6 +514,9 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
                             context_hint_data = _parsed.get("context_hint")
                 except Exception:
                     pass
+
+            # Strip trailing JSON code blocks the LLM sometimes embeds inside the message
+            reply_text = _strip_embedded_json(reply_text)
 
             # Process actions (same as chat_endpoint)
             response: dict = {

@@ -831,15 +831,21 @@ export default function Chat() {
       content: text, created_at: new Date().toISOString(),
     }]);
 
-    // If a reply looks like raw JSON with a "message" field, extract just the text
+    // If a reply looks like raw JSON with a "message" field, extract just the text.
+    // Also strip trailing ```json {...} ``` blocks the LLM sometimes embeds in the message.
     const cleanReply = (text: string): string => {
-      if (text && text.trimStart().startsWith("{") && text.includes('"message"')) {
+      let cleaned = text;
+      if (cleaned && cleaned.trimStart().startsWith("{") && cleaned.includes('"message"')) {
         try {
-          const parsed = JSON.parse(text);
-          if (typeof parsed.message === "string") return parsed.message;
+          const parsed = JSON.parse(cleaned);
+          if (typeof parsed.message === "string") cleaned = parsed.message;
         } catch { /* not JSON, use as-is */ }
       }
-      return text;
+      // Strip trailing markdown JSON blocks that echo the response structure
+      if (cleaned.includes("```") && cleaned.includes('"message"')) {
+        cleaned = cleaned.replace(/\s*```(?:json)?\s*\{[\s\S]*?"message"\s*:[\s\S]*?\}\s*```\s*$/, "").trimEnd();
+      }
+      return cleaned;
     };
 
     // Accumulate streamed JSON and extract the "message" field progressively
@@ -847,10 +853,15 @@ export default function Chat() {
     const extractMessage = (raw: string): string => {
       const match = raw.match(/"message"\s*:\s*"((?:[^"\\]|\\.)*)(?:"|$)/);
       if (!match) return "";
-      return match[1]
+      let msg = match[1]
         .replace(/\\n/g, "\n")
         .replace(/\\"/g, '"')
         .replace(/\\\\/g, "\\");
+      // Strip trailing JSON code blocks embedded inside the message during streaming
+      if (msg.includes("```") && msg.includes('"message"')) {
+        msg = msg.replace(/\s*```(?:json)?\s*\{[\s\S]*?"message"\s*:[\s\S]*$/, "").trimEnd();
+      }
+      return msg;
     };
 
     try {
