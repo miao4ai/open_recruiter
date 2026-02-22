@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   SendOutlined, DeleteOutline, AddOutlined, ChatBubbleOutlineOutlined, CloseOutlined, UploadOutlined,
   WorkOutlineOutlined, LocationOnOutlined, CheckCircleOutlined, WarningAmberOutlined,
-  BookmarkBorderOutlined, SearchOutlined,
+  BookmarkBorderOutlined, SearchOutlined, FavoriteBorderOutlined, FavoriteOutlined,
+  EmojiEmotionsOutlined,
 } from "@mui/icons-material";
 import { CircularProgress, LinearProgress } from "@mui/material";
 import EmojiPickerButton from "../components/EmojiPickerButton";
@@ -17,6 +18,8 @@ import {
   deleteChatSession,
   saveChatMessage,
   uploadResumeForProfile,
+  seekerSaveJob,
+  seekerGetSavedUrls,
 } from "../lib/api";
 import type { ChatMessage, ChatSession, ChatResponse, JobSearchResultsBlock, JobMatchResultBlock, MessageBlock, Suggestion } from "../types";
 
@@ -57,9 +60,13 @@ function makeGreeting(t: TFunction): RichMessage {
 function JobSearchResultsCard({
   block,
   onSelectJob,
+  onSaveJob,
+  savedJobKeys,
 }: {
   block: JobSearchResultsBlock;
   onSelectJob: (index: number, title: string, company: string) => void;
+  onSaveJob: (job: JobSearchResultsBlock["jobs"][number]) => void;
+  savedJobKeys: Set<string>;
 }) {
   const { t } = useTranslation();
   return (
@@ -113,6 +120,26 @@ function JobSearchResultsCard({
                 )}
               </div>
               <div className="ml-3 flex shrink-0 flex-col items-end gap-1.5">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onSaveJob(job); }}
+                  className={`rounded-lg p-1 transition-colors ${
+                    savedJobKeys.has(job.url || `${job.title}||${job.company}`)
+                      ? "text-red-500"
+                      : "text-gray-400 hover:text-red-400"
+                  }`}
+                  title={
+                    savedJobKeys.has(job.url || `${job.title}||${job.company}`)
+                      ? t("jobSeekerHome.jobSaved")
+                      : t("jobSeekerHome.saveJobDirect")
+                  }
+                  disabled={savedJobKeys.has(job.url || `${job.title}||${job.company}`)}
+                >
+                  {savedJobKeys.has(job.url || `${job.title}||${job.company}`) ? (
+                    <FavoriteOutlined className="h-4 w-4" />
+                  ) : (
+                    <FavoriteBorderOutlined className="h-4 w-4" />
+                  )}
+                </button>
                 <button
                   onClick={() => onSelectJob(job.index, job.title, job.company || "")}
                   className="rounded-lg bg-pink-500 px-3 py-1 text-xs font-medium text-white hover:bg-pink-600"
@@ -365,6 +392,10 @@ export default function JobSeekerHome() {
   const [messages, setMessages] = useState<RichMessage[]>([]);
   const [started, setStarted] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [encouragementMode, setEncouragementMode] = useState<boolean>(() =>
+    localStorage.getItem("or_encouragement_mode") === "true"
+  );
+  const [savedJobKeys, setSavedJobKeys] = useState<Set<string>>(new Set());
   const didAutoSelect = useRef(false);
   const loadedSessionRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -403,6 +434,28 @@ export default function JobSeekerHome() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Load saved job keys on mount for heart icon state
+  useEffect(() => {
+    seekerGetSavedUrls()
+      .then((data) => {
+        const keys = new Set<string>();
+        data.urls.forEach((url) => { if (url) keys.add(url); });
+        data.title_company_pairs.forEach((p) => {
+          keys.add(`${p.title}||${p.company}`);
+        });
+        setSavedJobKeys(keys);
+      })
+      .catch(() => {}); // silent fail — heart icons just show unsaved
+  }, []);
+
+  const handleToggleEncouragement = () => {
+    setEncouragementMode((prev) => {
+      const next = !prev;
+      localStorage.setItem("or_encouragement_mode", String(next));
+      return next;
+    });
+  };
+
   /* ── Send ─────────────────────────────────────────────────────────── */
 
   const handleSend = async (overrideMessage?: string) => {
@@ -423,7 +476,7 @@ export default function JobSeekerHome() {
     setMessages((prev) => [...prev, tempUser]);
 
     try {
-      const res: ChatResponse = await sendChatMessage(userMessage, activeSessionId ?? undefined);
+      const res: ChatResponse = await sendChatMessage(userMessage, activeSessionId ?? undefined, encouragementMode);
       if (!activeSessionId && res.session_id) {
         loadedSessionRef.current = res.session_id;
         setActiveSessionId(res.session_id);
@@ -574,6 +627,50 @@ export default function JobSeekerHome() {
     handleSend(t("jobSeekerHome.promptSearchMore"));
   };
 
+  const handleDirectSaveJob = async (job: JobSearchResultsBlock["jobs"][number]) => {
+    const key = job.url || `${job.title}||${job.company}`;
+    if (savedJobKeys.has(key)) return;
+
+    try {
+      await seekerSaveJob({
+        title: job.title,
+        company: job.company || "",
+        location: job.location || "",
+        url: job.url || "",
+        snippet: job.snippet || "",
+        salary_range: job.salary_range || "",
+        source: job.source || "",
+      });
+      setSavedJobKeys((prev) => {
+        const next = new Set(prev);
+        if (job.url) next.add(job.url);
+        next.add(`${job.title}||${job.company}`);
+        return next;
+      });
+      // Show brief success feedback as assistant message
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: "save-" + Date.now(),
+          user_id: "",
+          role: "assistant",
+          content: t("jobSeekerHome.jobSavedSuccess", { title: job.title }),
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number } };
+      if (axiosErr?.response?.status === 409) {
+        setSavedJobKeys((prev) => {
+          const next = new Set(prev);
+          if (job.url) next.add(job.url);
+          next.add(`${job.title}||${job.company}`);
+          return next;
+        });
+      }
+    }
+  };
+
   /* ── Render blocks for a message ─────────────────────────────────── */
 
   const renderBlocks = (msg: RichMessage) => {
@@ -585,6 +682,8 @@ export default function JobSeekerHome() {
             key={`block-${i}`}
             block={block as JobSearchResultsBlock}
             onSelectJob={handleSelectJob}
+            onSaveJob={handleDirectSaveJob}
+            savedJobKeys={savedJobKeys}
           />
         );
       }
@@ -650,12 +749,26 @@ export default function JobSeekerHome() {
             <AiChanAvatar />
             <h2 className="text-lg font-semibold">{t("jobSeekerHome.aiChan")}</h2>
           </div>
-          <button
-            onClick={handleClearAll}
-            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-          >
-            <DeleteOutline className="h-3.5 w-3.5" /> {t("jobSeekerHome.clearAll")}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleToggleEncouragement}
+              className={`inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                encouragementMode
+                  ? "border-pink-400 bg-pink-50 text-pink-600"
+                  : "border-gray-300 text-gray-500 hover:bg-gray-50"
+              }`}
+              title={t("jobSeekerHome.encouragementModeTooltip")}
+            >
+              <EmojiEmotionsOutlined className="h-3.5 w-3.5" />
+              {t("jobSeekerHome.encouragementMode")}
+            </button>
+            <button
+              onClick={handleClearAll}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+            >
+              <DeleteOutline className="h-3.5 w-3.5" /> {t("jobSeekerHome.clearAll")}
+            </button>
+          </div>
         </div>
 
         {/* Messages */}

@@ -117,9 +117,11 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
     user_role = current_user.get("role", "recruiter")
     log.info("Chat request from user %s with role '%s'", user_id, user_role)
     if user_role == "job_seeker":
-        from app.prompts import CHAT_SYSTEM_JOB_SEEKER
+        from app.prompts import CHAT_SYSTEM_JOB_SEEKER, ENCOURAGEMENT_ADDENDUM
         context = _build_job_seeker_context(user_id, session_id=session_id)
         system_prompt = CHAT_SYSTEM_JOB_SEEKER.format(context=context)
+        if req.encouragement_mode:
+            system_prompt += ENCOURAGEMENT_ADDENDUM
     else:
         context = _build_chat_context(user_id, current_message=req.message)
         system_prompt = CHAT_SYSTEM_WITH_ACTIONS.format(context=context)
@@ -371,9 +373,11 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
 
     # Build prompt
     if user_role == "job_seeker":
-        from app.prompts import CHAT_SYSTEM_JOB_SEEKER
+        from app.prompts import CHAT_SYSTEM_JOB_SEEKER, ENCOURAGEMENT_ADDENDUM
         context = _build_job_seeker_context(user_id, session_id=session_id)
         system_prompt = CHAT_SYSTEM_JOB_SEEKER.format(context=context)
+        if req.encouragement_mode:
+            system_prompt += ENCOURAGEMENT_ADDENDUM
     else:
         context = _build_chat_context(user_id, current_message=req.message)
         system_prompt = CHAT_SYSTEM_WITH_ACTIONS.format(context=context)

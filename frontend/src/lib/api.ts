@@ -219,8 +219,8 @@ export const runAgent = (instruction: string) =>
   api.post("/agent/run", { instruction }).then((r) => r.data);
 
 // ── Chat ─────────────────────────────────────────────────────────────────
-export const sendChatMessage = (message: string, session_id?: string) =>
-  api.post<ChatResponse>("/agent/chat", { message, session_id }).then((r) => r.data);
+export const sendChatMessage = (message: string, session_id?: string, encouragement_mode?: boolean) =>
+  api.post<ChatResponse>("/agent/chat", { message, session_id, encouragement_mode: encouragement_mode ?? false }).then((r) => r.data);
 
 /**
  * SSE streaming chat. Streams text tokens via onToken callback,
@@ -232,13 +232,14 @@ export async function streamChatMessage(
   session_id: string | undefined,
   onToken: (text: string) => void,
   onWorkflowStep?: (step: WorkflowStepEvent) => void,
+  encouragement_mode?: boolean,
 ): Promise<ChatResponse> {
   try {
-    return await _streamSSE(message, session_id, onToken, onWorkflowStep);
+    return await _streamSSE(message, session_id, onToken, onWorkflowStep, encouragement_mode);
   } catch (err) {
     // Fallback: try the non-streaming endpoint
     console.warn("Streaming failed, falling back to sync chat:", err);
-    return sendChatMessage(message, session_id);
+    return sendChatMessage(message, session_id, encouragement_mode);
   }
 }
 
@@ -247,6 +248,7 @@ function _streamSSE(
   session_id: string | undefined,
   onToken: (text: string) => void,
   onWorkflowStep?: (step: WorkflowStepEvent) => void,
+  encouragement_mode?: boolean,
 ): Promise<ChatResponse> {
   return new Promise((resolve, reject) => {
     const token = getToken();
@@ -256,7 +258,7 @@ function _streamSSE(
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ message, session_id: session_id || "" }),
+      body: JSON.stringify({ message, session_id: session_id || "", encouragement_mode: encouragement_mode ?? false }),
     })
       .then((resp) => {
         if (!resp.ok) {
@@ -378,6 +380,17 @@ export const seekerUploadJd = (file: File) => {
 };
 export const seekerDeleteJob = (id: string) =>
   api.delete(`/seeker/jobs/${id}`).then((r) => r.data);
+export const seekerSaveJob = (data: {
+  title: string;
+  company?: string;
+  location?: string;
+  url?: string;
+  snippet?: string;
+  salary_range?: string;
+  source?: string;
+}) => api.post<Job>("/seeker/jobs", data).then((r) => r.data);
+export const seekerGetSavedUrls = () =>
+  api.get<{ urls: string[]; title_company_pairs: { title: string; company: string }[] }>("/seeker/jobs/saved-urls").then((r) => r.data);
 
 // ── Job Seeker Profile ──────────────────────────────────────────────────
 export const getMyProfile = () =>

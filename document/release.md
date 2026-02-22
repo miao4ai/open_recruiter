@@ -6,6 +6,34 @@ Download installers from the [GitHub Releases](https://github.com/miao4ai/open_r
 
 ---
 
+## V1.3.0 (2026-02-22)
+
+### Encouragement Mode (Job Seeker)
+- New **Cheer Mode** toggle in the Ai Chan chat header
+- When enabled, Ai Chan weaves motivational phrases into every response (multilingual: Chinese, English, Japanese, Korean)
+- Preference persists across page reloads via localStorage; passed as a request parameter — no database migration required
+
+### Favorite Jobs from Search Results (Job Seeker)
+- Heart icon on each job search result card — click to save directly to My Jobs
+- Direct REST API save (`POST /seeker/jobs`) bypasses the LLM chat flow for instant saves
+- Duplicate detection by URL or title+company (returns 409 if already saved)
+- Filled red heart indicates saved state; saved keys loaded on mount via `GET /seeker/jobs/saved-urls`
+- Success feedback shown as an inline assistant message
+
+### Chat Tone Fix (Recruiter)
+- Added professional boundary rules to `CHAT_SYSTEM` and `CHAT_SYSTEM_WITH_ACTIONS` prompts
+- Prevents flirtatious or off-topic responses; enforces `context_hint: null` for casual messages
+- Emoji usage capped at 1-2 per message
+
+### New API Endpoints
+- `POST /seeker/jobs` — directly save a job from search results (title, company, location, url, snippet, salary_range, source)
+- `GET /seeker/jobs/saved-urls` — returns saved job identifiers for heart icon state
+
+### i18n
+- Added 7 new translation keys across all 6 locales (en, zh, ja, ko, zh-TW, es) for encouragement mode and favorite jobs
+
+---
+
 ## V1.2.0 (2026-02-21)
 
 ### Per-Job Pipeline Status

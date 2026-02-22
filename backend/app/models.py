@@ -236,6 +236,7 @@ class AgentEvent(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     session_id: str = ""
+    encouragement_mode: bool = False
 
 
 # ── Activity Log ──────────────────────────────────────────────────────────

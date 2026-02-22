@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from pydantic import BaseModel
 
 from app import database as db
 from app.auth import get_current_user
@@ -59,6 +60,69 @@ async def get_seeker_job(
     if not job or job["user_id"] != current_user["id"]:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+class SeekerJobSaveRequest(BaseModel):
+    title: str
+    company: str = ""
+    location: str = ""
+    url: str = ""
+    snippet: str = ""
+    salary_range: str = ""
+    source: str = ""
+
+
+@router.post("/jobs")
+async def save_seeker_job(
+    req: SeekerJobSaveRequest,
+    current_user: dict = Depends(_require_job_seeker),
+):
+    """Directly save a job from search results to the seeker's job list."""
+    user_id = current_user["id"]
+
+    # Check for duplicates by URL or title+company
+    existing = db.list_seeker_jobs(user_id)
+    for sj in existing:
+        if req.url and sj.get("source_url") == req.url:
+            raise HTTPException(status_code=409, detail="Job already saved")
+        if sj.get("title") == req.title and sj.get("company") == req.company:
+            raise HTTPException(status_code=409, detail="Job already saved")
+
+    job = {
+        "id": uuid.uuid4().hex[:8],
+        "user_id": user_id,
+        "title": req.title,
+        "company": req.company,
+        "posted_date": datetime.now().strftime("%Y-%m-%d"),
+        "required_skills": [],
+        "preferred_skills": [],
+        "experience_years": None,
+        "location": req.location,
+        "remote": False,
+        "salary_range": req.salary_range,
+        "summary": req.snippet,
+        "raw_text": req.snippet,
+        "source_url": req.url,
+        "status": "interested",
+        "created_at": datetime.now().isoformat(),
+    }
+    db.insert_seeker_job(job)
+    return db.get_seeker_job(job["id"])
+
+
+@router.get("/jobs/saved-urls")
+async def get_saved_job_urls(
+    current_user: dict = Depends(_require_job_seeker),
+):
+    """Return saved job identifiers so the frontend can mark which search results are already saved."""
+    jobs = db.list_seeker_jobs(current_user["id"])
+    return {
+        "urls": [j.get("source_url", "") for j in jobs if j.get("source_url")],
+        "title_company_pairs": [
+            {"title": j.get("title", ""), "company": j.get("company", "")}
+            for j in jobs
+        ],
+    }
 
 
 @router.post("/jobs/upload")
