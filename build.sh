@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # build.sh — Build Open Recruiter desktop app (Linux/macOS)
-# Run from the project root: bash build.sh
+# Run from the project root: bash build.sh [mac|linux|auto]
+# Default: auto-detects platform via uname
 #
 # Note: The final Windows .exe must be built on Windows with build.ps1.
-#       This script is for testing the build pipeline on Linux/macOS.
 
 set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -63,7 +63,30 @@ echo "  Electron compiled."
 
 echo "[5/5] Packaging with electron-builder..."
 cd "$PROJECT_ROOT"
-npx electron-builder --config electron/electron-builder.json
+
+# Detect platform or accept override: build.sh [mac|linux|auto]
+PLATFORM_FLAG=""
+TARGET_PLATFORM="${1:-auto}"
+case "$TARGET_PLATFORM" in
+    mac|macos|darwin)
+        PLATFORM_FLAG="--mac"
+        ;;
+    linux)
+        PLATFORM_FLAG="--linux"
+        ;;
+    auto)
+        case "$(uname -s)" in
+            Darwin) PLATFORM_FLAG="--mac" ;;
+            Linux)  PLATFORM_FLAG="--linux" ;;
+        esac
+        ;;
+    *)
+        echo "Unknown platform: $TARGET_PLATFORM (use: mac, linux, or auto)" >&2
+        exit 1
+        ;;
+esac
+
+npx electron-builder --config electron/electron-builder.json $PLATFORM_FLAG
 echo "  Package created."
 
 echo ""

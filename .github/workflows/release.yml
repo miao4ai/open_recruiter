@@ -85,16 +85,108 @@ jobs:
       - name: Package with electron-builder
         run: npx electron-builder --config electron/electron-builder.json --win --publish never
 
-      # ── Upload / Release ────────────────────────────────────────────────
+      # ── Upload artifact ────────────────────────────────────────────────
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: open-recruiter-windows-installer
           path: release/*.exe
 
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      # ── Step 1: Build frontend ──────────────────────────────────────────
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      # ── Step 2: Export embedding model as ONNX ─────────────────────────
+      - name: Install backend dependencies
+        working-directory: backend
+        run: uv sync
+
+      - name: Install ONNX export tools (system Python, not bundled)
+        run: |
+          python3 -m pip install --break-system-packages torch --index-url https://download.pytorch.org/whl/cpu
+          python3 -m pip install --break-system-packages "optimum[onnxruntime]"
+
+      - name: Export embedding model as ONNX
+        working-directory: backend
+        shell: python3 {0}
+        run: |
+          from optimum.onnxruntime import ORTModelForFeatureExtraction
+          from transformers import AutoTokenizer
+          print("Exporting BAAI/bge-small-en-v1.5 to ONNX...")
+          model = ORTModelForFeatureExtraction.from_pretrained("BAAI/bge-small-en-v1.5", export=True)
+          model.save_pretrained("models")
+          tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-small-en-v1.5")
+          tokenizer.save_pretrained("models")
+          print("ONNX export complete.")
+
+      # ── Step 3: Bundle backend with PyInstaller ─────────────────────────
+      - name: Bundle backend with PyInstaller
+        working-directory: backend
+        run: uv run pyinstaller open_recruiter.spec --noconfirm
+
+      - name: Verify PyInstaller output
+        run: |
+          if [ ! -f "backend/dist/backend/backend" ]; then
+            echo "ERROR: PyInstaller build failed - backend binary not found"
+            exit 1
+          fi
+          echo "backend binary OK"
+          file backend/dist/backend/backend
+
+      # ── Step 4: Compile Electron + package DMG ──────────────────────────
+      - name: Install root npm dependencies
+        run: npm install
+
+      - name: Compile Electron TypeScript
+        run: npm run build:electron
+
+      - name: Package with electron-builder
+        run: npx electron-builder --config electron/electron-builder.json --mac --publish never
+
+      # ── Upload artifact ────────────────────────────────────────────────
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-recruiter-macos-dmg
+          path: release/*.dmg
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*.exe
+          files: |
+            artifacts/open-recruiter-windows-installer/*.exe
+            artifacts/open-recruiter-macos-dmg/*.dmg
           generate_release_notes: true

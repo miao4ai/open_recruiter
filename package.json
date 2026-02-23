@@ -1,6 +1,6 @@
 {
   "name": "open-recruiter",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "description": "AI-powered recruitment automation agent",
   "main": "electron/dist/main.js",
@@ -14,7 +14,8 @@
     "electron:dev": "npm run build:electron && electron .",
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder --config electron/electron-builder.json",
-    "dist:win": "npm run build && electron-builder --config electron/electron-builder.json --win"
+    "dist:win": "npm run build && electron-builder --config electron/electron-builder.json --win",
+    "dist:mac": "npm run build && electron-builder --config electron/electron-builder.json --mac"
   },
   "devDependencies": {
     "@types/node": "^25.3.0",

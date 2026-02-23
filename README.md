@@ -16,7 +16,7 @@
 </p>
 <p align="center">
   <img src="https://img.shields.io/badge/BUILD-PASSING-brightgreen" />
-  <img src="https://img.shields.io/badge/RELEASE-V1.3.0-blue" />
+  <img src="https://img.shields.io/badge/RELEASE-V1.4.0-blue" />
   <img src="https://img.shields.io/badge/PYTHON-3.11+-yellow" />
   <img src="https://img.shields.io/badge/LICENSE-MIT-purple" />
 </p>
@@ -305,6 +305,7 @@ FastAPI Backend
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| [V1.4.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.4.0) | 2026-02-23 | macOS DMG build, cross-platform CI/CD |
 | [V1.3.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.3.0) | 2026-02-22 | Encouragement mode for Ai Chan, favorite jobs from search results, chat tone fix |
 | [V1.2.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.2.0) | 2026-02-21 | Per-job pipeline status, Candidate/Jobs toggle, emoji picker |
 | [V1.1.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.1.0) | 2026-02-20 | i18n (6 languages), ONNX Runtime migration, CI/CD, calendar overhaul |

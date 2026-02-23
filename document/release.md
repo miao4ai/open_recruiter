@@ -6,6 +6,27 @@ Download installers from the [GitHub Releases](https://github.com/miao4ai/open_r
 
 ---
 
+## V1.4.0 (2026-02-23)
+
+### macOS DMG Support
+- **Native macOS builds** — electron-builder now produces `.dmg` installers for macOS (Apple Silicon arm64)
+- **macOS entitlements** — hardened runtime with entitlements for Electron JIT, network access, and PyInstaller compatibility
+- **DMG installer layout** — drag-to-Applications install experience with app icon and Applications folder shortcut
+- **Auto-generated .icns icon** — electron-builder converts the existing 1024x1024 PNG to macOS icon format during build
+- **Backend binary permissions fix** — `chmodSync` ensures execute permission on macOS after electron-builder packaging
+
+### Cross-Platform CI/CD
+- **New `build-macos` job** in GitHub Actions release workflow — builds native macOS backend via PyInstaller + packages as DMG on `macos-latest` (Apple Silicon)
+- **Dedicated `release` job** — collects Windows `.exe` and macOS `.dmg` artifacts, attaches both to GitHub Release
+- GitHub Releases now include both Windows installer and macOS DMG
+
+### Build Script Improvements
+- `build.sh` now auto-detects platform (macOS vs Linux) and passes the correct `--mac` or `--linux` flag to electron-builder
+- Accepts optional platform argument: `bash build.sh mac`, `bash build.sh linux`, or `bash build.sh auto` (default)
+- New `dist:mac` npm script for macOS packaging
+
+---
+
 ## V1.3.0 (2026-02-22)
 
 ### Encouragement Mode (Job Seeker)

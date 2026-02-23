@@ -57,6 +57,10 @@ if (!gotTheLock) {
       const exeName =
         process.platform === "win32" ? "backend.exe" : "backend";
       const exePath = path.join(process.resourcesPath, "backend", exeName);
+      // Ensure execute permission on macOS/Linux (extraResources may strip it)
+      if (process.platform !== "win32") {
+        try { fs.chmodSync(exePath, 0o755); } catch {}
+      }
       return {
         command: exePath,
         args: [String(backendPort)],
