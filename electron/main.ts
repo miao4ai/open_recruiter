@@ -133,17 +133,45 @@ if (!gotTheLock) {
   function waitForBackend(timeout = 120000): Promise<void> {
     const start = Date.now();
     return new Promise((resolve, reject) => {
+      let settled = false;
+
+      // Detect early crash — if the process exits before the health check
+      // succeeds, fail immediately instead of waiting the full timeout.
+      const onExit = (code: number | null, signal: string | null) => {
+        if (!settled) {
+          settled = true;
+          reject(
+            new Error(
+              `Backend process exited unexpectedly (code=${code}, signal=${signal}). ` +
+              `This may be caused by macOS blocking the unsigned binary — ` +
+              `try: xattr -cr /Applications/Open\\ Recruiter.app`
+            )
+          );
+        }
+      };
+      backendProcess?.on("exit", onExit);
+
       const check = () => {
+        if (settled) return;
         http
           .get(`http://127.0.0.1:${backendPort}/health`, (res) => {
-            if (res.statusCode === 200) resolve();
-            else retry();
+            if (settled) return;
+            if (res.statusCode === 200) {
+              settled = true;
+              backendProcess?.removeListener("exit", onExit);
+              resolve();
+            } else {
+              retry();
+            }
           })
           .on("error", retry);
       };
 
       const retry = () => {
+        if (settled) return;
         if (Date.now() - start > timeout) {
+          settled = true;
+          backendProcess?.removeListener("exit", onExit);
           reject(new Error("Backend did not start in time"));
         } else {
           setTimeout(check, 500);
@@ -305,16 +333,25 @@ if (!gotTheLock) {
     buildAppMenu();
 
     if (!backendReady && mainWindow) {
+      const isMac = process.platform === "darwin";
+      const macHint = isMac
+        ? `<div style="background:#2a2a3e;border-radius:8px;padding:16px;margin-top:16px;text-align:left">
+  <p style="color:#f0c040;font-size:14px;margin:0 0 8px">macOS fix — run in Terminal:</p>
+  <code style="color:#7ec8e3;font-size:13px;word-break:break-all">xattr -cr /Applications/Open\\ Recruiter.app</code>
+  <p style="color:#888;font-size:12px;margin:8px 0 0">This removes the quarantine flag that blocks unsigned binaries.</p>
+</div>`
+        : "";
       mainWindow.loadURL(
         `data:text/html;charset=utf-8,${encodeURIComponent(`
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>Open Recruiter - Error</title></head>
 <body style="font-family:system-ui;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#1a1a2e;color:#e0e0e0">
-<div style="text-align:center;max-width:500px">
+<div style="text-align:center;max-width:520px">
   <h1 style="color:#e74c3c">Backend failed to start</h1>
   <p>The backend process did not respond within 120 seconds.</p>
-  <p style="color:#aaa;font-size:13px;word-break:break-all">Log file: ${backendLogPath.replace(/\\/g, "/")}</p>
+  ${macHint}
+  <p style="color:#aaa;font-size:13px;word-break:break-all;margin-top:16px">Log file: ${backendLogPath.replace(/\\/g, "/")}</p>
   <p style="color:#888;font-size:13px">Open the log file above to see the error details.</p>
 </div>
 </body></html>`)}`
