@@ -1,7 +1,8 @@
 // afterPack hook — ad-hoc sign ALL Mach-O binaries in the macOS .app bundle.
 // macOS Tahoe+ enforces strict code-signature checks on nested executables.
 // `codesign --deep` is deprecated and unreliable, so we sign each binary
-// individually (innermost first) before signing the top-level .app.
+// individually (innermost first) before signing the top-level .app with
+// entitlements.
 const { execSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -47,52 +48,94 @@ function collectSignableFiles(dir) {
   return results;
 }
 
+function signFile(filePath, entitlements) {
+  const entFlag = entitlements ? `--entitlements "${entitlements}"` : "";
+  execSync(
+    `codesign --force --sign - --timestamp=none ${entFlag} "${filePath}"`,
+    { stdio: "pipe" }
+  );
+}
+
 exports.default = async function (context) {
   if (context.electronPlatformName !== "darwin") return;
 
   const appName = context.packager.appInfo.productFilename;
   const appPath = path.join(context.appOutDir, `${appName}.app`);
-  const resourcesDir = path.join(appPath, "Contents", "Resources");
+  const entitlements = path.join(__dirname, "entitlements.mac.plist");
 
-  // 1. Sign all nested Mach-O binaries inside Resources (backend + frameworks)
-  const binaries = collectSignableFiles(resourcesDir);
-  console.log(`[afterPack] Found ${binaries.length} signable binaries in Resources`);
+  // 1. Sign all nested Mach-O binaries inside Resources (backend + data)
+  const resourcesDir = path.join(appPath, "Contents", "Resources");
+  const resBinaries = collectSignableFiles(resourcesDir);
+  console.log(`[afterPack] Found ${resBinaries.length} signable binaries in Resources`);
 
   let signed = 0;
-  for (const bin of binaries) {
+  for (const bin of resBinaries) {
     try {
-      execSync(
-        `codesign --force --sign - --timestamp=none "${bin}"`,
-        { stdio: "pipe" }
-      );
+      signFile(bin);
       signed++;
-    } catch (err) {
-      // Some files may not be Mach-O despite matching heuristics — skip
-      console.log(`[afterPack] Skipped (not signable): ${path.relative(appPath, bin)}`);
+    } catch {
+      console.log(`[afterPack] Skipped: ${path.relative(appPath, bin)}`);
     }
   }
-  console.log(`[afterPack] Signed ${signed}/${binaries.length} binaries`);
+  console.log(`[afterPack] Signed ${signed}/${resBinaries.length} resource binaries`);
 
-  // 2. Sign the Electron framework and helpers
+  // 2. Sign Electron framework binaries
   const frameworksDir = path.join(appPath, "Contents", "Frameworks");
-  const frameworkBinaries = collectSignableFiles(frameworksDir);
-  console.log(`[afterPack] Found ${frameworkBinaries.length} signable binaries in Frameworks`);
+  const fwBinaries = collectSignableFiles(frameworksDir);
+  console.log(`[afterPack] Found ${fwBinaries.length} signable binaries in Frameworks`);
 
-  for (const bin of frameworkBinaries) {
+  for (const bin of fwBinaries) {
     try {
-      execSync(
-        `codesign --force --sign - --timestamp=none "${bin}"`,
-        { stdio: "pipe" }
-      );
+      signFile(bin);
     } catch {
       // skip
     }
   }
 
-  // 3. Sign the top-level .app bundle
-  console.log(`[afterPack] Signing app bundle: ${appPath}`);
-  execSync(`codesign --force --sign - --timestamp=none "${appPath}"`, {
-    stdio: "inherit",
-  });
+  // 3. Sign .framework bundles themselves (required on Tahoe+)
+  if (fs.existsSync(frameworksDir)) {
+    const fwEntries = fs.readdirSync(frameworksDir);
+    for (const name of fwEntries) {
+      const fwPath = path.join(frameworksDir, name);
+      if (name.endsWith(".framework") && fs.statSync(fwPath).isDirectory()) {
+        try {
+          signFile(fwPath);
+          console.log(`[afterPack] Signed framework: ${name}`);
+        } catch {
+          // skip
+        }
+      }
+    }
+  }
+
+  // 4. Sign helper apps (e.g. crashpad, renderer)
+  const helpersDir = path.join(frameworksDir);
+  if (fs.existsSync(helpersDir)) {
+    const helperApps = fs.readdirSync(helpersDir).filter((n) => n.endsWith(".app"));
+    for (const helper of helperApps) {
+      const helperPath = path.join(helpersDir, helper);
+      try {
+        signFile(helperPath, entitlements);
+        console.log(`[afterPack] Signed helper: ${helper}`);
+      } catch {
+        // skip
+      }
+    }
+  }
+
+  // 5. Sign the top-level .app with entitlements
+  console.log(`[afterPack] Signing app bundle with entitlements: ${appPath}`);
+  execSync(
+    `codesign --force --sign - --timestamp=none --entitlements "${entitlements}" "${appPath}"`,
+    { stdio: "inherit" }
+  );
   console.log("[afterPack] Ad-hoc signing complete.");
+
+  // 6. Verify the signature
+  try {
+    execSync(`codesign --verify --deep --strict "${appPath}"`, { stdio: "inherit" });
+    console.log("[afterPack] Signature verification passed.");
+  } catch {
+    console.warn("[afterPack] WARNING: Signature verification failed — app may be blocked by Gatekeeper.");
+  }
 };

@@ -166,12 +166,18 @@ jobs:
       - name: Package with electron-builder
         run: npx electron-builder --config electron/electron-builder.json --mac --publish never
 
-      # ── Upload artifact ────────────────────────────────────────────────
+      # ── Upload artifacts ───────────────────────────────────────────────
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
           name: open-recruiter-macos-dmg
           path: release/*.dmg
+
+      - name: Upload macOS install helper
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-recruiter-macos-install-helper
+          path: macos-install.command
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
@@ -189,4 +195,5 @@ jobs:
           files: |
             artifacts/open-recruiter-windows-installer/*.exe
             artifacts/open-recruiter-macos-dmg/*.dmg
+            artifacts/open-recruiter-macos-install-helper/macos-install.command
           generate_release_notes: true

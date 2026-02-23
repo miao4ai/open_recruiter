@@ -40,13 +40,22 @@ The installer will automatically:
 ## Desktop App (macOS / Windows)
 
 Download the latest installer from the [Releases](https://github.com/miao4ai/open_recruiter/releases) page:
-- **macOS**: `.dmg` (Apple Silicon) — drag to Applications and open
-- **Windows**: `.exe` installer
+- **Windows**: `.exe` installer — download and run
+- **macOS**: `.dmg` (Apple Silicon) — see install steps below
 
-> **macOS first launch**: If macOS shows a security warning, right-click the app and select **Open**, or run:
-> ```bash
-> xattr -cr /Applications/Open\ Recruiter.app
-> ```
+### macOS Install
+
+macOS blocks unsigned apps downloaded from the internet. Use **either** method:
+
+**Method 1 — Install helper** (recommended):
+Download both `macos-install.command` and the `.dmg` from [Releases](https://github.com/miao4ai/open_recruiter/releases). Mount the DMG, then double-click `macos-install.command` — it copies the app to `/Applications`, removes the quarantine flag, and launches.
+
+**Method 2 — Terminal**:
+After dragging the app to `/Applications` from the DMG:
+```bash
+xattr -cr /Applications/Open\ Recruiter.app
+open /Applications/Open\ Recruiter.app
+```
 
 ---
 
