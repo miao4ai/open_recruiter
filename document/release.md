@@ -10,10 +10,12 @@ Download installers from the [GitHub Releases](https://github.com/miao4ai/open_r
 
 ### macOS DMG Support
 - **Native macOS builds** — electron-builder now produces `.dmg` installers for macOS (Apple Silicon arm64)
-- **macOS entitlements** — hardened runtime with entitlements for Electron JIT, network access, and PyInstaller compatibility
+- **Ad-hoc code signing** — `afterPack` hook automatically signs the `.app` bundle to avoid Gatekeeper "damaged" errors
 - **DMG installer layout** — drag-to-Applications install experience with app icon and Applications folder shortcut
 - **Auto-generated .icns icon** — electron-builder converts the existing 1024x1024 PNG to macOS icon format during build
 - **Backend binary permissions fix** — `chmodSync` ensures execute permission on macOS after electron-builder packaging
+
+> **macOS first launch**: If macOS shows a security warning, right-click the app and select **Open**, or run `xattr -cr /Applications/Open\ Recruiter.app` in Terminal before opening.
 
 ### Cross-Platform CI/CD
 - **New `build-macos` job** in GitHub Actions release workflow — builds native macOS backend via PyInstaller + packages as DMG on `macos-latest` (Apple Silicon)

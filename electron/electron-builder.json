@@ -38,10 +38,8 @@
     ],
     "icon": "images/avartar.png",
     "category": "public.app-category.business",
-    "hardenedRuntime": true,
-    "gatekeeperAssess": false,
-    "entitlements": "electron/entitlements.mac.plist",
-    "entitlementsInherit": "electron/entitlements.mac.plist"
+    "identity": null,
+    "afterPack": "./electron/afterPack.js"
   },
   "dmg": {
     "title": "${productName} ${version}",

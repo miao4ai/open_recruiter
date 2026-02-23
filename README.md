@@ -37,6 +37,17 @@ The installer will automatically:
 
 > You can also set a custom install directory: `OPEN_RECRUITER_DIR=~/my-dir curl -fsSL ... | bash`
 
+## Desktop App (macOS / Windows)
+
+Download the latest installer from the [Releases](https://github.com/miao4ai/open_recruiter/releases) page:
+- **macOS**: `.dmg` (Apple Silicon) — drag to Applications and open
+- **Windows**: `.exe` installer
+
+> **macOS first launch**: If macOS shows a security warning, right-click the app and select **Open**, or run:
+> ```bash
+> xattr -cr /Applications/Open\ Recruiter.app
+> ```
+
 ---
 
 ## Introduction
