@@ -3,6 +3,7 @@
   "version": "1.4.0",
   "private": true,
   "description": "AI-powered recruitment automation agent",
+  "author": "Open Recruiter Contributors",
   "main": "electron/dist/main.js",
   "scripts": {
     "dev:backend": "cd backend && python3 -m uvicorn app.main:app --port 8000 --reload",
