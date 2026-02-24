@@ -181,7 +181,7 @@ jobs:
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-            --wait --timeout 15m
+            --wait --timeout 30m
           echo "Stapling notarization ticket..."
           xcrun stapler staple "$DMG_PATH"
           echo "Notarization complete!"
