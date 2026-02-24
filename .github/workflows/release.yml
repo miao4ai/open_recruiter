@@ -163,14 +163,28 @@ jobs:
       - name: Compile Electron TypeScript
         run: npm run build:electron
 
-      - name: Package with electron-builder
+      - name: Package with electron-builder (sign only, no notarize)
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: npx electron-builder --config electron/electron-builder.json --mac --publish never
+
+      - name: Notarize DMG
+        env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npx electron-builder --config electron/electron-builder.json --mac --publish never
+        run: |
+          DMG_PATH=$(ls release/*.dmg | head -1)
+          echo "Submitting $DMG_PATH for notarization..."
+          xcrun notarytool submit "$DMG_PATH" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --wait --timeout 15m
+          echo "Stapling notarization ticket..."
+          xcrun stapler staple "$DMG_PATH"
+          echo "Notarization complete!"
 
       # ── Upload artifacts ───────────────────────────────────────────────
       - name: Upload DMG artifact
