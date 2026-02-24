@@ -1,8 +1,10 @@
-// afterPack hook — ad-hoc sign ALL Mach-O binaries in the macOS .app bundle.
-// macOS Tahoe+ enforces strict code-signature checks on nested executables.
-// `codesign --deep` is deprecated and unreliable, so we sign each binary
-// individually (innermost first) before signing the top-level .app with
-// entitlements.
+// afterPack hook — sign nested Mach-O binaries in the macOS .app bundle.
+//
+// When CSC_LINK is set (CI with Apple Developer cert), electron-builder handles
+// top-level signing + notarization. This hook pre-signs nested binaries in
+// Resources (PyInstaller backend) that electron-builder doesn't know about.
+//
+// When CSC_LINK is NOT set (local dev), falls back to ad-hoc signing everything.
 const { execSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -48,10 +50,21 @@ function collectSignableFiles(dir) {
   return results;
 }
 
-function signFile(filePath, entitlements) {
+function getSignIdentity() {
+  // When CSC_LINK is set, electron-builder imports the cert into a temp keychain.
+  // We use the Developer ID identity for nested binaries; electron-builder
+  // handles the top-level .app and Electron frameworks.
+  if (process.env.CSC_LINK) {
+    return "Developer ID Application";
+  }
+  return "-"; // ad-hoc fallback
+}
+
+function signFile(filePath, identity, entitlements) {
   const entFlag = entitlements ? `--entitlements "${entitlements}"` : "";
+  const tsFlag = identity === "-" ? "--timestamp=none" : "";
   execSync(
-    `codesign --force --sign - --timestamp=none ${entFlag} "${filePath}"`,
+    `codesign --force --sign "${identity}" ${tsFlag} ${entFlag} "${filePath}"`,
     { stdio: "pipe" }
   );
 }
@@ -62,8 +75,14 @@ exports.default = async function (context) {
   const appName = context.packager.appInfo.productFilename;
   const appPath = path.join(context.appOutDir, `${appName}.app`);
   const entitlements = path.join(__dirname, "entitlements.mac.plist");
+  const identity = getSignIdentity();
+  const hasRealCert = identity !== "-";
 
-  // 1. Sign all nested Mach-O binaries inside Resources (backend + data)
+  console.log(`[afterPack] Signing mode: ${hasRealCert ? "Developer ID" : "ad-hoc"}`);
+
+  // Sign all nested Mach-O binaries inside Resources (PyInstaller backend).
+  // electron-builder only signs Electron's own frameworks — it does NOT sign
+  // extraResources, so we must sign the backend binaries ourselves.
   const resourcesDir = path.join(appPath, "Contents", "Resources");
   const resBinaries = collectSignableFiles(resourcesDir);
   console.log(`[afterPack] Found ${resBinaries.length} signable binaries in Resources`);
@@ -71,7 +90,7 @@ exports.default = async function (context) {
   let signed = 0;
   for (const bin of resBinaries) {
     try {
-      signFile(bin);
+      signFile(bin, identity);
       signed++;
     } catch {
       console.log(`[afterPack] Skipped: ${path.relative(appPath, bin)}`);
@@ -79,63 +98,38 @@ exports.default = async function (context) {
   }
   console.log(`[afterPack] Signed ${signed}/${resBinaries.length} resource binaries`);
 
-  // 2. Sign Electron framework binaries
+  // When using a real cert, electron-builder handles Frameworks, helpers,
+  // and the top-level .app — we only needed to sign extraResources above.
+  if (hasRealCert) {
+    console.log("[afterPack] Real cert detected — electron-builder will sign the rest.");
+    return;
+  }
+
+  // --- Ad-hoc fallback (no cert): sign everything ourselves ---
+
   const frameworksDir = path.join(appPath, "Contents", "Frameworks");
   const fwBinaries = collectSignableFiles(frameworksDir);
-  console.log(`[afterPack] Found ${fwBinaries.length} signable binaries in Frameworks`);
-
   for (const bin of fwBinaries) {
-    try {
-      signFile(bin);
-    } catch {
-      // skip
-    }
+    try { signFile(bin, identity); } catch {}
   }
 
-  // 3. Sign .framework bundles themselves (required on Tahoe+)
   if (fs.existsSync(frameworksDir)) {
-    const fwEntries = fs.readdirSync(frameworksDir);
-    for (const name of fwEntries) {
+    for (const name of fs.readdirSync(frameworksDir)) {
       const fwPath = path.join(frameworksDir, name);
       if (name.endsWith(".framework") && fs.statSync(fwPath).isDirectory()) {
-        try {
-          signFile(fwPath);
-          console.log(`[afterPack] Signed framework: ${name}`);
-        } catch {
-          // skip
-        }
+        try { signFile(fwPath, identity); } catch {}
+      }
+    }
+    for (const name of fs.readdirSync(frameworksDir)) {
+      if (name.endsWith(".app")) {
+        try { signFile(path.join(frameworksDir, name), identity, entitlements); } catch {}
       }
     }
   }
 
-  // 4. Sign helper apps (e.g. crashpad, renderer)
-  const helpersDir = path.join(frameworksDir);
-  if (fs.existsSync(helpersDir)) {
-    const helperApps = fs.readdirSync(helpersDir).filter((n) => n.endsWith(".app"));
-    for (const helper of helperApps) {
-      const helperPath = path.join(helpersDir, helper);
-      try {
-        signFile(helperPath, entitlements);
-        console.log(`[afterPack] Signed helper: ${helper}`);
-      } catch {
-        // skip
-      }
-    }
-  }
-
-  // 5. Sign the top-level .app with entitlements
-  console.log(`[afterPack] Signing app bundle with entitlements: ${appPath}`);
   execSync(
     `codesign --force --sign - --timestamp=none --entitlements "${entitlements}" "${appPath}"`,
     { stdio: "inherit" }
   );
   console.log("[afterPack] Ad-hoc signing complete.");
-
-  // 6. Verify the signature
-  try {
-    execSync(`codesign --verify --deep --strict "${appPath}"`, { stdio: "inherit" });
-    console.log("[afterPack] Signature verification passed.");
-  } catch {
-    console.warn("[afterPack] WARNING: Signature verification failed — app may be blocked by Gatekeeper.");
-  }
 };

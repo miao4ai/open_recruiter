@@ -38,7 +38,13 @@
     ],
     "icon": "images/avartar.png",
     "category": "public.app-category.business",
-    "identity": null
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "entitlements": "electron/entitlements.mac.plist",
+    "entitlementsInherit": "electron/entitlements.mac.plist",
+    "notarize": {
+      "teamId": "CL2K4Y9H9S"
+    }
   },
   "afterPack": "./electron/afterPack.js",
   "dmg": {
