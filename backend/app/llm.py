@@ -23,6 +23,8 @@ def _model_name(cfg: Config) -> str:
         return f"openai/{model}"
     elif provider == "gemini":
         return f"gemini/{model}"
+    elif provider == "ollama":
+        return f"ollama/{model}"
     # Fallback: pass model name directly, let litellm figure it out
     return model
 
@@ -36,6 +38,8 @@ def _api_key(cfg: Config) -> str | None:
         return cfg.openai_api_key or None
     elif provider == "gemini":
         return cfg.gemini_api_key or None
+    elif provider == "ollama":
+        return None
     return None
 
 
@@ -73,7 +77,9 @@ def chat(cfg: Config, system: str, messages: list[dict], json_mode: bool = False
     if api_key:
         kwargs["api_key"] = api_key
 
-    if json_mode:
+    if cfg.llm_provider == "ollama":
+        kwargs["api_base"] = cfg.ollama_base_url
+    elif json_mode:
         kwargs["response_format"] = {"type": "json_object"}
 
     resp = completion(**kwargs)
@@ -110,7 +116,9 @@ def chat_stream(cfg: Config, system: str, messages: list[dict], json_mode: bool 
     if api_key:
         kwargs["api_key"] = api_key
 
-    if json_mode:
+    if cfg.llm_provider == "ollama":
+        kwargs["api_base"] = cfg.ollama_base_url
+    elif json_mode:
         kwargs["response_format"] = {"type": "json_object"}
 
     resp = completion(**kwargs)

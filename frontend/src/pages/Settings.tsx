@@ -8,8 +8,11 @@ import MenuItem from "@mui/material/MenuItem";
 import Button from "@mui/material/Button";
 import FormHelperText from "@mui/material/FormHelperText";
 import Stack from "@mui/material/Stack";
+import Chip from "@mui/material/Chip";
+import LinearProgress from "@mui/material/LinearProgress";
 import SaveOutlined from "@mui/icons-material/SaveOutlined";
 import ScienceOutlined from "@mui/icons-material/ScienceOutlined";
+import DownloadOutlined from "@mui/icons-material/DownloadOutlined";
 import { useSnackbar } from "notistack";
 import { useApi } from "../hooks/useApi";
 import {
@@ -17,7 +20,10 @@ import {
   updateSettings,
   testLlm,
   testEmail,
+  getOllamaStatus,
+  pullOllamaModel,
 } from "../lib/api";
+import type { OllamaStatus } from "../lib/api";
 import type { Settings as SettingsType } from "../types";
 
 const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
@@ -37,12 +43,18 @@ const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
     { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
     { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
   ],
+  ollama: [
+    { value: "qwen2.5:3b", label: "Qwen 2.5 3B (2 GB)" },
+    { value: "qwen2.5:7b", label: "Qwen 2.5 7B (4.7 GB)" },
+    { value: "qwen2.5:14b", label: "Qwen 2.5 14B (9 GB)" },
+  ],
 };
 
 const DEFAULT_MODEL: Record<string, string> = {
   anthropic: "claude-sonnet-4-20250514",
   openai: "gpt-5.1",
   gemini: "gemini-2.5-flash",
+  ollama: "qwen2.5:7b",
 };
 
 const LANGUAGES = [
@@ -63,6 +75,7 @@ export default function Settings() {
     anthropic_api_key: "",
     openai_api_key: "",
     gemini_api_key: "",
+    ollama_base_url: "http://localhost:11434",
     email_backend: "console",
     sendgrid_api_key: "",
     email_from: "",
@@ -81,9 +94,22 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
 
+  // Ollama state
+  const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus | null>(null);
+  const [pulling, setPulling] = useState(false);
+  const [pullProgress, setPullProgress] = useState(0);
+  const [pullStatus, setPullStatus] = useState("");
+
   useEffect(() => {
     if (saved) setForm(saved);
   }, [saved]);
+
+  // Fetch Ollama status when provider changes to ollama
+  useEffect(() => {
+    if (form.llm_provider === "ollama") {
+      getOllamaStatus().then(setOllamaStatus).catch(() => setOllamaStatus(null));
+    }
+  }, [form.llm_provider]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -154,6 +180,33 @@ export default function Settings() {
     }
   };
 
+  const handlePullModel = async () => {
+    setPulling(true);
+    setPullProgress(0);
+    setPullStatus(t("settings.downloading"));
+    try {
+      await pullOllamaModel(form.llm_model, (progress) => {
+        setPullStatus(progress.status);
+        if (progress.total && progress.completed) {
+          setPullProgress(Math.round((progress.completed / progress.total) * 100));
+        }
+      });
+      setPullStatus("");
+      setPullProgress(100);
+      const status = await getOllamaStatus();
+      setOllamaStatus(status);
+      enqueueSnackbar(t("settings.modelDownloaded"), { variant: "success" });
+    } catch {
+      enqueueSnackbar(t("settings.modelDownloadFailed"), { variant: "error" });
+    } finally {
+      setPulling(false);
+    }
+  };
+
+  const isModelInstalled = ollamaStatus?.running && ollamaStatus.installed_models.some(
+    (m) => m === form.llm_model || m.startsWith(form.llm_model.split(":")[0] + ":" + form.llm_model.split(":")[1])
+  );
+
   return (
     <Box sx={{ maxWidth: 640, mx: "auto" }}>
       <Stack spacing={3}>
@@ -188,6 +241,7 @@ export default function Settings() {
             <MenuItem value="anthropic">Anthropic</MenuItem>
             <MenuItem value="openai">OpenAI</MenuItem>
             <MenuItem value="gemini">Google Gemini</MenuItem>
+            <MenuItem value="ollama">Ollama ({t("settings.localFree")})</MenuItem>
           </TextField>
           <TextField
             select
@@ -235,6 +289,62 @@ export default function Settings() {
               placeholder="AI..."
               fullWidth
             />
+          )}
+          {form.llm_provider === "ollama" && (
+            <>
+              {/* Ollama status */}
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                <Chip
+                  label={ollamaStatus?.running ? t("settings.ollamaRunning") : t("settings.ollamaNotRunning")}
+                  color={ollamaStatus?.running ? "success" : "error"}
+                  size="small"
+                />
+                {!ollamaStatus?.running && (
+                  <Typography variant="body2" color="text.secondary">
+                    {t("settings.ollamaInstallHint")}
+                  </Typography>
+                )}
+              </Box>
+
+              {/* Model download */}
+              {ollamaStatus?.running && !isModelInstalled && (
+                <Box>
+                  {pulling ? (
+                    <Box>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                        {pullStatus}
+                      </Typography>
+                      <LinearProgress variant="determinate" value={pullProgress} />
+                    </Box>
+                  ) : (
+                    <Button
+                      variant="outlined"
+                      startIcon={<DownloadOutlined />}
+                      onClick={handlePullModel}
+                    >
+                      {t("settings.downloadModel")}
+                    </Button>
+                  )}
+                </Box>
+              )}
+
+              {/* Model installed */}
+              {isModelInstalled && (
+                <Chip label={t("settings.modelReady")} color="success" size="small" />
+              )}
+
+              <FormHelperText>{t("settings.noApiKeyNeeded")}</FormHelperText>
+
+              {/* Base URL */}
+              <TextField
+                label={t("settings.ollamaBaseUrl")}
+                name="ollama_base_url"
+                value={form.ollama_base_url || "http://localhost:11434"}
+                onChange={handleChange}
+                fullWidth
+                size="small"
+              />
+            </>
           )}
           <Button
             variant="outlined"

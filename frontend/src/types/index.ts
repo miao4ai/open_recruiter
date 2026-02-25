@@ -155,6 +155,7 @@ export interface Settings {
   anthropic_api_key: string;
   openai_api_key: string;
   gemini_api_key: string;
+  ollama_base_url: string;
   email_backend: string;
   sendgrid_api_key: string;
   email_from: string;

@@ -214,6 +214,58 @@ export const testLlm = () =>
 export const testEmail = () =>
   api.post("/settings/test-email").then((r) => r.data);
 
+// ── Ollama ────────────────────────────────────────────────────────────────
+export interface OllamaModel {
+  value: string;
+  label: string;
+  size_gb: number;
+}
+
+export interface OllamaStatus {
+  running: boolean;
+  installed_models: string[];
+  available_models: OllamaModel[];
+  error?: string;
+}
+
+export const getOllamaStatus = () =>
+  api.get<OllamaStatus>("/ollama/status").then((r) => r.data);
+
+export async function pullOllamaModel(
+  modelName: string,
+  onProgress: (progress: { status: string; total?: number; completed?: number }) => void,
+): Promise<void> {
+  const token = getToken();
+  const resp = await fetch("/api/ollama/pull", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ name: modelName }),
+  });
+  if (!resp.ok) throw new Error(`Pull failed: ${resp.status}`);
+
+  const reader = resp.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    for (const line of lines) {
+      if (line.trim()) {
+        try {
+          onProgress(JSON.parse(line));
+        } catch { /* ignore malformed */ }
+      }
+    }
+  }
+}
+
 // ── Agent (SSE) ───────────────────────────────────────────────────────────
 export const runAgent = (instruction: string) =>
   api.post("/agent/run", { instruction }).then((r) => r.data);

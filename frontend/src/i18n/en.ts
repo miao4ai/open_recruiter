@@ -445,6 +445,18 @@ const en = {
     emailOk: "Email OK ({{backend}}): {{message}}",
     emailError: "Email Error: {{message}}",
     failedToTestEmail: "Failed to test Email.",
+    // Ollama
+    localFree: "Local - Free",
+    ollamaRunning: "Ollama is running",
+    ollamaNotRunning: "Ollama is not running",
+    ollamaInstallHint: "Install Ollama from ollama.com and start it first.",
+    ollamaBaseUrl: "Ollama Server URL",
+    downloadModel: "Download Model",
+    modelReady: "Model installed",
+    modelDownloaded: "Model downloaded successfully!",
+    modelDownloadFailed: "Failed to download model.",
+    downloading: "Downloading...",
+    noApiKeyNeeded: "No API key needed — runs locally on your machine for free.",
     // Language
     language: "Language",
     languageHint: "Interface display language",
@@ -727,10 +739,13 @@ const en = {
     getStarted: "Get Started",
     skip: "Skip for Now",
     stepOf: "Step {{current}} of {{total}}",
+    ollamaSetupTitle: "Set Up Ollama",
+    ollamaSetupSubtitle: "Ollama runs AI models locally on your machine — completely free, no API key needed.",
     getKeyHint: {
       anthropic: "Get your API key at console.anthropic.com",
       openai: "Get your API key at platform.openai.com",
       gemini: "Get your API key at aistudio.google.com",
+      ollama: "No API key needed — Ollama runs locally.",
     },
   },
 };

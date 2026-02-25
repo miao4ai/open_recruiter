@@ -20,6 +20,7 @@ def _build_config() -> Config:
         anthropic_api_key=db.get("anthropic_api_key", env.anthropic_api_key),
         openai_api_key=db.get("openai_api_key", env.openai_api_key),
         gemini_api_key=db.get("gemini_api_key", env.gemini_api_key),
+        ollama_base_url=db.get("ollama_base_url", env.ollama_base_url),
         email_backend=db.get("email_backend", env.email_backend),
         sendgrid_api_key=db.get("sendgrid_api_key", env.sendgrid_api_key),
         email_from=db.get("email_from", env.email_from),
@@ -51,12 +52,15 @@ async def setup_status(current_user: dict = Depends(get_current_user)):
     """Check if LLM is configured — used by the onboarding flow."""
     cfg = _build_config()
     provider = cfg.llm_provider
-    key_map = {
-        "anthropic": cfg.anthropic_api_key,
-        "openai": cfg.openai_api_key,
-        "gemini": cfg.gemini_api_key,
-    }
-    has_key = bool(key_map.get(provider, ""))
+    if provider == "ollama":
+        has_key = True  # Ollama doesn't need an API key
+    else:
+        key_map = {
+            "anthropic": cfg.anthropic_api_key,
+            "openai": cfg.openai_api_key,
+            "gemini": cfg.gemini_api_key,
+        }
+        has_key = bool(key_map.get(provider, ""))
     has_model = bool(cfg.llm_model)
     return {
         "llm_configured": has_key and has_model,
@@ -77,6 +81,7 @@ async def get_settings_route(current_user: dict = Depends(get_current_user)):
         anthropic_api_key=cfg.anthropic_api_key,
         openai_api_key=cfg.openai_api_key,
         gemini_api_key=cfg.gemini_api_key,
+        ollama_base_url=cfg.ollama_base_url,
         email_backend=cfg.email_backend,
         sendgrid_api_key=cfg.sendgrid_api_key,
         email_from=user_email,
