@@ -22,6 +22,7 @@ class Config:
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     gemini_api_key: str = ""
+    ollama_base_url: str = "http://localhost:11434"
 
     email_backend: str = "console"
     sendgrid_api_key: str = ""
@@ -53,6 +54,7 @@ class Config:
                 "anthropic": "claude-sonnet-4-20250514",
                 "openai": "gpt-5.1",
                 "gemini": "gemini-2.5-flash",
+                "ollama": "qwen2.5:7b",
             }.get(self.llm_provider, "claude-sonnet-4-20250514")
 
 
@@ -64,6 +66,7 @@ def load_config_from_env() -> Config:
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
         gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
+        ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         email_backend=os.getenv("EMAIL_BACKEND", "console"),
         sendgrid_api_key=os.getenv("SENDGRID_API_KEY", ""),
         email_from=os.getenv("EMAIL_FROM", "recruiter@example.com"),
