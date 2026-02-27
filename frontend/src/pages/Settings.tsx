@@ -45,9 +45,9 @@ const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
     { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
   ],
   ollama: [
-    { value: "qwen2.5:3b", label: "Qwen 2.5 3B (2 GB)" },
-    { value: "qwen2.5:7b", label: "Qwen 2.5 7B (4.7 GB)" },
-    { value: "qwen2.5:14b", label: "Qwen 2.5 14B (9 GB)" },
+    { value: "qwen3:1.7b", label: "Qwen 3 1.7B (1.4 GB)" },
+    { value: "qwen3:4b", label: "Qwen 3 4B (2.5 GB)" },
+    { value: "qwen3:8b", label: "Qwen 3 8B (5.2 GB)" },
   ],
 };
 
@@ -55,7 +55,7 @@ const DEFAULT_MODEL: Record<string, string> = {
   anthropic: "claude-sonnet-4-20250514",
   openai: "gpt-5.1",
   gemini: "gemini-2.5-flash",
-  ollama: "qwen2.5:7b",
+  ollama: "qwen3:4b",
 };
 
 const LANGUAGES = [
