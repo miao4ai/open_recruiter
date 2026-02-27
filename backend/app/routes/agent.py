@@ -33,6 +33,20 @@ def _strip_embedded_json(text: str) -> str:
     return text
 
 
+def _detect_action_from_keywords(message: str) -> dict | None:
+    """Fallback: detect common user intents via keywords when the LLM fails to
+    return a structured action.  This ensures upload cards etc. always appear
+    even with weak local models."""
+    msg = message.lower().strip()
+    # Resume upload
+    if re.search(r"upload.*(resume|cv|简历)|上传.*(简历|cv)|添加候选人|add.*candidate", msg):
+        return {"type": "upload_resume", "job_id": "", "job_title": ""}
+    # JD upload
+    if re.search(r"upload.*(jd|job\s*desc)|上传.*(jd|职位|岗位)|添加职位|add.*(job|position)", msg):
+        return {"type": "upload_jd"}
+    return None
+
+
 @router.post("/run")
 async def run_agent(req: AgentRequest, _user: dict = Depends(require_recruiter)):
     """Execute a natural language instruction via the orchestrator.
@@ -194,6 +208,10 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
 
     # Strip trailing JSON code blocks the LLM sometimes embeds inside the message
     reply_text = _strip_embedded_json(reply_text)
+
+    # Keyword fallback: if LLM didn't return an action, detect from user message
+    if not action_data:
+        action_data = _detect_action_from_keywords(req.message)
 
     # Process actions using shared helper
     response: dict = {"reply": reply_text, "session_id": session_id, "blocks": [], "suggestions": [], "context_hint": context_hint_data}
@@ -519,6 +537,10 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
 
             # Strip trailing JSON code blocks the LLM sometimes embeds inside the message
             reply_text = _strip_embedded_json(reply_text)
+
+            # Keyword fallback: if LLM didn't return an action, detect from user message
+            if not action_data:
+                action_data = _detect_action_from_keywords(req.message)
 
             # Process actions (same as chat_endpoint)
             response: dict = {
