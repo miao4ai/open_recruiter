@@ -61,7 +61,7 @@ app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"], dependencies=
 app.include_router(candidates.router, prefix="/api/candidates", tags=["candidates"], dependencies=_recruiter_only)
 app.include_router(emails.router, prefix="/api/emails", tags=["emails"], dependencies=_recruiter_only)
 app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
-app.include_router(settings.router, prefix="/api/settings", tags=["settings"], dependencies=_recruiter_only)
+app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
 app.include_router(search.router, prefix="/api/search", tags=["search"], dependencies=_recruiter_only)
 app.include_router(calendar.router, prefix="/api/calendar", tags=["calendar"], dependencies=_recruiter_only)
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])

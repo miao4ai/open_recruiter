@@ -41,7 +41,9 @@ try:
             result = {}
             if _orig:
                 try:
-                    result = _orig()
+                    orig_result = _orig()
+                    if isinstance(orig_result, dict):
+                        result.update(orig_result)
                 except Exception:
                     pass
             result.update(_constructors)
