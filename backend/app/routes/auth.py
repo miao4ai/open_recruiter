@@ -1,6 +1,7 @@
 """Auth routes — register, login, me."""
 
 import sqlite3
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -13,17 +14,38 @@ router = APIRouter()
 
 @router.post("/register")
 async def register(req: UserRegister):
-    if db.get_user_by_email_and_role(req.email, req.role.value):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered for this role")
+    # Check if this exact email+role combo already exists
+    existing = db.get_user_by_email_and_role(req.email, req.role.value)
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Email already registered as {req.role.value}",
+        )
 
     user = User(email=req.email, name=req.name, role=req.role.value)
     user_dict = user.model_dump()
     user_dict["password_hash"] = hash_password(req.password)
 
-    try:
-        db.insert_user(user_dict)
-    except sqlite3.IntegrityError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered for this role")
+    # Retry with a fresh ID on the unlikely chance of a primary-key collision
+    for attempt in range(3):
+        try:
+            db.insert_user(user_dict)
+            break
+        except sqlite3.IntegrityError as exc:
+            err_msg = str(exc).lower()
+            if "email" in err_msg or "unique" in err_msg:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Email already registered as {req.role.value}",
+                )
+            # Likely a primary-key collision — regenerate ID
+            user_dict["id"] = uuid.uuid4().hex[:8]
+            user.id = user_dict["id"]
+            if attempt == 2:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Registration failed — please try again",
+                )
 
     token = create_token(user.id, user.email)
     return {"token": token, "user": user.model_dump()}

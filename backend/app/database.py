@@ -492,32 +492,48 @@ def delete_user(user_id: str, delete_records: bool = False) -> bool:
     """Delete a user and associated data.
 
     If *delete_records* is True, also removes recruiter business data
-    (jobs, candidates, emails, events, automation rules/logs).
-    Otherwise only user-specific data (chat, memories, etc.) is removed.
+    (jobs, candidates, emails, events, automation rules/logs) and resets
+    global settings so the next user gets a fresh onboarding experience.
     """
     conn = get_conn()
+
+    # Helper: best-effort delete — never let one table block user removal
+    def _safe_delete(sql: str, params: tuple = ()) -> None:
+        try:
+            conn.execute(sql, params)
+        except Exception:
+            pass
+
     # Always: remove user-specific data
-    conn.execute("DELETE FROM chat_messages WHERE user_id = ?", (user_id,))
-    conn.execute("DELETE FROM chat_sessions WHERE user_id = ?", (user_id,))
-    conn.execute("DELETE FROM activities WHERE user_id = ?", (user_id,))
-    conn.execute("DELETE FROM memories WHERE user_id = ?", (user_id,))
-    conn.execute("DELETE FROM workflows WHERE user_id = ?", (user_id,))
-    conn.execute("DELETE FROM session_summaries WHERE user_id = ?", (user_id,))
-    conn.execute("DELETE FROM job_seeker_profiles WHERE user_id = ?", (user_id,))
-    conn.execute("DELETE FROM seeker_jobs WHERE user_id = ?", (user_id,))
+    _safe_delete("DELETE FROM chat_messages WHERE user_id = ?", (user_id,))
+    _safe_delete("DELETE FROM chat_sessions WHERE user_id = ?", (user_id,))
+    _safe_delete("DELETE FROM activities WHERE user_id = ?", (user_id,))
+    _safe_delete("DELETE FROM memories WHERE user_id = ?", (user_id,))
+    _safe_delete("DELETE FROM workflows WHERE user_id = ?", (user_id,))
+    _safe_delete("DELETE FROM session_summaries WHERE user_id = ?", (user_id,))
+    _safe_delete("DELETE FROM job_seeker_profiles WHERE user_id = ?", (user_id,))
+    _safe_delete("DELETE FROM seeker_jobs WHERE user_id = ?", (user_id,))
 
     if delete_records:
         # Also remove recruiter business data
-        conn.execute("DELETE FROM emails", ())
-        conn.execute("DELETE FROM candidate_jobs", ())
-        conn.execute("DELETE FROM candidates", ())
-        conn.execute("DELETE FROM jobs", ())
-        conn.execute("DELETE FROM events", ())
-        conn.execute("DELETE FROM automation_rules", ())
-        conn.execute("DELETE FROM automation_logs", ())
+        _safe_delete("DELETE FROM emails")
+        _safe_delete("DELETE FROM candidate_jobs")
+        _safe_delete("DELETE FROM candidates")
+        _safe_delete("DELETE FROM jobs")
+        _safe_delete("DELETE FROM events")
+        _safe_delete("DELETE FROM automation_rules")
+        _safe_delete("DELETE FROM automation_logs")
 
+    # Always delete the user row itself
     cur = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
     conn.commit()
+
+    # If no users remain, clear global settings for fresh onboarding
+    remaining = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    if remaining == 0:
+        _safe_delete("DELETE FROM settings")
+        conn.commit()
+
     conn.close()
     return cur.rowcount > 0
 
