@@ -111,7 +111,8 @@ async def upload_resume(file: UploadFile = File(...), job_id: str = Form(""), _u
         cfg = get_config()
 
         has_key = (
-            (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
+            cfg.llm_provider == "ollama"
+            or (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
             or (cfg.llm_provider == "openai" and cfg.openai_api_key)
             or (cfg.llm_provider == "gemini" and cfg.gemini_api_key)
         )
@@ -258,7 +259,8 @@ async def reparse_candidate_route(candidate_id: str, _user: dict = Depends(get_c
     cfg = get_config()
 
     has_key = (
-        (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
+        cfg.llm_provider == "ollama"
+        or (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
         or (cfg.llm_provider == "openai" and cfg.openai_api_key)
         or (cfg.llm_provider == "gemini" and cfg.gemini_api_key)
     )
@@ -394,7 +396,8 @@ async def match_candidates(req: MatchRequest, _user: dict = Depends(get_current_
     # Stage 2: LLM evaluation (optional)
     cfg = get_config()
     has_key = (
-        (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
+        cfg.llm_provider == "ollama"
+        or (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
         or (cfg.llm_provider == "openai" and cfg.openai_api_key)
         or (cfg.llm_provider == "gemini" and cfg.gemini_api_key)
     )

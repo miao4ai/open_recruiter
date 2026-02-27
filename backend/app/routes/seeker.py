@@ -149,7 +149,8 @@ async def upload_jd_for_seeker(
         from app.routes.settings import get_config
         cfg = get_config()
         has_key = (
-            (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
+            cfg.llm_provider == "ollama"
+            or (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
             or (cfg.llm_provider == "openai" and cfg.openai_api_key)
             or (cfg.llm_provider == "gemini" and cfg.gemini_api_key)
         )
