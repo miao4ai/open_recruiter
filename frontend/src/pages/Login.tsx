@@ -28,7 +28,7 @@ const LANGUAGES = [
 ];
 
 interface Props {
-  onLogin: (user: User) => void;
+  onLogin: (user: User, isNewRegistration?: boolean) => void;
 }
 
 export default function Login({ onLogin }: Props) {
@@ -51,7 +51,7 @@ export default function Login({ onLogin }: Props) {
         ? await register(email, password, name, role)
         : await login(email, password, role);
       setToken(res.token);
-      onLogin(res.user);
+      onLogin(res.user, isRegister);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data

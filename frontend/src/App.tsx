@@ -54,9 +54,14 @@ export default function App() {
       .finally(() => setChecking(false));
   }, []);
 
-  const handleLogin = (u: User) => {
+  const handleLogin = (u: User, isNewRegistration?: boolean) => {
     setUser(u);
-    // Check if LLM needs onboarding (both roles need LLM configured)
+    if (isNewRegistration) {
+      // Always show onboarding for new registrations
+      setNeedsOnboarding(true);
+      return;
+    }
+    // Existing users: only show onboarding if LLM not configured
     getSetupStatus().then((status) => {
       if (!status.llm_configured) setNeedsOnboarding(true);
     }).catch(() => {});
