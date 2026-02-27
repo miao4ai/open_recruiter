@@ -19,7 +19,7 @@ import ArrowForward from "@mui/icons-material/ArrowForward";
 import ArrowBack from "@mui/icons-material/ArrowBack";
 import ScienceOutlined from "@mui/icons-material/ScienceOutlined";
 import DownloadOutlined from "@mui/icons-material/DownloadOutlined";
-import { updateSettings, testLlm, testEmail, getOllamaStatus, pullOllamaModel } from "../lib/api";
+import { updateSettings, testLlm, testEmail, getOllamaStatus, pullOllamaModel, startOllama } from "../lib/api";
 import type { OllamaStatus } from "../lib/api";
 
 const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
@@ -97,6 +97,7 @@ export default function Onboarding({ onComplete, role = "recruiter" }: Props) {
   const [pulling, setPulling] = useState(false);
   const [pullProgress, setPullProgress] = useState(0);
   const [pullStatus, setPullStatus] = useState("");
+  const [starting, setStarting] = useState(false);
 
   // Email state
   const [emailBackend, setEmailBackend] = useState("console");
@@ -401,12 +402,44 @@ export default function Onboarding({ onComplete, role = "recruiter" }: Props) {
                       color={ollamaStatus?.running ? "success" : "error"}
                       size="small"
                     />
-                    {!ollamaStatus?.running && (
-                      <Typography variant="body2" color="text.secondary">
-                        {t("settings.ollamaInstallHint")}
-                      </Typography>
-                    )}
                   </Box>
+                  {!ollamaStatus?.running && (
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={async () => {
+                          setStarting(true);
+                          setError("");
+                          try {
+                            const res = await startOllama();
+                            if (res.started) {
+                              const status = await getOllamaStatus();
+                              setOllamaStatus(status);
+                            } else if (!res.installed) {
+                              setError(t("settings.ollamaNotInstalled"));
+                            } else {
+                              setError(t("settings.ollamaStartFailed"));
+                            }
+                          } catch {
+                            setError(t("settings.ollamaStartFailed"));
+                          } finally {
+                            setStarting(false);
+                          }
+                        }}
+                        disabled={starting}
+                      >
+                        {starting ? t("settings.ollamaStarting") : t("settings.startOllama")}
+                      </Button>
+                      <Button
+                        variant="text"
+                        size="small"
+                        onClick={() => window.open("https://ollama.com/download", "_blank")}
+                      >
+                        {t("settings.installOllama")}
+                      </Button>
+                    </Box>
+                  )}
 
                   {/* Model download */}
                   {ollamaStatus?.running && !isModelInstalled && (

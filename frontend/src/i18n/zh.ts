@@ -456,6 +456,12 @@ const zh = {
     modelDownloadFailed: "模型下载失败。",
     downloading: "下载中...",
     noApiKeyNeeded: "无需 API 密钥 — 在您的电脑上免费本地运行。",
+    startOllama: "启动 Ollama",
+    ollamaStarting: "正在启动...",
+    ollamaStarted: "Ollama 启动成功！",
+    ollamaStartFailed: "启动 Ollama 失败。",
+    ollamaNotInstalled: "Ollama 未安装，请先下载安装。",
+    installOllama: "下载 Ollama",
     // Language
     language: "语言",
     languageHint: "界面显示语言",

@@ -455,6 +455,12 @@ const ko = {
     modelDownloadFailed: "모델 다운로드 실패.",
     downloading: "다운로드 중...",
     noApiKeyNeeded: "API 키 불필요 — 로컬에서 무료로 실행됩니다.",
+    startOllama: "Ollama 시작",
+    ollamaStarting: "시작 중...",
+    ollamaStarted: "Ollama가 시작되었습니다!",
+    ollamaStartFailed: "Ollama 시작에 실패했습니다.",
+    ollamaNotInstalled: "Ollama가 설치되어 있지 않습니다. 먼저 다운로드하세요.",
+    installOllama: "Ollama 다운로드",
     // Language
     language: "언어",
     languageHint: "인터페이스 표시 언어",

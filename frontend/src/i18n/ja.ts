@@ -455,6 +455,12 @@ const ja = {
     modelDownloadFailed: "モデルのダウンロードに失敗しました。",
     downloading: "ダウンロード中...",
     noApiKeyNeeded: "APIキー不要 — お使いのマシンでローカルに無料で実行されます。",
+    startOllama: "Ollama を起動",
+    ollamaStarting: "起動中...",
+    ollamaStarted: "Ollama が起動しました！",
+    ollamaStartFailed: "Ollama の起動に失敗しました。",
+    ollamaNotInstalled: "Ollama がインストールされていません。先にダウンロードしてください。",
+    installOllama: "Ollama をダウンロード",
     // Language
     language: "言語",
     languageHint: "インターフェースの表示言語",

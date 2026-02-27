@@ -456,6 +456,12 @@ const es = {
     modelDownloadFailed: "Error al descargar el modelo.",
     downloading: "Descargando...",
     noApiKeyNeeded: "No se necesita clave API — se ejecuta localmente en tu máquina de forma gratuita.",
+    startOllama: "Iniciar Ollama",
+    ollamaStarting: "Iniciando...",
+    ollamaStarted: "¡Ollama se inició correctamente!",
+    ollamaStartFailed: "Error al iniciar Ollama.",
+    ollamaNotInstalled: "Ollama no está instalado. Descárgalo primero.",
+    installOllama: "Descargar Ollama",
     // Language
     language: "Idioma",
     languageHint: "Idioma de la interfaz",

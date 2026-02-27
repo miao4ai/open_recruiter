@@ -456,6 +456,12 @@ const zhTW = {
     modelDownloadFailed: "模型下載失敗。",
     downloading: "下載中...",
     noApiKeyNeeded: "無需 API 金鑰 — 在您的電腦上免費本地運行。",
+    startOllama: "啟動 Ollama",
+    ollamaStarting: "正在啟動...",
+    ollamaStarted: "Ollama 啟動成功！",
+    ollamaStartFailed: "啟動 Ollama 失敗。",
+    ollamaNotInstalled: "Ollama 未安裝，請先下載安裝。",
+    installOllama: "下載 Ollama",
     // Language
     language: "語言",
     languageHint: "介面顯示語言",

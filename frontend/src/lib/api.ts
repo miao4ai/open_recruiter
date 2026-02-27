@@ -231,6 +231,15 @@ export interface OllamaStatus {
 export const getOllamaStatus = () =>
   api.get<OllamaStatus>("/ollama/status").then((r) => r.data);
 
+export interface OllamaStartResult {
+  started: boolean;
+  installed?: boolean;
+  message: string;
+}
+
+export const startOllama = () =>
+  api.post<OllamaStartResult>("/ollama/start").then((r) => r.data);
+
 export async function pullOllamaModel(
   modelName: string,
   onProgress: (progress: { status: string; total?: number; completed?: number }) => void,

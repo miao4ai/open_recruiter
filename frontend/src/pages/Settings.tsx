@@ -22,6 +22,7 @@ import {
   testEmail,
   getOllamaStatus,
   pullOllamaModel,
+  startOllama,
 } from "../lib/api";
 import type { OllamaStatus } from "../lib/api";
 import type { Settings as SettingsType } from "../types";
@@ -99,6 +100,7 @@ export default function Settings() {
   const [pulling, setPulling] = useState(false);
   const [pullProgress, setPullProgress] = useState(0);
   const [pullStatus, setPullStatus] = useState("");
+  const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     if (saved) setForm(saved);
@@ -299,12 +301,44 @@ export default function Settings() {
                   color={ollamaStatus?.running ? "success" : "error"}
                   size="small"
                 />
-                {!ollamaStatus?.running && (
-                  <Typography variant="body2" color="text.secondary">
-                    {t("settings.ollamaInstallHint")}
-                  </Typography>
-                )}
               </Box>
+              {!ollamaStatus?.running && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={async () => {
+                      setStarting(true);
+                      try {
+                        const res = await startOllama();
+                        if (res.started) {
+                          enqueueSnackbar(t("settings.ollamaStarted"), { variant: "success" });
+                          const status = await getOllamaStatus();
+                          setOllamaStatus(status);
+                        } else if (!res.installed) {
+                          enqueueSnackbar(t("settings.ollamaNotInstalled"), { variant: "warning" });
+                        } else {
+                          enqueueSnackbar(t("settings.ollamaStartFailed"), { variant: "error" });
+                        }
+                      } catch {
+                        enqueueSnackbar(t("settings.ollamaStartFailed"), { variant: "error" });
+                      } finally {
+                        setStarting(false);
+                      }
+                    }}
+                    disabled={starting}
+                  >
+                    {starting ? t("settings.ollamaStarting") : t("settings.startOllama")}
+                  </Button>
+                  <Button
+                    variant="text"
+                    size="small"
+                    onClick={() => window.open("https://ollama.com/download", "_blank")}
+                  >
+                    {t("settings.installOllama")}
+                  </Button>
+                </Box>
+              )}
 
               {/* Model download */}
               {ollamaStatus?.running && !isModelInstalled && (
