@@ -1,7 +1,7 @@
 # Open Recruiter v2.0.0 — LangGraph Architecture
 
 > v1.x 使用单体 orchestrator.py（~950行）手动管理 5 种工作流。
-> v2.0 采用 LangGraph 实现图编排、Planning Mode、Human-in-the-Loop 和 Guardrails。
+> v2.0 采用 LangGraph 实现 **Multi-Agent 协作**、Planning Mode、Human-in-the-Loop 和 Guardrails。
 
 ---
 
@@ -23,17 +23,23 @@
 │  │                   graphs/ (LangGraph Core)                 │  │
 │  │                                                            │  │
 │  │   Router Graph ──┬──► Chat Graph                           │  │
-│  │                  ├──► Planner Graph ──► Workflow Graphs     │  │
+│  │                  ├──► Planner (Supervisor) ──► Multi-Agent  │  │
 │  │                  └──► Resume Paused Workflow                │  │
 │  │                                                            │  │
 │  │   ┌─────────────────────────────────────────────────────┐  │  │
-│  │   │              Workflow Graphs                         │  │  │
-│  │   │  bulk_outreach | candidate_review | job_launch       │  │  │
-│  │   │  interview_scheduling | pipeline_cleanup             │  │  │
+│  │   │          Specialist Agents (Multi-Agent)             │  │  │
+│  │   │                                                     │  │  │
+│  │   │  ┌───────────┐ ┌───────────┐ ┌──────────────────┐  │  │  │
+│  │   │  │ Matching  │ │   Comms   │ │   Scheduling     │  │  │  │
+│  │   │  │   Agent   │ │   Agent   │ │     Agent        │  │  │  │
+│  │   │  └───────────┘ └───────────┘ └──────────────────┘  │  │  │
+│  │   │  ┌───────────┐ ┌───────────┐ ┌──────────────────┐  │  │  │
+│  │   │  │  Resume   │ │    JD     │ │    Pipeline      │  │  │  │
+│  │   │  │   Agent   │ │   Agent   │ │     Agent        │  │  │  │
+│  │   │  └───────────┘ └───────────┘ └──────────────────┘  │  │  │
 │  │   └─────────────────────────────────────────────────────┘  │  │
 │  └────────────────────────────────────────────────────────────┘  │
 │                                                                  │
-│  agents/   ──── 现有 Agent 模块（保持不变，包装为 Node）          │
 │  guardrails/ ── 输入/输出/操作验证层                              │
 │  llm.py  ────── LiteLLM 统一调用（LangGraph Node 直接调用）      │
 │  SqliteSaver ── 检查点存储（复用同一 SQLite 数据库）              │
@@ -98,24 +104,68 @@
 
 ---
 
-## 4. Planner Graph（规划模式 — 新增）
+## 4. Supervisor / Planner Graph（规划 + 多 Agent 调度）
+
+Planner 同时充当 **Supervisor**，负责生成计划并动态编排多个 Specialist Agent 协作完成任务。
 
 ```
-┌──────────────┐   ┌───────────────┐   ┌───────────────┐   ┌─────────────────┐
-│ generate_plan│──▶│ validate_plan │──▶│ present_plan  │──▶│   INTERRUPT     │
-│  (LLM)       │   │ (guardrails)  │   │ (SSE → 前端)  │   │ (等待用户审批)   │
-└──────────────┘   └───────────────┘   └───────────────┘   └────────┬────────┘
-       ▲                                                            │
-       │                                              ┌─────────────┼──────────────┐
-       │                                              │             │              │
-       │                                       ┌──────▼───┐  ┌─────▼────┐  ┌──────▼─────┐
-       └───────────── modify ─────────────────│  Modify  │  │ Approve  │  │  Cancel    │
-                                               └──────────┘  └─────┬────┘  └────────────┘
-                                                                    │
-                                                             ┌──────▼──────────┐
-                                                             │dispatch_workflow│
-                                                             │(启动对应 Graph) │
-                                                             └─────────────────┘
+                         ┌──────────────┐
+                         │  User Input  │
+                         └──────┬───────┘
+                                │
+                    ┌───────────▼───────────┐
+                    │    generate_plan      │
+                    │    (LLM 生成计划)      │
+                    └───────────┬───────────┘
+                                │
+                    ┌───────────▼───────────┐
+                    │    validate_plan      │
+                    │    (guardrails)       │
+                    └───────────┬───────────┘
+                                │
+                    ┌───────────▼───────────┐
+                    │    present_plan       │
+                    │    (SSE → 前端)       │
+                    └───────────┬───────────┘
+                                │
+                    ┌───────────▼───────────┐
+                    │      INTERRUPT        │
+                    │   (等待用户审批)       │
+                    └───────────┬───────────┘
+                      ┌────────┼────────┐
+                      │        │        │
+               ┌──────▼──┐ ┌──▼────┐ ┌─▼───────┐
+               │ Modify  │ │Cancel │ │ Approve │
+               └────┬────┘ └───────┘ └────┬────┘
+                    │                      │
+                    ▼                      ▼
+              (loop back)     ┌────────────────────────┐
+                              │   Supervisor Dispatch   │
+                              │   (动态编排 Agent)       │
+                              └────────────┬───────────┘
+                         ┌─────────────────┼─────────────────┐
+                         │                 │                 │
+                  ┌──────▼──────┐  ┌───────▼──────┐  ┌──────▼──────┐
+                  │   Agent A   │  │   Agent B    │  │   Agent C   │
+                  │ (按需选择)   │  │  (按需选择)   │  │  (按需选择)  │
+                  └──────┬──────┘  └───────┬──────┘  └──────┬──────┘
+                         │                 │                 │
+                         └─────────┬───────┘                 │
+                                   │    ┌────────────────────┘
+                                   │    │
+                           ┌───────▼────▼───────┐
+                           │  aggregate_results │
+                           │  (汇总 + guardrails)│
+                           └────────┬───────────┘
+                                    │
+                           ┌────────▼───────────┐
+                           │     INTERRUPT      │
+                           │  (最终审批/确认)     │
+                           └────────┬───────────┘
+                                    │
+                           ┌────────▼───────────┐
+                           │     finalize       │
+                           └────────────────────┘
 ```
 
 **Plan JSON 结构:**
@@ -123,11 +173,12 @@
 {
   "goal": "为 Senior Engineer 职位找到候选人并发送外联邮件",
   "workflow_type": "job_launch",
+  "agents_required": ["matching", "communication"],
   "steps": [
-    {"step": 1, "action": "搜索匹配候选人", "description": "基于 JD 向量匹配"},
-    {"step": 2, "action": "排名与筛选", "description": "取 Top 10 候选人"},
-    {"step": 3, "action": "生成邮件", "description": "为每人生成个性化外联邮件"},
-    {"step": 4, "action": "审批发送", "description": "等待用户确认后批量发送"}
+    {"step": 1, "agent": "matching",      "action": "搜索匹配候选人", "mode": "sequential"},
+    {"step": 2, "agent": "matching",      "action": "排名与筛选",     "mode": "sequential"},
+    {"step": 3, "agent": "communication", "action": "生成个性化邮件", "mode": "parallel"},
+    {"step": 4, "agent": "supervisor",    "action": "审批发送",       "mode": "interrupt"}
   ],
   "estimated_actions": {"emails": 10, "api_calls": 15},
   "requires_approval": true
@@ -136,51 +187,103 @@
 
 ---
 
-## 5. Workflow Graphs
+## 5. Specialist Agents（专业 Agent）
 
-### 5.1 Bulk Outreach（批量外联）
+每个 Specialist Agent 封装一个领域能力，由 Supervisor 按需调度。Agent 之间可以串行执行、并行执行或通过 Handoff 交接。
 
-```
-┌────────────────┐   ┌──────────────┐   ┌────────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────┐
-│find_candidates │──▶│ draft_emails │──▶│check_guardrails│──▶│  INTERRUPT   │──▶│ send_emails  │──▶│ finalize │
-│(matching.py)   │   │(communic.py) │   │(action_limits) │   │(用户审批邮件) │   │(communic.py) │   │          │
-└────────────────┘   └──────────────┘   └────────────────┘   └──────────────┘   └──────────────┘   └──────────┘
-```
+### 5.1 Agent 清单
 
-### 5.2 Candidate Review（候选人审查）
+| Agent | 封装模块 | 职责 | 可调度的工作流 |
+|-------|---------|------|--------------|
+| **Matching Agent** | `matching.py` | 候选人搜索、向量匹配、排名打分 | bulk_outreach, job_launch, candidate_review |
+| **Communication Agent** | `communication.py` | 邮件草拟、邮件发送、模板管理 | bulk_outreach, job_launch |
+| **Scheduling Agent** | `scheduling.py` | 面试时间提议、日历事件创建、邀请邮件 | interview_scheduling |
+| **Resume Agent** | `resume.py` | 简历解析、技能提取、经历分析 | candidate_review, matching |
+| **JD Agent** | `jd.py` | 职位描述解析、需求提取 | job_launch |
+| **Pipeline Agent** | (new) | 管道扫描、候选人状态分类、批量操作 | pipeline_cleanup |
 
-```
-┌──────────────┐   ┌────────────┐   ┌──────────────┐   ┌──────────────┐   ┌───────────────┐   ┌──────────┐
-│load_candidate│──▶│  analyze   │──▶│    rank      │──▶│  INTERRUPT   │──▶│ update_status │──▶│ finalize │
-│              │   │(matching.py)│  │              │   │(确认操作建议) │   │               │   │          │
-└──────────────┘   └────────────┘   └──────────────┘   └──────────────┘   └───────────────┘   └──────────┘
-```
-
-### 5.3 Interview Scheduling（面试安排）
+### 5.2 Multi-Agent 协作模式
 
 ```
-┌──────────────────┐   ┌───────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────┐
-│load_candidate_job│──▶│ propose_slots │──▶│  INTERRUPT   │──▶│ create_event │──▶│ finalize │
-│                  │   │(scheduling.py)│   │(确认时间段)   │   │+ draft_invite│   │          │
-└──────────────────┘   └───────────────┘   └──────────────┘   └──────────────┘   └──────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Supervisor (Planner)                              │
+│                                                                     │
+│  根据 Plan 动态选择协作模式:                                         │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  模式 1: Sequential（串行）                                  │    │
+│  │                                                             │    │
+│  │  Matching Agent ──▶ Communication Agent ──▶ Supervisor      │    │
+│  │  (先找人)            (再写邮件)              (汇总审批)       │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  模式 2: Parallel Fan-out（并行扇出）                        │    │
+│  │                                                             │    │
+│  │  ┌─ Communication Agent (候选人 A 邮件) ─┐                  │    │
+│  │  ├─ Communication Agent (候选人 B 邮件) ─┼──▶ Supervisor    │    │
+│  │  └─ Communication Agent (候选人 C 邮件) ─┘    (汇总)        │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  模式 3: Handoff（交接）                                     │    │
+│  │                                                             │    │
+│  │  Resume Agent ──handoff──▶ Matching Agent                   │    │
+│  │  (解析简历后直接交给匹配,  不回 Supervisor)                    │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  模式 4: Sequential + Parallel 混合                          │    │
+│  │                                                             │    │
+│  │  JD Agent ──▶ Matching Agent ──▶ ┌─ Comms Agent (邮件) ──┐  │    │
+│  │  (解析JD)     (搜索匹配)         ├─ Scheduling Agent ────┼▶ │    │
+│  │                                  └─ (面试安排)  ──────────┘  │    │
+│  │                                              Supervisor 汇总  │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.4 Pipeline Cleanup（管道清理）
+### 5.3 典型工作流的 Agent 编排
 
+**Job Launch（职位启动）— Sequential + Parallel:**
 ```
-┌──────────┐   ┌────────────┐   ┌──────────────┐   ┌─────────┐   ┌──────────┐
-│   scan   │──▶│ categorize │──▶│  INTERRUPT   │──▶│ execute │──▶│ finalize │
-│          │   │            │   │(确认清理操作) │   │         │   │          │
-└──────────┘   └────────────┘   └──────────────┘   └─────────┘   └──────────┘
+JD Agent ──▶ Matching Agent ──▶ [parallel] Communication Agent ×N ──▶ INTERRUPT ──▶ Send
+(解析职位)    (搜索+排名)        (并行为每人生成邮件)                   (审批)
 ```
 
-### 5.5 Job Launch（职位启动）
-
+**Bulk Outreach（批量外联）— Sequential + Parallel:**
 ```
-┌──────────┐   ┌────────┐   ┌───────┐   ┌──────────────┐   ┌────────────────┐   ┌──────────────┐   ┌──────────┐
-│ load_job │──▶│ search │──▶│ match │──▶│ draft_emails │──▶│check_guardrails│──▶│  INTERRUPT   │──▶│  send +  │
-│          │   │        │   │       │   │              │   │                │   │(审批邮件)     │   │ finalize │
-└──────────┘   └────────┘   └───────┘   └──────────────┘   └────────────────┘   └──────────────┘   └──────────┘
+Matching Agent ──▶ [parallel] Communication Agent ×N ──▶ Guardrails ──▶ INTERRUPT ──▶ Send
+(候选人搜索)       (并行草拟邮件)                        (批量检查)      (审批)
+```
+
+**Candidate Review（候选人审查）— Sequential + Handoff:**
+```
+Resume Agent ──handoff──▶ Matching Agent ──▶ INTERRUPT ──▶ Pipeline Agent
+(解析简历)                 (匹配分析+排名)    (确认建议)     (更新状态)
+```
+
+**Interview Scheduling（面试安排）— Sequential:**
+```
+Matching Agent ──▶ Scheduling Agent ──▶ INTERRUPT ──▶ Communication Agent
+(加载候选人+职位)   (提议时间段)          (确认时间)     (发送邀请邮件)
+```
+
+**Pipeline Cleanup（管道清理）— Sequential:**
+```
+Pipeline Agent (scan) ──▶ Pipeline Agent (categorize) ──▶ INTERRUPT ──▶ Pipeline Agent (execute)
+```
+
+**跨工作流串联（复杂任务）:**
+```
+用户: "帮我找到适合这个职位的候选人，发邮件，然后安排面试"
+
+Supervisor Plan:
+  Step 1: JD Agent        → 解析职位需求
+  Step 2: Matching Agent  → 搜索+匹配候选人      ──▶ INTERRUPT (审批候选人名单)
+  Step 3: Comms Agent ×N  → 并行生成外联邮件      ──▶ INTERRUPT (审批邮件)
+  Step 4: Comms Agent     → 发送邮件
+  Step 5: Scheduling Agent→ 为回复的候选人安排面试  ──▶ INTERRUPT (确认时间)
 ```
 
 ---
@@ -313,18 +416,19 @@ backend/app/
 │
 ├── graphs/                          # 新增 — LangGraph 核心
 │   ├── __init__.py
-│   ├── state.py                     # TypedDict 状态 (BaseWorkflowState, ChatState, PlannerState)
+│   ├── state.py                     # TypedDict 状态 (BaseWorkflowState, ChatState, PlannerState, AgentState)
 │   ├── checkpointer.py              # SqliteSaver 配置（复用同一 SQLite）
 │   ├── router.py                    # 顶层路由: classify → chat | planner | resume
-│   ├── planner.py                   # 规划图: generate → validate → present → INTERRUPT → dispatch
+│   ├── supervisor.py                # Supervisor/Planner: 生成计划 + 动态调度 Agent
 │   ├── chat_graph.py                # 单轮聊天图
-│   └── workflows/
+│   └── agents/                      # Specialist Agent 子图
 │       ├── __init__.py
-│       ├── bulk_outreach.py         # 批量外联
-│       ├── candidate_review.py      # 候选人审查
-│       ├── interview_scheduling.py  # 面试安排
-│       ├── pipeline_cleanup.py      # 管道清理
-│       └── job_launch.py            # 职位启动
+│       ├── matching_agent.py        # 候选人搜索、向量匹配、排名
+│       ├── communication_agent.py   # 邮件草拟、发送
+│       ├── scheduling_agent.py      # 面试安排、日历事件
+│       ├── resume_agent.py          # 简历解析、技能提取
+│       ├── jd_agent.py              # 职位描述解析
+│       └── pipeline_agent.py        # 管道扫描、状态分类、批量操作
 │
 ├── guardrails/                      # 新增 — 验证层
 │   ├── __init__.py
@@ -334,11 +438,11 @@ backend/app/
 │   ├── action_limits.py             # 速率限制、批量上限、成本控制
 │   └── policy.py                    # 可配置规则引擎
 │
-├── agents/                          # 重构 — 现有文件保留，包装为 Node
-│   ├── tools.py                     # 新增: Agent → Graph Node 适配器
-│   ├── communication.py             # (保留)
-│   ├── matching.py                  # (保留)
-│   ├── resume.py / jd.py / market.py / employer.py / job_search.py / scheduling.py  # (保留)
+├── agents/                          # 现有模块保留，被 graphs/agents/ 封装调用
+│   ├── communication.py             # (保留) 被 communication_agent 调用
+│   ├── matching.py                  # (保留) 被 matching_agent 调用
+│   ├── scheduling.py                # (保留) 被 scheduling_agent 调用
+│   ├── resume.py / jd.py / market.py / employer.py / job_search.py  # (保留)
 │   └── orchestrator.py              # 废弃: 迁移期间保留，最终删除
 │
 ├── routes/
@@ -381,8 +485,8 @@ langgraph-checkpoint-sqlite>=1.0
 |------|-----|------|-------------|
 | 1. 基础设施 | 1-2 | 添加依赖、创建 graphs/ 结构、State Schema、Checkpointer、DB 迁移 | — |
 | 2. Chat Graph | 3 | 迁移单轮聊天到 LangGraph | `USE_LANGGRAPH_CHAT` |
-| 3. Workflows | 4-5 | 逐个迁移工作流: pipeline_cleanup → candidate_review → interview_scheduling → bulk_outreach → job_launch | `USE_LANGGRAPH_WORKFLOW` |
-| 4. Planning Mode | 6 | 新增 Planner Graph、Router、PlanPreview UI | `USE_PLANNER` |
+| 3. Specialist Agents | 4-5 | 逐个封装 Agent: pipeline → resume → jd → matching → communication → scheduling | `USE_LANGGRAPH_AGENTS` |
+| 4. Supervisor + Multi-Agent | 6 | Supervisor/Planner Graph、Router、Agent 编排（串行/并行/Handoff）、PlanPreview UI | `USE_SUPERVISOR` |
 | 5. Guardrails | 7 | 完整 Guardrails 层 + 策略配置 UI | `USE_GUARDRAILS` |
 | 6. Cleanup | 8 | 移除 Feature Flags、删除 orchestrator.py、版本号 → 2.0.0 | — |
 
