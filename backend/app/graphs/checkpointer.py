@@ -5,7 +5,7 @@ its own tables (checkpoints, checkpoint_writes, etc.) alongside the app's
 tables in the same database, so workflow_id maps directly to thread_id.
 
 Usage:
-    from graphs.checkpointer import get_checkpointer
+    from app.graphs.checkpointer import get_checkpointer
 
     checkpointer = get_checkpointer()
     graph = workflow.compile(checkpointer=checkpointer)

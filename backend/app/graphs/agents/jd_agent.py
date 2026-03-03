@@ -16,7 +16,7 @@ Nodes:
                    can read it and decide the next step.
 
 Usage by Supervisor:
-    from graphs.agents.jd_agent import jd_agent_graph
+    from app.graphs.agents.jd_agent import jd_agent_graph
 
     # Invoke as a subgraph within the supervisor
     result = jd_agent_graph.invoke({
@@ -32,7 +32,7 @@ import logging
 
 from langgraph.graph import END, StateGraph
 
-from graphs.state import JDAgentState
+from app.graphs.state import JDAgentState
 from app.llm import chat_json
 from app.prompts import PARSE_JD
 
