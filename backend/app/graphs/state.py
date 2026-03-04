@@ -9,7 +9,7 @@ Hierarchy:
   ├── ChatState       — single-turn chat graph
   ├── PlannerState    — supervisor / planner graph
   └── AgentState      — individual specialist agent subgraphs
-      └── JDAgentState, MatchingAgentState, ...  (agent-specific extensions)
+      └── JDAgentState, ResumeAgentState, CommunicationAgentState, ...  (per-agent)
 """
 
 from __future__ import annotations
@@ -108,3 +108,53 @@ class JDAgentState(AgentState, total=False):
     raw_text: str                # Raw JD text to parse
     job_id: str                  # Optional — existing job to update
     parsed_jd: dict              # Structured fields extracted by LLM
+
+
+# ── Resume Agent ──────────────────────────────────────────────────────────
+
+class ResumeAgentState(AgentState, total=False):
+    """State specific to the Resume parsing agent.
+
+    Input:  agent_input = {"raw_text": "...", "candidate_id": "..."}
+    Output: agent_output = {"name": ..., "skills": [...], "resume_summary": ..., ...}
+    """
+
+    raw_text: str                # Raw resume text to parse
+    candidate_id: str            # Optional — existing candidate to update
+    parsed_resume: dict          # Structured fields extracted by LLM
+
+
+# ── Communication Agent ──────────────────────────────────────────────────
+
+class CommunicationAgentState(AgentState, total=False):
+    """State specific to the Communication (email drafting) agent.
+
+    Input:  agent_input = {"candidate_id": ..., "job_id": ..., "email_type": ..., ...}
+    Output: agent_output = {"subject": ..., "body": ..., "candidate_name": ...}
+    """
+
+    candidate_id: str            # Target candidate
+    job_id: str                  # Related job (optional)
+    email_type: str              # outreach | followup | interview_invite | rejection
+    instructions: str            # User-provided drafting instructions
+    candidate_context: dict      # Loaded candidate profile
+    job_context: dict            # Loaded job description
+    email_history: list[dict]    # Prior emails with this candidate
+    draft: dict                  # {"subject": ..., "body": ...}
+
+
+# ── Matching Agent ────────────────────────────────────────────────────────
+
+class MatchingAgentState(AgentState, total=False):
+    """State specific to the Matching (candidate-job scoring) agent.
+
+    Input:  agent_input = {"job_id": ..., "candidate_ids": [...], "top_k": 20}
+    Output: agent_output = {"rankings": [...], "detailed_matches": [...]}
+    """
+
+    job_id: str                  # Target job
+    candidate_ids: list[str]     # Specific candidates (optional — empty means all)
+    top_k: int                   # Max candidates for vector search
+    job_context: dict            # Loaded job record
+    vector_rankings: list[dict]  # Results from vector similarity search
+    detailed_matches: list[dict] # LLM-evaluated match results per candidate
