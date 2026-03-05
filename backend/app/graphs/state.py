@@ -158,3 +158,38 @@ class MatchingAgentState(AgentState, total=False):
     job_context: dict            # Loaded job record
     vector_rankings: list[dict]  # Results from vector similarity search
     detailed_matches: list[dict] # LLM-evaluated match results per candidate
+
+
+# ── Scheduling Agent ─────────────────────────────────────────────────────
+
+class SchedulingAgentState(AgentState, total=False):
+    """State specific to the Scheduling (interview coordination) agent.
+
+    Input:  agent_input = {"candidate_id": ..., "job_id": ..., "num_slots": 3}
+    Output: agent_output = {"event": {...}, "email_draft": {...}, "slots": [...]}
+    """
+
+    candidate_id: str            # Candidate to schedule
+    job_id: str                  # Related job
+    candidate_context: dict      # Loaded candidate record
+    job_context: dict            # Loaded job record
+    num_slots: int               # How many time slots to propose (default 3)
+    proposed_slots: list[dict]   # Generated time slot options
+    selected_slot: dict          # Slot chosen after INTERRUPT
+    event: dict                  # Created calendar event
+    email_draft: dict            # Drafted invite email
+
+
+# ── Pipeline Agent ────────────────────────────────────────────────────────
+
+class PipelineAgentState(AgentState, total=False):
+    """State specific to the Pipeline (cleanup/maintenance) agent.
+
+    Input:  agent_input = {"days_stale": 3}
+    Output: agent_output = {"stale_candidates": [...], "actions": [...], "summary": ...}
+    """
+
+    days_stale: int              # Threshold in days for staleness
+    stale_candidates: list[dict] # Candidates identified as stale
+    actions: list[dict]          # Categorised actions (follow_up / archive / reject)
+    executed: list[dict]         # Results of executed actions
