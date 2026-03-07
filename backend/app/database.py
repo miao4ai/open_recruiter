@@ -431,6 +431,48 @@ def init_db() -> None:
     except Exception:
         pass  # Best-effort migration
 
+    # ── v2.0.0 LangGraph tables ───────────────────────────────────────────
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS plans (
+            id TEXT PRIMARY KEY,
+            workflow_id TEXT DEFAULT '',
+            session_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            goal TEXT NOT NULL,
+            workflow_type TEXT NOT NULL,
+            plan_json TEXT NOT NULL DEFAULT '{}',
+            status TEXT DEFAULT 'pending',
+            modifications_json TEXT DEFAULT '[]',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS guardrail_logs (
+            id TEXT PRIMARY KEY,
+            workflow_id TEXT DEFAULT '',
+            session_id TEXT DEFAULT '',
+            user_id TEXT DEFAULT '',
+            check_name TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            message TEXT NOT NULL,
+            context_json TEXT DEFAULT '{}',
+            created_at TEXT NOT NULL
+        );
+    """)
+    conn.commit()
+
+    # Migration: add LangGraph columns to workflows
+    for col, default in [
+        ("plan_id", "''"),
+        ("graph_name", "''"),
+        ("langgraph_thread_id", "''"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE workflows ADD COLUMN {col} TEXT DEFAULT {default}")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
     conn.close()
 
 
