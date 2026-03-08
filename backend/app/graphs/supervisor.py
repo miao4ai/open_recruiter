@@ -303,17 +303,12 @@ def present_plan(state: PlannerState) -> dict:
 
 
 # ── Node 6: dispatch_agents ──────────────────────────────────────────────
-# Executes the approved plan by invoking specialist agents in order.
-# Sequential steps run one after another; parallel steps could be batched
-# (future enhancement with asyncio.gather).
+# Executes the approved plan by invoking specialist agents.
+# Steps marked as "parallel" are grouped and executed concurrently
+# via ThreadPoolExecutor. Sequential/interrupt steps run one-by-one.
 
-def dispatch_agents(state: PlannerState) -> dict:
-    """Dispatch specialist agents according to the approved plan."""
-    cfg = state["cfg"]
-    plan = state.get("plan", {})
-    steps = plan.get("steps", [])
-
-    # Lazy import to avoid circular imports at module load
+def _get_agent_graphs() -> dict:
+    """Lazy import of agent subgraphs to avoid circular imports."""
     from app.graphs.agents.jd_agent import jd_agent_graph
     from app.graphs.agents.resume_agent import resume_agent_graph
     from app.graphs.agents.matching_agent import matching_agent_graph
@@ -321,7 +316,7 @@ def dispatch_agents(state: PlannerState) -> dict:
     from app.graphs.agents.scheduling_agent import scheduling_agent_graph
     from app.graphs.agents.pipeline_agent import pipeline_agent_graph
 
-    agent_graphs = {
+    return {
         "jd": jd_agent_graph,
         "resume": resume_agent_graph,
         "matching": matching_agent_graph,
@@ -330,32 +325,117 @@ def dispatch_agents(state: PlannerState) -> dict:
         "pipeline": pipeline_agent_graph,
     }
 
-    agent_results = state.get("agent_results") or {}
+
+def _invoke_agent(agent_graph, agent_input: dict) -> dict:
+    """Invoke a single agent graph, returning its output or error."""
+    try:
+        result = agent_graph.invoke(agent_input)
+        return result.get("agent_output", {})
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _group_steps(steps: list[dict]) -> list[list[dict]]:
+    """Group plan steps into execution batches.
+
+    Consecutive steps with mode="parallel" are grouped into the same
+    batch and run concurrently.  Sequential/interrupt steps each form
+    their own single-item batch.
+
+    Example:
+        steps = [
+            {mode: "sequential"},  # batch 0 (alone)
+            {mode: "parallel"},    # batch 1 (together)
+            {mode: "parallel"},    # batch 1 (together)
+            {mode: "sequential"},  # batch 2 (alone)
+        ]
+    """
+    batches: list[list[dict]] = []
+    current_parallel: list[dict] = []
 
     for step in steps:
-        agent_name = step.get("agent", "")
-        agent_graph = agent_graphs.get(agent_name)
+        mode = step.get("mode", "sequential")
+        if mode == "parallel":
+            current_parallel.append(step)
+        else:
+            # Flush any accumulated parallel batch
+            if current_parallel:
+                batches.append(current_parallel)
+                current_parallel = []
+            batches.append([step])
 
-        if not agent_graph:
-            log.warning("Unknown agent: %s, skipping", agent_name)
-            continue
+    if current_parallel:
+        batches.append(current_parallel)
 
-        agent_input = {
-            "cfg": cfg,
-            "agent_input": {
-                **step,
-                "previous_results": agent_results,
-            },
-            "session_id": state.get("session_id", ""),
-            "user_id": state.get("user_id", ""),
-        }
+    return batches
 
-        try:
-            result = agent_graph.invoke(agent_input)
-            agent_results[agent_name] = result.get("agent_output", {})
-        except Exception as e:
-            log.error("Agent %s failed: %s", agent_name, e)
-            agent_results[agent_name] = {"error": str(e)}
+
+def dispatch_agents(state: PlannerState) -> dict:
+    """Dispatch specialist agents according to the approved plan.
+
+    Parallel steps are run concurrently using a ThreadPoolExecutor.
+    Sequential steps run one after another. Each batch can read
+    previous_results from earlier batches.
+    """
+    import concurrent.futures
+
+    cfg = state["cfg"]
+    plan = state.get("plan", {})
+    steps = plan.get("steps", [])
+    agent_graphs = _get_agent_graphs()
+    agent_results = state.get("agent_results") or {}
+
+    batches = _group_steps(steps)
+
+    for batch in batches:
+        if len(batch) == 1:
+            # Single step — run directly (no thread overhead)
+            step = batch[0]
+            agent_name = step.get("agent", "")
+            agent_graph = agent_graphs.get(agent_name)
+            if not agent_graph:
+                log.warning("Unknown agent: %s, skipping", agent_name)
+                continue
+
+            agent_input = {
+                "cfg": cfg,
+                "agent_input": {**step, "previous_results": agent_results},
+                "session_id": state.get("session_id", ""),
+                "user_id": state.get("user_id", ""),
+            }
+            result = _invoke_agent(agent_graph, agent_input)
+            agent_results[agent_name] = result
+            if isinstance(result, dict) and result.get("error"):
+                log.error("Agent %s failed: %s", agent_name, result["error"])
+        else:
+            # Parallel batch — fan out with ThreadPoolExecutor
+            futures: dict[str, concurrent.futures.Future] = {}
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=len(batch),
+                thread_name_prefix="agent",
+            ) as executor:
+                for step in batch:
+                    agent_name = step.get("agent", "")
+                    agent_graph = agent_graphs.get(agent_name)
+                    if not agent_graph:
+                        log.warning("Unknown agent: %s, skipping", agent_name)
+                        continue
+                    agent_input = {
+                        "cfg": cfg,
+                        "agent_input": {**step, "previous_results": agent_results},
+                        "session_id": state.get("session_id", ""),
+                        "user_id": state.get("user_id", ""),
+                    }
+                    futures[agent_name] = executor.submit(
+                        _invoke_agent, agent_graph, agent_input,
+                    )
+
+            # Collect results after all futures complete
+            for agent_name, future in futures.items():
+                result = future.result()
+                agent_results[agent_name] = result
+                if isinstance(result, dict) and result.get("error"):
+                    log.error("Agent %s failed: %s", agent_name, result["error"])
 
     return {
         "agent_results": agent_results,
