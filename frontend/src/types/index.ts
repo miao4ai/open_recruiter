@@ -357,7 +357,35 @@ export interface JobMatchResultBlock {
   };
 }
 
-export type MessageBlock = MatchReportBlock | ApprovalBlock | JobSearchResultsBlock | JobMatchResultBlock;
+export interface PlanPreviewBlock {
+  type: "plan_preview";
+  plan: {
+    goal: string;
+    workflow_type: string;
+    agents_required: string[];
+    steps: {
+      step: number;
+      agent: string;
+      action: string;
+      mode: "sequential" | "parallel" | "interrupt";
+    }[];
+    requires_approval: boolean;
+  };
+  options: string[];
+}
+
+export type GuardrailSeverity = "pass" | "warning" | "blocked";
+
+export interface GuardrailWarningBlock {
+  type: "guardrail_warning";
+  check_name: string;
+  severity: GuardrailSeverity;
+  message: string;
+  details?: string;
+  suggestions?: string[];
+}
+
+export type MessageBlock = MatchReportBlock | ApprovalBlock | JobSearchResultsBlock | JobMatchResultBlock | PlanPreviewBlock | GuardrailWarningBlock;
 
 // ── Workflow Types ──────────────────────────────────────────────────────
 

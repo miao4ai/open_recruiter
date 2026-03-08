@@ -1,5 +1,7 @@
 import { WorkOutline, CheckOutlined, ChevronRightOutlined, StarOutlined, TrendingUpOutlined, WarningAmberOutlined, CloseOutlined } from "@mui/icons-material";
 import type { MessageBlock, MatchRanking, ApprovalBlock } from "../types";
+import PlanPreview from "./PlanPreview";
+import GuardrailWarning from "./GuardrailWarning";
 
 interface Props {
   blocks: MessageBlock[];
@@ -27,6 +29,24 @@ export default function MessageBlocks({ blocks, onSendPrompt, onViewJob }: Props
         if (block.type === "approval_block") {
           return (
             <ApprovalBlockCard
+              key={i}
+              block={block}
+              onSendPrompt={onSendPrompt}
+            />
+          );
+        }
+        if (block.type === "plan_preview") {
+          return (
+            <PlanPreview
+              key={i}
+              block={block}
+              onSendPrompt={onSendPrompt}
+            />
+          );
+        }
+        if (block.type === "guardrail_warning") {
+          return (
+            <GuardrailWarning
               key={i}
               block={block}
               onSendPrompt={onSendPrompt}
