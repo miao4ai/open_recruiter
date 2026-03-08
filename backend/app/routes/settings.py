@@ -109,6 +109,9 @@ async def update_settings(s: Settings, _user: dict = Depends(get_current_user)):
     # Store all non-empty values; convert non-str to str for DB
     to_store = {k: str(v) for k, v in data.items() if v}
     put_settings(to_store)
+    # Invalidate feature flag cache so new values take effect immediately
+    from app.graphs.feature_flags import reload as reload_flags
+    reload_flags()
     return {"status": "ok"}
 
 
