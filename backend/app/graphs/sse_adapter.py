@@ -69,7 +69,33 @@ async def stream_chat_graph(
     if action:
         response["action"] = action
 
-    # Build smart suggestions based on role
+    # Execute action business logic (job search, match analysis, email drafting, etc.)
+    if action and isinstance(action, dict) and action.get("type"):
+        try:
+            from app.routes.agent import _process_actions
+            cfg = state.get("cfg")
+            response = _process_actions(response, action, cfg, user_id, session_id)
+
+            # Update the DB message if _process_actions changed the reply or action
+            if response.get("reply") != reply or response.get("action"):
+                try:
+                    # Find the most recent assistant message for this session
+                    recent = db.list_chat_messages(user_id, limit=1, session_id=session_id)
+                    if recent and recent[-1]["role"] == "assistant":
+                        updates = {}
+                        if response.get("reply") != reply:
+                            updates["content"] = response["reply"]
+                        if response.get("action"):
+                            updates["action_json"] = json.dumps(response["action"])
+                            updates["action_status"] = "pending"
+                        if updates:
+                            db.update_chat_message(recent[-1]["id"], updates)
+                except Exception:
+                    pass  # Non-fatal — message already saved with original content
+        except Exception as exc:
+            log.warning("Action processing failed in SSE adapter: %s", exc)
+
+    # Build smart suggestions based on role (only if not already set by action processing)
     if not response.get("suggestions"):
         if user_role == "job_seeker":
             response["suggestions"] = _seeker_suggestions(action)

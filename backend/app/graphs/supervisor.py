@@ -88,12 +88,12 @@ You are a routing assistant. Classify the user's message into one of these inten
 2. "workflow" — The user wants to trigger a specific workflow. Return the workflow type.
 3. "plan" — The user wants a complex, multi-step task that requires planning and multiple agents.
 
-Workflow types: bulk_outreach, candidate_review, interview_scheduling, pipeline_cleanup, job_launch
+Workflow types: bulk_outreach, candidate_review, interview_scheduling, pipeline_cleanup, job_launch, job_search, job_match
 
 Return JSON:
 {
   "intent": "chat" | "workflow" | "plan",
-  "workflow_type": "bulk_outreach" | "candidate_review" | ... | null,
+  "workflow_type": "bulk_outreach" | "candidate_review" | "job_search" | "job_match" | ... | null,
   "reasoning": "one sentence explanation"
 }
 Only output valid JSON.
@@ -226,6 +226,8 @@ def route_to_chat(state: PlannerState) -> dict:
         "user_id": state.get("user_id", ""),
         "session_id": state.get("session_id", ""),
         "user_message": state.get("user_message", ""),
+        "user_role": state.get("user_role", "recruiter"),
+        "encouragement_mode": state.get("encouragement_mode", False),
     })
 
     return {

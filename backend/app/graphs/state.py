@@ -65,6 +65,8 @@ class PlannerState(BaseWorkflowState, total=False):
 
     # Input
     user_message: str
+    user_role: str               # "recruiter" | "job_seeker"
+    encouragement_mode: bool     # Job seeker encouragement mode
     conversation_history: list[dict]
 
     # Planning

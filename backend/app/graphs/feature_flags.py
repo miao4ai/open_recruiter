@@ -10,7 +10,8 @@ DB keys:
   - ``use_langgraph_workflow``  — route workflow execution through supervisor_graph
                                    instead of orchestrator.py
 
-Both default to ``"false"`` — opt-in during migration.
+Both default to ``"true"`` — LangGraph is the primary path.
+Set to ``"false"`` in the DB settings table to fall back to legacy.
 """
 
 from __future__ import annotations
@@ -50,9 +51,9 @@ def reload() -> None:
 
 def use_langgraph_chat() -> bool:
     """True → route chat through ``chat_graph``; False → legacy LLM path."""
-    return _read("use_langgraph_chat", default=False)
+    return _read("use_langgraph_chat", default=True)
 
 
 def use_langgraph_workflow() -> bool:
     """True → route workflows through ``supervisor_graph``; False → legacy orchestrator."""
-    return _read("use_langgraph_workflow", default=False)
+    return _read("use_langgraph_workflow", default=True)
