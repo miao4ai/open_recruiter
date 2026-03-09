@@ -14,15 +14,17 @@ Replaces the inline chat logic in routes/agent.py with a composable graph:
 Nodes:
   1. build_context    — Loads conversation history from DB, builds RAG context
                         with candidate/job data, assembles the system prompt.
-  2. input_guard      — (Stub) Future guardrail: prompt injection detection,
-                        PII scan, length limits. Currently passes through.
+  2. input_guard      — Validates user input: prompt injection detection (BLOCKED),
+                        PII scan (WARNING), length limits (BLOCKED).
+                        If blocked → short-circuits to finalize (skips LLM).
   3. call_llm         — Calls llm.chat_json() with the system prompt and
                         conversation history. Produces the raw LLM response.
   4. parse_response   — Extracts message, action, and context_hint from the
                         LLM JSON response. Includes regex fallback for
                         malformed JSON and keyword-based action detection.
-  5. output_guard     — (Stub) Future guardrail: content safety check,
-                        format validation. Currently passes through.
+  5. output_guard     — Validates LLM output: content safety (BLOCKED),
+                        output length (WARNING), hallucination check (WARNING).
+                        If blocked → replaces response and short-circuits to finalize.
   6. process_action   — If the LLM detected an actionable intent (compose_email,
                         upload_resume, etc.), prepares the action payload.
   7. finalize         — Saves assistant message to DB, returns final response.
@@ -32,7 +34,8 @@ Design notes:
   - The streaming variant will be handled at the SSE adapter layer — the
     adapter calls llm.chat_stream() and collects tokens, then feeds the
     accumulated text through parse_response → process_action → finalize.
-  - Guardrail nodes are stubs for now — they'll be implemented in Phase 5.
+  - Guardrails use conditional edges to skip downstream nodes when input/output
+    is blocked, avoiding unnecessary LLM calls or action processing.
 """
 
 from __future__ import annotations
@@ -90,13 +93,36 @@ def build_context(state: ChatState) -> dict:
 
 
 # ── Node 2: input_guard ──────────────────────────────────────────────────
-# Stub for Phase 5 guardrails. Will check for:
-#   - Prompt injection attempts
-#   - PII in user input
-#   - Message length limits
+# Validates user input before it reaches the LLM:
+#   - Prompt injection detection (BLOCKED)
+#   - PII scan (WARNING — logged but not blocked)
+#   - Message length limits (BLOCKED)
 
 def input_guard(state: ChatState) -> dict:
-    """(Stub) Validate user input — guardrails Phase 5."""
+    """Validate user input via InputValidator guardrail."""
+    from app.guardrails.input_validator import InputValidator
+    from app.guardrails.base import GuardrailSeverity, log_guardrail_result
+
+    user_message = state.get("user_message", "")
+    session_id = state.get("session_id", "")
+    user_id = state.get("user_id", "")
+
+    validator = InputValidator()
+    result = validator.check(text=user_message)
+
+    log_guardrail_result(result, session_id=session_id, user_id=user_id)
+
+    if result.blocked:
+        return {
+            "response_text": result.message,
+            "error": f"input_guard: {result.check_name}",
+            "current_step": "input_guard",
+            "steps_completed": [*(state.get("steps_completed") or []), "input_guard"],
+        }
+
+    if result.severity == GuardrailSeverity.WARNING:
+        log.info("Input guard warning: %s — %s", result.check_name, result.message)
+
     return {
         "current_step": "input_guard",
         "steps_completed": [*(state.get("steps_completed") or []), "input_guard"],
@@ -208,13 +234,51 @@ def parse_response(state: ChatState) -> dict:
 
 
 # ── Node 5: output_guard ─────────────────────────────────────────────────
-# Stub for Phase 5 guardrails. Will check for:
-#   - Content safety (harmful/inappropriate content)
-#   - Hallucination detection
-#   - Response format validation
+# Validates LLM output before it reaches the user:
+#   - Content safety — discriminatory language (BLOCKED)
+#   - Output length — runaway generation (WARNING)
+#   - Hallucination — fabricated candidate/job references (WARNING)
 
 def output_guard(state: ChatState) -> dict:
-    """(Stub) Validate LLM output — guardrails Phase 5."""
+    """Validate LLM output via OutputValidator guardrail."""
+    from app.guardrails.output_validator import OutputValidator
+    from app.guardrails.base import GuardrailSeverity, log_guardrail_result
+
+    response_text = state.get("response_text", "")
+    session_id = state.get("session_id", "")
+    user_id = state.get("user_id", "")
+
+    # Gather known entities for hallucination check
+    known_candidates = []
+    known_job_ids = []
+    try:
+        candidates = db.list_candidates() or []
+        known_candidates = [c.get("name", "") for c in candidates if c.get("name")]
+        jobs = db.list_jobs() or []
+        known_job_ids = [j.get("id", "") for j in jobs if j.get("id")]
+    except Exception:
+        pass  # Don't let DB errors break the guard
+
+    validator = OutputValidator()
+    result = validator.check(
+        text=response_text,
+        known_candidates=known_candidates,
+        known_job_ids=known_job_ids,
+    )
+
+    log_guardrail_result(result, session_id=session_id, user_id=user_id)
+
+    if result.blocked:
+        return {
+            "response_text": "I'm sorry, I can't provide that response. Please rephrase your request.",
+            "error": f"output_guard: {result.check_name}",
+            "current_step": "output_guard",
+            "steps_completed": [*(state.get("steps_completed") or []), "output_guard"],
+        }
+
+    if result.severity == GuardrailSeverity.WARNING:
+        log.info("Output guard warning: %s — %s", result.check_name, result.message)
+
     return {
         "current_step": "output_guard",
         "steps_completed": [*(state.get("steps_completed") or []), "output_guard"],
@@ -282,12 +346,26 @@ def finalize(state: ChatState) -> dict:
 
 # ── Graph assembly ───────────────────────────────────────────────────────
 
+def _route_after_input_guard(state: ChatState) -> str:
+    """Skip LLM call if input was blocked by guardrails."""
+    if state.get("error", "").startswith("input_guard:"):
+        return "finalize"
+    return "call_llm"
+
+
+def _route_after_output_guard(state: ChatState) -> str:
+    """Skip action processing if output was blocked by guardrails."""
+    if state.get("error", "").startswith("output_guard:"):
+        return "finalize"
+    return "process_action"
+
+
 def build_chat_graph() -> StateGraph:
     """Construct the Chat Graph.
 
     Flow:
-        build_context → input_guard → call_llm → parse_response
-        → output_guard → process_action → finalize → END
+        build_context → input_guard ─┬─▶ call_llm → parse_response → output_guard ─┬─▶ process_action → finalize → END
+                                     └─▶ finalize (blocked)                         └─▶ finalize (blocked)
     """
     graph = StateGraph(ChatState)
 
@@ -302,10 +380,10 @@ def build_chat_graph() -> StateGraph:
     graph.set_entry_point("build_context")
 
     graph.add_edge("build_context", "input_guard")
-    graph.add_edge("input_guard", "call_llm")
+    graph.add_conditional_edges("input_guard", _route_after_input_guard)
     graph.add_edge("call_llm", "parse_response")
     graph.add_edge("parse_response", "output_guard")
-    graph.add_edge("output_guard", "process_action")
+    graph.add_conditional_edges("output_guard", _route_after_output_guard)
     graph.add_edge("process_action", "finalize")
     graph.add_edge("finalize", END)
 
