@@ -27,6 +27,7 @@ declare global {
       platform: string;
       onLogout?: (callback: () => void) => void;
       onDeleteAccount?: (callback: () => void) => void;
+      showNotification?: (title: string, body: string) => void;
     };
   }
 }

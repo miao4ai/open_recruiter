@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, nativeImage } from "electron";
+import { app, BrowserWindow, Menu, Tray, Notification, dialog, nativeImage, ipcMain } from "electron";
 import { spawn, ChildProcess, execSync } from "child_process";
 import { autoUpdater } from "electron-updater";
 import * as path from "path";
@@ -8,11 +8,13 @@ import * as fs from "fs";
 
 let backendProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
 let backendPort = 8000;
 let backendLogPath = "";
 let backendRestarts = 0;
 let isQuitting = false;
 const MAX_BACKEND_RESTARTS = 3;
+const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10 MB
 
 // ---------------------------------------------------------------------------
 // Single-instance lock — prevent multiple app windows
@@ -49,6 +51,20 @@ if (!gotTheLock) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
     return dataDir;
+  }
+
+  function rotateLogIfNeeded(logPath: string): void {
+    try {
+      if (!fs.existsSync(logPath)) return;
+      const stats = fs.statSync(logPath);
+      if (stats.size > MAX_LOG_SIZE) {
+        const rotated = logPath + ".old";
+        if (fs.existsSync(rotated)) fs.unlinkSync(rotated);
+        fs.renameSync(logPath, rotated);
+      }
+    } catch {
+      // Non-fatal
+    }
   }
 
   function getBackendCommand(): {
@@ -98,9 +114,10 @@ if (!gotTheLock) {
       OPEN_RECRUITER_DATA_DIR: dataDir,
     };
 
-    // Write backend logs to a file for diagnostics
+    // Write backend logs to a file for diagnostics (rotate if > 10 MB)
     backendLogPath = path.join(dataDir, "backend.log");
-    const logStream = fs.createWriteStream(backendLogPath, { flags: "w" });
+    rotateLogIfNeeded(backendLogPath);
+    const logStream = fs.createWriteStream(backendLogPath, { flags: "a" });
     logStream.write(`[${new Date().toISOString()}] Starting: ${command} ${args.join(" ")}\n`);
     logStream.write(`[${new Date().toISOString()}] CWD: ${cwd}\n\n`);
 
@@ -322,10 +339,72 @@ if (!gotTheLock) {
       mainWindow.loadURL(`http://127.0.0.1:${backendPort}`);
     }
 
+    // Minimize to tray instead of closing (except on macOS which hides to dock)
+    mainWindow.on("close", (e) => {
+      if (!isQuitting && process.platform !== "darwin") {
+        e.preventDefault();
+        mainWindow?.hide();
+      }
+    });
+
     mainWindow.on("closed", () => {
       mainWindow = null;
     });
   }
+
+  // -----------------------------------------------------------------------
+  // System tray
+  // -----------------------------------------------------------------------
+
+  function createTray() {
+    const iconExt = process.platform === "win32" ? "avartar.ico" : "avartar.png";
+    const iconPath = app.isPackaged
+      ? path.join(process.resourcesPath, "images", iconExt)
+      : path.join(__dirname, "..", "images", iconExt);
+
+    let trayIcon = nativeImage.createFromPath(iconPath);
+    // Resize for tray (16x16 on most platforms)
+    if (!trayIcon.isEmpty()) {
+      trayIcon = trayIcon.resize({ width: 16, height: 16 });
+    }
+
+    tray = new Tray(trayIcon);
+    tray.setToolTip("Open Recruiter");
+
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: "Show Window",
+        click: () => {
+          mainWindow?.show();
+          mainWindow?.focus();
+        },
+      },
+      { type: "separator" },
+      {
+        label: "Quit",
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      },
+    ]);
+    tray.setContextMenu(contextMenu);
+
+    tray.on("double-click", () => {
+      mainWindow?.show();
+      mainWindow?.focus();
+    });
+  }
+
+  // -----------------------------------------------------------------------
+  // Native notifications (called from renderer via IPC)
+  // -----------------------------------------------------------------------
+
+  ipcMain.on("show-notification", (_event, args: { title: string; body: string }) => {
+    if (Notification.isSupported()) {
+      new Notification({ title: args.title, body: args.body }).show();
+    }
+  });
 
   // -----------------------------------------------------------------------
   // Auto-update (GitHub Releases)
@@ -407,7 +486,13 @@ if (!gotTheLock) {
 
     createWindow();
     buildAppMenu();
+    createTray();
     setupAutoUpdater();
+
+    // Auto-start on login (packaged builds only)
+    if (app.isPackaged) {
+      app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+    }
 
     if (!backendReady && mainWindow) {
       const isMac = process.platform === "darwin";

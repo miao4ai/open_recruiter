@@ -908,6 +908,14 @@ export default function Chat() {
       // Handle workflow status from done event
       if (response.workflow_id && response.workflow_status) {
         if (response.workflow_status === "done" || response.workflow_status === "cancelled") {
+          // Desktop notification when window is not focused
+          if (!document.hasFocus()) {
+            const status = response.workflow_status === "done" ? "completed" : "cancelled";
+            window.electronAPI?.showNotification?.(
+              "Open Recruiter",
+              `Workflow ${status}: ${response.reply?.slice(0, 100) || "Task finished."}`,
+            );
+          }
           // Clear tracker after a short delay so user sees the final state
           setTimeout(() => setActiveWorkflow(null), 3000);
           setActiveWorkflow((prev) =>

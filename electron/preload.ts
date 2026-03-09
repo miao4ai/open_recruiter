@@ -9,4 +9,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onDeleteAccount: (callback: () => void) => {
     ipcRenderer.on("delete-account", callback);
   },
+  showNotification: (title: string, body: string) => {
+    ipcRenderer.send("show-notification", { title, body });
+  },
 });
