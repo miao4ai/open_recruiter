@@ -79,6 +79,9 @@ def chat(cfg: Config, system: str, messages: list[dict], json_mode: bool = False
 
     if cfg.llm_provider == "ollama":
         kwargs["api_base"] = cfg.ollama_base_url
+        # Disable thinking mode for Qwen 3.5 to avoid <think> tags in output
+        if "qwen3.5" in (cfg.llm_model or ""):
+            kwargs["extra_body"] = {"options": {"num_ctx": 4096}, "think": False}
     elif json_mode:
         kwargs["response_format"] = {"type": "json_object"}
 
@@ -118,6 +121,8 @@ def chat_stream(cfg: Config, system: str, messages: list[dict], json_mode: bool 
 
     if cfg.llm_provider == "ollama":
         kwargs["api_base"] = cfg.ollama_base_url
+        if "qwen3.5" in (cfg.llm_model or ""):
+            kwargs["extra_body"] = {"options": {"num_ctx": 4096}, "think": False}
     elif json_mode:
         kwargs["response_format"] = {"type": "json_object"}
 
