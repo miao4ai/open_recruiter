@@ -4,6 +4,11 @@
   "directories": {
     "output": "release"
   },
+  "publish": {
+    "provider": "github",
+    "owner": "miao4ai",
+    "repo": "open_recruiter"
+  },
   "files": [
     "electron/dist/**/*"
   ],
@@ -33,6 +38,10 @@
     "target": [
       {
         "target": "dmg",
+        "arch": ["arm64"]
+      },
+      {
+        "target": "zip",
         "arch": ["arm64"]
       }
     ],

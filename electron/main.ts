@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu, dialog, nativeImage } from "electron";
 import { spawn, ChildProcess, execSync } from "child_process";
+import { autoUpdater } from "electron-updater";
 import * as path from "path";
 import * as http from "http";
 import * as net from "net";
@@ -307,6 +308,61 @@ if (!gotTheLock) {
   }
 
   // -----------------------------------------------------------------------
+  // Auto-update (GitHub Releases)
+  // -----------------------------------------------------------------------
+
+  function setupAutoUpdater() {
+    if (!app.isPackaged) return; // skip in dev
+
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = true;
+
+    autoUpdater.on("update-available", (info) => {
+      console.log(`[updater] Update available: ${info.version}`);
+      dialog
+        .showMessageBox(mainWindow!, {
+          type: "info",
+          title: "Update Available",
+          message: `A new version (${info.version}) is available. Download now?`,
+          buttons: ["Download", "Later"],
+          defaultId: 0,
+          cancelId: 1,
+        })
+        .then(({ response }) => {
+          if (response === 0) {
+            autoUpdater.downloadUpdate();
+          }
+        });
+    });
+
+    autoUpdater.on("update-downloaded", (info) => {
+      console.log(`[updater] Update downloaded: ${info.version}`);
+      dialog
+        .showMessageBox(mainWindow!, {
+          type: "info",
+          title: "Update Ready",
+          message: `Version ${info.version} has been downloaded. Restart now to install?`,
+          buttons: ["Restart", "Later"],
+          defaultId: 0,
+          cancelId: 1,
+        })
+        .then(({ response }) => {
+          if (response === 0) {
+            autoUpdater.quitAndInstall();
+          }
+        });
+    });
+
+    autoUpdater.on("error", (err) => {
+      console.log("[updater] Error:", err.message);
+    });
+
+    // Check for updates 3 seconds after launch, then every 4 hours
+    setTimeout(() => autoUpdater.checkForUpdates(), 3000);
+    setInterval(() => autoUpdater.checkForUpdates(), 4 * 60 * 60 * 1000);
+  }
+
+  // -----------------------------------------------------------------------
   // App lifecycle
   // -----------------------------------------------------------------------
 
@@ -331,6 +387,7 @@ if (!gotTheLock) {
 
     createWindow();
     buildAppMenu();
+    setupAutoUpdater();
 
     if (!backendReady && mainWindow) {
       const isMac = process.platform === "darwin";

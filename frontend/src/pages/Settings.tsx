@@ -13,6 +13,8 @@ import LinearProgress from "@mui/material/LinearProgress";
 import SaveOutlined from "@mui/icons-material/SaveOutlined";
 import ScienceOutlined from "@mui/icons-material/ScienceOutlined";
 import DownloadOutlined from "@mui/icons-material/DownloadOutlined";
+import BackupOutlined from "@mui/icons-material/BackupOutlined";
+import RestoreOutlined from "@mui/icons-material/RestoreOutlined";
 import { useSnackbar } from "notistack";
 import { useApi } from "../hooks/useApi";
 import {
@@ -23,6 +25,8 @@ import {
   getOllamaStatus,
   pullOllamaModel,
   startOllama,
+  exportBackup,
+  importBackup,
 } from "../lib/api";
 import type { OllamaStatus } from "../lib/api";
 import type { Settings as SettingsType } from "../types";
@@ -102,6 +106,8 @@ export default function Settings() {
   const [pullProgress, setPullProgress] = useState(0);
   const [pullStatus, setPullStatus] = useState("");
   const [starting, setStarting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     if (saved) setForm(saved);
@@ -577,6 +583,64 @@ export default function Settings() {
             onChange={handleChange}
             fullWidth
           />
+        </Section>
+
+        {/* Data Backup & Restore */}
+        <Section title={t("settings.dataBackup")}>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: -1, mb: 1 }}>
+            {t("settings.backupHint")}
+          </Typography>
+          <Stack direction="row" spacing={2}>
+            <Button
+              variant="outlined"
+              startIcon={<BackupOutlined />}
+              disabled={exporting}
+              onClick={async () => {
+                setExporting(true);
+                try {
+                  await exportBackup();
+                  enqueueSnackbar(t("settings.backupExported"), { variant: "success" });
+                } catch {
+                  enqueueSnackbar(t("settings.backupExportFailed"), { variant: "error" });
+                } finally {
+                  setExporting(false);
+                }
+              }}
+            >
+              {exporting ? t("settings.exporting") : t("settings.exportBackup")}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<RestoreOutlined />}
+              disabled={importing}
+              component="label"
+            >
+              {importing ? t("settings.importing") : t("settings.importBackup")}
+              <input
+                type="file"
+                accept=".zip"
+                hidden
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setImporting(true);
+                  try {
+                    const res = await importBackup(file);
+                    if (res.status === "ok") {
+                      enqueueSnackbar(res.message, { variant: "success" });
+                    } else {
+                      enqueueSnackbar(res.message, { variant: "error" });
+                    }
+                  } catch {
+                    enqueueSnackbar(t("settings.backupImportFailed"), { variant: "error" });
+                  } finally {
+                    setImporting(false);
+                    e.target.value = "";
+                  }
+                }}
+              />
+            </Button>
+          </Stack>
         </Section>
 
         {/* Save */}

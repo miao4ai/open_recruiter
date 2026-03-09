@@ -275,6 +275,32 @@ export async function pullOllamaModel(
   }
 }
 
+// ── Backup ────────────────────────────────────────────────────────────────
+export const exportBackup = async () => {
+  const token = getToken();
+  const resp = await fetch("/api/backup/export", {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
+  const blob = await resp.blob();
+  const disposition = resp.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match?.[1] || "open_recruiter_backup.zip";
+  // Trigger browser download
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+export const importBackup = (file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return api.post<{ status: string; message: string }>("/backup/import", form).then((r) => r.data);
+};
+
 // ── Agent (SSE) ───────────────────────────────────────────────────────────
 export const runAgent = (instruction: string) =>
   api.post("/agent/run", { instruction }).then((r) => r.data);

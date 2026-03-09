@@ -463,6 +463,16 @@ const en = {
     ollamaStartFailed: "Failed to start Ollama.",
     ollamaNotInstalled: "Ollama is not installed. Please download it first.",
     installOllama: "Download Ollama",
+    // Backup & Restore
+    dataBackup: "Data Backup & Restore",
+    backupHint: "Export your database and uploaded files as a ZIP, or restore from a previous backup.",
+    exportBackup: "Export Backup",
+    importBackup: "Import Backup",
+    exporting: "Exporting...",
+    importing: "Importing...",
+    backupExported: "Backup exported successfully!",
+    backupExportFailed: "Failed to export backup.",
+    backupImportFailed: "Failed to import backup.",
     // Language
     language: "Language",
     languageHint: "Interface display language",

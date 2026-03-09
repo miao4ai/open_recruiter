@@ -462,6 +462,16 @@ const zh = {
     ollamaStartFailed: "启动 Ollama 失败。",
     ollamaNotInstalled: "Ollama 未安装，请先下载安装。",
     installOllama: "下载 Ollama",
+    // 备份与恢复
+    dataBackup: "数据备份与恢复",
+    backupHint: "将数据库和上传文件导出为 ZIP 压缩包，或从之前的备份中恢复。",
+    exportBackup: "导出备份",
+    importBackup: "导入备份",
+    exporting: "导出中...",
+    importing: "导入中...",
+    backupExported: "备份导出成功！",
+    backupExportFailed: "备份导出失败。",
+    backupImportFailed: "备份导入失败。",
     // Language
     language: "语言",
     languageHint: "界面显示语言",

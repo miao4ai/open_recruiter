@@ -83,7 +83,9 @@ jobs:
         run: npm run build:electron
 
       - name: Package with electron-builder
-        run: npx electron-builder --config electron/electron-builder.json --win --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --config electron/electron-builder.json --win --publish always
 
       # ── Upload artifact ────────────────────────────────────────────────
       - name: Upload installer artifact
@@ -167,7 +169,8 @@ jobs:
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        run: npx electron-builder --config electron/electron-builder.json --mac --publish never
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --config electron/electron-builder.json --mac --publish always
 
       # NOTE: Notarization disabled — Apple notary service is currently
       # experiencing widespread delays (all submissions stuck "In Progress").

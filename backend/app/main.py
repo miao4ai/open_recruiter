@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.auth import require_recruiter
 from app.database import init_db
-from app.routes import agent, auth, automations, calendar, candidates, emails, jobs, ollama, profile, search, seeker, settings
+from app.routes import agent, auth, automations, backup, calendar, candidates, emails, jobs, ollama, profile, search, seeker, settings
 from app.scheduler import init_scheduler, shutdown_scheduler
 from app.slack import routes as slack_routes
 from app.slack.bot import init_slack_app
@@ -68,6 +68,7 @@ app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
 app.include_router(seeker.router, prefix="/api/seeker", tags=["seeker"])
 app.include_router(automations.router, prefix="/api/automations", tags=["automations"], dependencies=_recruiter_only)
 app.include_router(ollama.router, prefix="/api/ollama", tags=["ollama"])
+app.include_router(backup.router, prefix="/api/backup", tags=["backup"])
 app.include_router(slack_routes.router, prefix="/slack", tags=["slack"])
 
 
