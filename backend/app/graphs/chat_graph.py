@@ -53,6 +53,9 @@ from app.graphs.state import ChatState
 from app.llm import chat, chat_json
 from app.prompts import CHAT_SYSTEM_WITH_ACTIONS
 
+# Job seeker action whitelist — only these actions are allowed for seekers
+_SEEKER_ALLOWED_ACTIONS = {"search_jobs", "analyze_job_match", "save_job"}
+
 log = logging.getLogger(__name__)
 
 # Regex to strip trailing ```json {...} ``` blocks the LLM sometimes embeds
@@ -63,8 +66,9 @@ _TRAILING_JSON_BLOCK_RE = re.compile(
 
 
 # ── Node 1: build_context ────────────────────────────────────────────────
-# Assembles the LLM system prompt with recruiter's pipeline context:
-# candidate summaries, job summaries, recent pipeline activity.
+# Assembles the LLM system prompt with role-appropriate context:
+# - Recruiter: pipeline data (candidates, jobs, activity)
+# - Job Seeker: profile, saved jobs, recent search results
 # Also loads conversation history for multi-turn context.
 
 def build_context(state: ChatState) -> dict:
@@ -72,6 +76,7 @@ def build_context(state: ChatState) -> dict:
     user_id = state.get("user_id", "")
     session_id = state.get("session_id", "")
     user_message = state.get("user_message", "")
+    user_role = state.get("user_role", "recruiter")
 
     # Load conversation history
     history = db.list_chat_messages(user_id, limit=20, session_id=session_id)
@@ -80,9 +85,16 @@ def build_context(state: ChatState) -> dict:
     ]
     conversation_history.append({"role": "user", "content": user_message})
 
-    # Build context from DB data (candidates, jobs, pipeline stats)
-    context = _build_pipeline_context(user_id, current_message=user_message)
-    rag_context = CHAT_SYSTEM_WITH_ACTIONS.format(context=context)
+    # Build role-specific system prompt
+    if user_role == "job_seeker":
+        from app.prompts import CHAT_SYSTEM_JOB_SEEKER, ENCOURAGEMENT_ADDENDUM
+        context = _build_job_seeker_context(user_id, session_id=session_id)
+        rag_context = CHAT_SYSTEM_JOB_SEEKER.format(context=context)
+        if state.get("encouragement_mode"):
+            rag_context += ENCOURAGEMENT_ADDENDUM
+    else:
+        context = _build_pipeline_context(user_id, current_message=user_message)
+        rag_context = CHAT_SYSTEM_WITH_ACTIONS.format(context=context)
 
     return {
         "conversation_history": conversation_history,
@@ -293,10 +305,19 @@ def output_guard(state: ChatState) -> dict:
 def process_action(state: ChatState) -> dict:
     """Process any detected action from the LLM response."""
     action = state.get("parsed_action", {})
+    user_role = state.get("user_role", "recruiter")
 
     # No action — nothing to do
     if not action:
         return {
+            "current_step": "process_action",
+            "steps_completed": [*(state.get("steps_completed") or []), "process_action"],
+        }
+
+    # Job seeker whitelist: block recruiter-only actions
+    if user_role == "job_seeker" and action.get("type") not in _SEEKER_ALLOWED_ACTIONS:
+        return {
+            "parsed_action": {},
             "current_step": "process_action",
             "steps_completed": [*(state.get("steps_completed") or []), "process_action"],
         }
@@ -447,3 +468,73 @@ def _detect_action_from_keywords(message: str) -> dict | None:
     if re.search(r"upload.*(jd|job\s*desc)|上传.*(jd|职位|岗位)|添加职位|add.*(job|position)", msg):
         return {"type": "upload_jd"}
     return None
+
+
+def _build_job_seeker_context(user_id: str, session_id: str | None = None) -> str:
+    """Build context from the job seeker's profile, saved jobs, and recent search results."""
+    parts: list[str] = []
+
+    # Profile / resume
+    profile = db.get_job_seeker_profile_by_user(user_id)
+    if profile and profile.get("name"):
+        parts.append("## Your Profile")
+        parts.append(f"- Name: {profile['name']}")
+        if profile.get("email"):
+            parts.append(f"- Email: {profile['email']}")
+        if profile.get("current_title"):
+            parts.append(f"- Current Title: {profile['current_title']}")
+        if profile.get("current_company"):
+            parts.append(f"- Current Company: {profile['current_company']}")
+        if profile.get("experience_years"):
+            parts.append(f"- Experience: {profile['experience_years']} years")
+        if profile.get("location"):
+            parts.append(f"- Location: {profile['location']}")
+        skills = profile.get("skills", [])
+        if skills:
+            parts.append(f"- Skills: {', '.join(skills)}")
+        if profile.get("resume_summary"):
+            parts.append(f"\n## Resume Summary\n{profile['resume_summary']}")
+        if profile.get("raw_resume_text"):
+            parts.append(f"\n## Resume Content (excerpt)\n{profile['raw_resume_text'][:2000]}")
+    else:
+        parts.append("## Profile: Not yet created (user has not uploaded a resume)")
+
+    # Saved jobs
+    saved_jobs = db.list_seeker_jobs(user_id)
+    if saved_jobs:
+        parts.append(f"\n## Saved Jobs ({len(saved_jobs)})")
+        for j in saved_jobs[:10]:
+            line = f"- {j['title']} at {j['company']}"
+            if j.get("location"):
+                line += f" ({j['location']})"
+            if j.get("required_skills"):
+                line += f" — skills: {', '.join(j['required_skills'][:5])}"
+            parts.append(line)
+    else:
+        parts.append("\n## Saved Jobs: None")
+
+    # Recent search results — inject so LLM can resolve "第N个" references
+    if session_id:
+        import json as _json
+        recent_msgs = db.list_chat_messages(user_id, limit=10, session_id=session_id)
+        for msg in reversed(recent_msgs):
+            if msg.get("action_json"):
+                try:
+                    action = _json.loads(msg["action_json"]) if isinstance(msg["action_json"], str) else msg["action_json"]
+                    if isinstance(action, dict) and action.get("type") == "job_search_results":
+                        jobs = action.get("jobs", [])
+                        if jobs:
+                            parts.append(f"\n## Recent Search Results ({len(jobs)} jobs from web)")
+                            for j in jobs:
+                                idx = j.get("index", 0)
+                                line = f"{idx}. {j.get('title', '')} at {j.get('company', 'Unknown')}"
+                                if j.get("location"):
+                                    line += f" ({j['location']})"
+                                if j.get("source"):
+                                    line += f" — {j['source']}"
+                                parts.append(line)
+                            break
+                except (_json.JSONDecodeError, TypeError):
+                    pass
+
+    return "\n".join(parts)

@@ -109,6 +109,8 @@ Available agents:
 - communication: Draft personalised emails (outreach, follow-up, interview invite, rejection)
 - scheduling: Coordinate interview scheduling with time slot proposals
 - pipeline: Pipeline cleanup — find stale candidates, categorise actions, execute
+- job_search: Search the web for job postings (job seeker side)
+- job_match: Analyze candidate-job fit and score matches (job seeker side)
 
 Create a plan with ordered steps. Each step assigns one agent.
 Steps can be "sequential" (wait for previous), "parallel" (run concurrently), or "interrupt" (needs user approval).
@@ -315,6 +317,8 @@ def _get_agent_graphs() -> dict:
     from app.graphs.agents.communication_agent import communication_agent_graph
     from app.graphs.agents.scheduling_agent import scheduling_agent_graph
     from app.graphs.agents.pipeline_agent import pipeline_agent_graph
+    from app.graphs.agents.job_search_agent import job_search_agent_graph
+    from app.graphs.agents.job_match_agent import job_match_agent_graph
 
     return {
         "jd": jd_agent_graph,
@@ -323,6 +327,8 @@ def _get_agent_graphs() -> dict:
         "communication": communication_agent_graph,
         "scheduling": scheduling_agent_graph,
         "pipeline": pipeline_agent_graph,
+        "job_search": job_search_agent_graph,
+        "job_match": job_match_agent_graph,
     }
 
 

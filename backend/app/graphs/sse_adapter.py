@@ -69,9 +69,12 @@ async def stream_chat_graph(
     if action:
         response["action"] = action
 
-    # Build smart suggestions for recruiter
-    if user_role == "recruiter" and not response.get("suggestions"):
-        response["suggestions"] = _default_suggestions(action)
+    # Build smart suggestions based on role
+    if not response.get("suggestions"):
+        if user_role == "job_seeker":
+            response["suggestions"] = _seeker_suggestions(action)
+        else:
+            response["suggestions"] = _default_suggestions(action)
 
     yield {"event": "done", "data": json.dumps(response)}
 
@@ -241,6 +244,24 @@ def _build_blocks_from_agent_results(agent_results: dict) -> list[dict]:
                 "summary": result.get("summary", ""),
                 "actions": result.get("actions", []),
             })
+        elif agent_name == "job_search" and result.get("jobs"):
+            blocks.append({
+                "type": "job_search_results",
+                "jobs": result.get("jobs", []),
+                "total": result.get("total", 0),
+                "query": result.get("query", ""),
+                "location": result.get("location", ""),
+            })
+        elif agent_name == "job_match" and result.get("score") is not None:
+            blocks.append({
+                "type": "job_match_result",
+                "score": result.get("score", 0.0),
+                "strengths": result.get("strengths", []),
+                "gaps": result.get("gaps", []),
+                "reasoning": result.get("reasoning", ""),
+                "job": result.get("job", {}),
+                "candidate_name": result.get("candidate_name", ""),
+            })
 
     return blocks
 
@@ -264,5 +285,27 @@ def _default_suggestions(action: dict | None) -> list[dict]:
         return [
             {"label": f"Email {cname}", "prompt": f"Draft an outreach email to {cname}"},
             {"label": "Compare candidates", "prompt": "Compare the top candidates"},
+        ]
+    return []
+
+
+def _seeker_suggestions(action: dict | None) -> list[dict]:
+    """Build follow-up suggestions for job seekers."""
+    if not action:
+        return [
+            {"label": "Search jobs", "prompt": "Search for jobs matching my profile"},
+            {"label": "Upload resume", "prompt": "I want to upload my resume"},
+        ]
+
+    action_type = action.get("type", "")
+    if action_type == "job_search_results":
+        return [
+            {"label": "Analyze match", "prompt": "How well do I match the first job?"},
+            {"label": "Save job", "prompt": "Save the first job to my list"},
+        ]
+    elif action_type == "analyze_job_match":
+        return [
+            {"label": "Search more", "prompt": "Search for more similar jobs"},
+            {"label": "View saved jobs", "prompt": "Show my saved jobs"},
         ]
     return []

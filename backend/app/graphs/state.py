@@ -43,6 +43,8 @@ class ChatState(BaseWorkflowState, total=False):
 
     # Input
     user_message: str
+    user_role: str               # "recruiter" | "job_seeker"
+    encouragement_mode: bool     # Job seeker encouragement mode
     conversation_history: list[dict]
 
     # RAG context injected by build_context node
@@ -193,3 +195,34 @@ class PipelineAgentState(AgentState, total=False):
     stale_candidates: list[dict] # Candidates identified as stale
     actions: list[dict]          # Categorised actions (follow_up / archive / reject)
     executed: list[dict]         # Results of executed actions
+
+
+# ── Job Search Agent (Job Seeker) ────────────────────────────────────────
+
+class JobSearchAgentState(AgentState, total=False):
+    """State specific to the Job Search agent (job seeker side).
+
+    Input:  agent_input = {"query": "...", "location": "...", "n_results": 10}
+    Output: agent_output = {"jobs": [...], "total": N}
+    """
+
+    query: str                   # Search keywords
+    location: str                # Location filter
+    n_results: int               # Max results to return
+    profile: dict                # Job seeker profile for context
+    raw_results: list[dict]      # Raw web search results
+    enriched_results: list[dict] # LLM-enriched structured results
+
+
+# ── Job Match Agent (Job Seeker) ─────────────────────────────────────────
+
+class JobMatchAgentState(AgentState, total=False):
+    """State specific to the Job Match analysis agent (job seeker side).
+
+    Input:  agent_input = {"job_title": ..., "job_snippet": ..., "job_index": N}
+    Output: agent_output = {"score": 0.85, "strengths": [...], "gaps": [...], "reasoning": "..."}
+    """
+
+    profile: dict                # Job seeker profile
+    job_info: dict               # Job details (title, company, snippet, url, location)
+    match_result: dict           # LLM-evaluated match result

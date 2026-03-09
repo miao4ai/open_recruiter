@@ -478,6 +478,8 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
                 "user_id": user_id,
                 "cfg": cfg,
                 "conversation_history": messages,
+                "user_role": user_role,
+                "encouragement_mode": getattr(req, "encouragement_mode", False),
             }
             async for ev in stream_chat_graph(
                 graph_state,
