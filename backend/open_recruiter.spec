@@ -86,7 +86,7 @@ hiddenimports = [
     "app.agents.job_search",
     "app.agents.market",
     "app.agents.matching",
-    "app.agents.orchestrator",
+    "app.agents.workflow",
     "app.agents.planning",
     "app.agents.resume",
     "app.agents.scheduling",

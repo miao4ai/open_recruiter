@@ -12,7 +12,6 @@ from sse_starlette.sse import EventSourceResponse
 
 from app import database as db
 from app.auth import get_current_user, require_recruiter
-from app.graphs.feature_flags import use_langgraph_chat, use_langgraph_workflow
 from app.models import AgentRequest, ChatRequest
 
 log = logging.getLogger(__name__)
@@ -438,59 +437,41 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
         active_wf = db.get_active_workflow(session_id)
         if active_wf and active_wf["status"] == "paused":
             # Save user message (already saved above), then resume workflow
-            if use_langgraph_workflow():
-                from app.graphs.sse_adapter import stream_supervisor_graph
-                graph_state = {
-                    "user_message": req.message,
-                    "session_id": session_id,
-                    "user_id": user_id,
-                    "cfg": cfg,
-                    "plan_status": "resuming",
-                    "plan": {"_paused_workflow": dict(active_wf)},
-                    "workflow_id": active_wf["id"],
-                }
-                async for ev in stream_supervisor_graph(graph_state, session_id=session_id, user_id=user_id):
-                    yield ev
-            else:
-                from app.agents.orchestrator import resume_workflow
-                async for wf_event in resume_workflow(cfg, active_wf, req.message, user_id, session_id):
-                    if wf_event["event"] == "workflow_step":
-                        yield wf_event
-                    elif wf_event["event"] == "done":
-                        wf_data = json.loads(wf_event["data"]) if isinstance(wf_event["data"], str) else wf_event["data"]
-                        assistant_msg_id = uuid.uuid4().hex[:8]
-                        db.insert_chat_message({
-                            "id": assistant_msg_id, "user_id": user_id,
-                            "session_id": session_id, "role": "assistant",
-                            "content": wf_data.get("reply", ""),
-                            "created_at": datetime.now().isoformat(),
-                        })
-                        wf_data["message_id"] = assistant_msg_id
-                        yield {"event": "done", "data": json.dumps(wf_data)}
-            return  # skip normal LLM path
-
-        # ── LANGGRAPH CHAT PATH ──
-        if use_langgraph_chat():
-            from app.graphs.sse_adapter import stream_chat_graph
+            from app.graphs.sse_adapter import stream_supervisor_graph
             graph_state = {
                 "user_message": req.message,
                 "session_id": session_id,
                 "user_id": user_id,
                 "cfg": cfg,
-                "conversation_history": messages,
-                "user_role": user_role,
-                "encouragement_mode": getattr(req, "encouragement_mode", False),
+                "plan_status": "resuming",
+                "plan": {"_paused_workflow": dict(active_wf)},
+                "workflow_id": active_wf["id"],
             }
-            async for ev in stream_chat_graph(
-                graph_state,
-                session_id=session_id,
-                user_id=user_id,
-                user_role=user_role,
-            ):
+            async for ev in stream_supervisor_graph(graph_state, session_id=session_id, user_id=user_id):
                 yield ev
-            return
+            return  # skip normal LLM path
 
-        # ── LEGACY PATH: stream LLM tokens ──
+        # ── LANGGRAPH CHAT PATH ──
+        from app.graphs.sse_adapter import stream_chat_graph
+        graph_state = {
+            "user_message": req.message,
+            "session_id": session_id,
+            "user_id": user_id,
+            "cfg": cfg,
+            "conversation_history": messages,
+            "user_role": user_role,
+            "encouragement_mode": getattr(req, "encouragement_mode", False),
+        }
+        async for ev in stream_chat_graph(
+            graph_state,
+            session_id=session_id,
+            user_id=user_id,
+            user_role=user_role,
+        ):
+            yield ev
+        return
+
+        # ── LEGACY PATH (retained for reference, unreachable) ──
         loop = asyncio.get_running_loop()
         q: asyncio.Queue[str | Exception | None] = asyncio.Queue()
 
@@ -600,40 +581,22 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
                     "created_at": datetime.now().isoformat(),
                 })
 
-                if use_langgraph_workflow():
-                    from app.graphs.sse_adapter import stream_supervisor_graph
-                    wf = db.get_workflow(response["workflow_id"])
-                    graph_state = {
-                        "user_message": req.message,
-                        "session_id": session_id,
-                        "user_id": user_id,
-                        "cfg": cfg,
-                        "plan_status": "needs_plan",
-                        "workflow_id": response["workflow_id"],
-                        "plan": {
-                            "workflow_type": wf.get("workflow_type", "") if wf else "",
-                            "context": json.loads(wf.get("context_json", "{}")) if wf else {},
-                        },
-                    }
-                    async for ev in stream_supervisor_graph(graph_state, session_id=session_id, user_id=user_id):
-                        yield ev
-                else:
-                    from app.agents.orchestrator import run_workflow
-                    wf = db.get_workflow(response["workflow_id"])
-                    async for wf_event in run_workflow(cfg, wf, user_id, session_id):
-                        if wf_event["event"] == "workflow_step":
-                            yield wf_event
-                        elif wf_event["event"] == "done":
-                            wf_data = json.loads(wf_event["data"]) if isinstance(wf_event["data"], str) else wf_event["data"]
-                            wf_msg_id = uuid.uuid4().hex[:8]
-                            db.insert_chat_message({
-                                "id": wf_msg_id, "user_id": user_id,
-                                "session_id": session_id, "role": "assistant",
-                                "content": wf_data.get("reply", ""),
-                                "created_at": datetime.now().isoformat(),
-                            })
-                            wf_data["message_id"] = wf_msg_id
-                            yield {"event": "done", "data": json.dumps(wf_data)}
+                from app.graphs.sse_adapter import stream_supervisor_graph
+                wf = db.get_workflow(response["workflow_id"])
+                graph_state = {
+                    "user_message": req.message,
+                    "session_id": session_id,
+                    "user_id": user_id,
+                    "cfg": cfg,
+                    "plan_status": "needs_plan",
+                    "workflow_id": response["workflow_id"],
+                    "plan": {
+                        "workflow_type": wf.get("workflow_type", "") if wf else "",
+                        "context": json.loads(wf.get("context_json", "{}")) if wf else {},
+                    },
+                }
+                async for ev in stream_supervisor_graph(graph_state, session_id=session_id, user_id=user_id):
+                    yield ev
                 return
 
             # Build suggestions
@@ -954,7 +917,7 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
 
     elif action_type == "start_workflow":
         try:
-            from app.agents.orchestrator import create_workflow
+            from app.agents.workflow import create_workflow
             wf = create_workflow(
                 session_id, user_id,
                 action_data.get("workflow_type", ""),
