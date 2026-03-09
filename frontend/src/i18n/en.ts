@@ -473,6 +473,9 @@ const en = {
     backupExported: "Backup exported successfully!",
     backupExportFailed: "Failed to export backup.",
     backupImportFailed: "Failed to import backup.",
+    // Offline
+    offlineCloudWarning: "You are offline. Cloud LLM providers (Anthropic, OpenAI, Gemini) require an internet connection. Consider using Ollama for local, offline usage.",
+    offlineOllamaHint: "You are offline. Ollama works locally, but downloading new models requires an internet connection.",
     // Language
     language: "Language",
     languageHint: "Interface display language",

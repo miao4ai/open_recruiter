@@ -10,6 +10,9 @@ let backendProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
 let backendPort = 8000;
 let backendLogPath = "";
+let backendRestarts = 0;
+let isQuitting = false;
+const MAX_BACKEND_RESTARTS = 3;
 
 // ---------------------------------------------------------------------------
 // Single-instance lock — prevent multiple app windows
@@ -126,6 +129,23 @@ if (!gotTheLock) {
       console.log(`[backend] exited with code ${code}`);
       logStream.write(`\n[Process exited with code ${code}]\n`);
       logStream.end();
+
+      // Auto-restart on unexpected crash (not during app quit)
+      if (!isQuitting && code !== 0 && code !== null && backendRestarts < MAX_BACKEND_RESTARTS) {
+        backendRestarts++;
+        console.log(`[electron] Backend crashed, restarting (attempt ${backendRestarts}/${MAX_BACKEND_RESTARTS})...`);
+        setTimeout(() => {
+          backendProcess = startBackend();
+          waitForBackend(30000)
+            .then(() => {
+              console.log("[electron] Backend restarted successfully.");
+              mainWindow?.loadURL(`http://127.0.0.1:${backendPort}`);
+            })
+            .catch((err) => {
+              console.error("[electron] Backend restart failed:", err);
+            });
+        }, 1000);
+      }
     });
 
     return proc;
@@ -429,6 +449,7 @@ if (!gotTheLock) {
   });
 
   app.on("before-quit", () => {
+    isQuitting = true;
     killBackend();
   });
 }

@@ -10,6 +10,7 @@ import FormHelperText from "@mui/material/FormHelperText";
 import Stack from "@mui/material/Stack";
 import Chip from "@mui/material/Chip";
 import LinearProgress from "@mui/material/LinearProgress";
+import Alert from "@mui/material/Alert";
 import SaveOutlined from "@mui/icons-material/SaveOutlined";
 import ScienceOutlined from "@mui/icons-material/ScienceOutlined";
 import DownloadOutlined from "@mui/icons-material/DownloadOutlined";
@@ -108,6 +109,18 @@ export default function Settings() {
   const [starting, setStarting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
 
   useEffect(() => {
     if (saved) setForm(saved);
@@ -239,6 +252,11 @@ export default function Settings() {
 
         {/* LLM Configuration */}
         <Section title={t("settings.llmConfig")}>
+          {!isOnline && form.llm_provider !== "ollama" && (
+            <Alert severity="warning" variant="outlined">
+              {t("settings.offlineCloudWarning")}
+            </Alert>
+          )}
           <TextField
             select
             label={t("settings.provider")}
@@ -301,6 +319,11 @@ export default function Settings() {
           )}
           {form.llm_provider === "ollama" && (
             <>
+              {!isOnline && (
+                <Alert severity="info" variant="outlined">
+                  {t("settings.offlineOllamaHint")}
+                </Alert>
+              )}
               {/* Ollama status */}
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                 <Chip

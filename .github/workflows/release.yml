@@ -75,6 +75,23 @@ jobs:
           }
           Write-Host "backend.exe OK"
 
+      - name: Smoke test backend binary
+        shell: bash
+        run: |
+          backend/dist/backend/backend.exe 9999 &
+          PID=$!
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:9999/health; then
+              echo "Smoke test passed!"
+              kill $PID 2>/dev/null || true
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "ERROR: Backend did not respond within 30 seconds"
+          kill $PID 2>/dev/null || true
+          exit 1
+
       # ── Step 4: Compile Electron + package installer ────────────────────
       - name: Install root npm dependencies
         run: npm install
@@ -158,6 +175,23 @@ jobs:
           echo "backend binary OK"
           file backend/dist/backend/backend
 
+      - name: Smoke test backend binary
+        run: |
+          chmod +x backend/dist/backend/backend
+          backend/dist/backend/backend 9999 &
+          PID=$!
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:9999/health; then
+              echo "Smoke test passed!"
+              kill $PID 2>/dev/null || true
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "ERROR: Backend did not respond within 30 seconds"
+          kill $PID 2>/dev/null || true
+          exit 1
+
       # ── Step 4: Compile Electron + package DMG ──────────────────────────
       - name: Install root npm dependencies
         run: npm install
@@ -189,9 +223,109 @@ jobs:
           name: open-recruiter-macos-install-helper
           path: macos-install.command
 
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      # ── Step 1: Build frontend ──────────────────────────────────────────
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      # ── Step 2: Export embedding model as ONNX ─────────────────────────
+      - name: Install backend dependencies
+        working-directory: backend
+        run: uv sync
+
+      - name: Install ONNX export tools (system Python, not bundled)
+        run: |
+          python3 -m pip install --break-system-packages torch --index-url https://download.pytorch.org/whl/cpu
+          python3 -m pip install --break-system-packages "optimum[onnxruntime]"
+
+      - name: Export embedding model as ONNX
+        working-directory: backend
+        shell: python3 {0}
+        run: |
+          from optimum.onnxruntime import ORTModelForFeatureExtraction
+          from transformers import AutoTokenizer
+          print("Exporting BAAI/bge-small-en-v1.5 to ONNX...")
+          model = ORTModelForFeatureExtraction.from_pretrained("BAAI/bge-small-en-v1.5", export=True)
+          model.save_pretrained("models")
+          tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-small-en-v1.5")
+          tokenizer.save_pretrained("models")
+          print("ONNX export complete.")
+
+      # ── Step 3: Bundle backend with PyInstaller ─────────────────────────
+      - name: Bundle backend with PyInstaller
+        working-directory: backend
+        run: uv run pyinstaller open_recruiter.spec --noconfirm
+
+      - name: Verify PyInstaller output
+        run: |
+          if [ ! -f "backend/dist/backend/backend" ]; then
+            echo "ERROR: PyInstaller build failed - backend binary not found"
+            exit 1
+          fi
+          echo "backend binary OK"
+          file backend/dist/backend/backend
+
+      - name: Smoke test backend binary
+        run: |
+          chmod +x backend/dist/backend/backend
+          backend/dist/backend/backend 9999 &
+          PID=$!
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:9999/health; then
+              echo "Smoke test passed!"
+              kill $PID 2>/dev/null || true
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "ERROR: Backend did not respond within 30 seconds"
+          kill $PID 2>/dev/null || true
+          exit 1
+
+      # ── Step 4: Compile Electron + package AppImage ─────────────────────
+      - name: Install root npm dependencies
+        run: npm install
+
+      - name: Compile Electron TypeScript
+        run: npm run build:electron
+
+      - name: Package with electron-builder
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --config electron/electron-builder.json --linux --publish always
+
+      # ── Upload artifact ────────────────────────────────────────────────
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-recruiter-linux-appimage
+          path: release/*.AppImage
+
   release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [build-windows, build-macos]
+    needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -206,4 +340,5 @@ jobs:
             artifacts/open-recruiter-windows-installer/*.exe
             artifacts/open-recruiter-macos-dmg/*.dmg
             artifacts/open-recruiter-macos-install-helper/macos-install.command
+            artifacts/open-recruiter-linux-appimage/*.AppImage
           generate_release_notes: true

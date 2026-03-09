@@ -472,6 +472,9 @@ const zh = {
     backupExported: "备份导出成功！",
     backupExportFailed: "备份导出失败。",
     backupImportFailed: "备份导入失败。",
+    // 离线提示
+    offlineCloudWarning: "当前无网络连接。云端 LLM（Anthropic、OpenAI、Gemini）需要联网使用，建议切换到 Ollama 本地运行。",
+    offlineOllamaHint: "当前无网络连接。Ollama 可以离线运行，但下载新模型需要联网。",
     // Language
     language: "语言",
     languageHint: "界面显示语言",
