@@ -54,7 +54,7 @@ class Config:
                 "anthropic": "claude-sonnet-4-20250514",
                 "openai": "gpt-5.1",
                 "gemini": "gemini-2.5-flash",
-                "ollama": "qwen2.5:7b",
+                "ollama": "qwen3.5:0.6b",
             }.get(self.llm_provider, "claude-sonnet-4-20250514")
 
 
