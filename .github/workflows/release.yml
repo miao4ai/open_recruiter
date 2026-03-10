@@ -102,7 +102,7 @@ jobs:
       - name: Package with electron-builder
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --config electron/electron-builder.json --win --publish always
+        run: npx electron-builder --config electron/electron-builder.json --win --publish never
 
       # ── Upload artifact ────────────────────────────────────────────────
       - name: Upload installer artifact
@@ -204,7 +204,7 @@ jobs:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --config electron/electron-builder.json --mac --publish always
+        run: npx electron-builder --config electron/electron-builder.json --mac --publish never
 
       # NOTE: Notarization disabled — Apple notary service is currently
       # experiencing widespread delays (all submissions stuck "In Progress").
@@ -217,11 +217,6 @@ jobs:
           name: open-recruiter-macos-dmg
           path: release/*.dmg
 
-      - name: Upload macOS install helper
-        uses: actions/upload-artifact@v4
-        with:
-          name: open-recruiter-macos-install-helper
-          path: macos-install.command
 
   build-linux:
     runs-on: ubuntu-latest
@@ -314,7 +309,7 @@ jobs:
       - name: Package with electron-builder
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --config electron/electron-builder.json --linux --publish always
+        run: npx electron-builder --config electron/electron-builder.json --linux --publish never
 
       # ── Upload artifact ────────────────────────────────────────────────
       - name: Upload AppImage artifact
@@ -339,6 +334,5 @@ jobs:
           files: |
             artifacts/open-recruiter-windows-installer/*.exe
             artifacts/open-recruiter-macos-dmg/*.dmg
-            artifacts/open-recruiter-macos-install-helper/macos-install.command
             artifacts/open-recruiter-linux-appimage/*.AppImage
           generate_release_notes: true
