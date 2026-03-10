@@ -303,6 +303,7 @@ const en = {
     errorMessage: "Sorry, I encountered an error. Please try again.",
     askErika: "Ask Erika anything...",
     failedToSendEmail: "Failed to send the email. Please check your email configuration in Settings.",
+    jobCreatedViaForm: "Job \"{{title}}\" has been created! You can find it in the Jobs page.",
   },
 
   // ── Calendar ──

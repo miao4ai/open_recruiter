@@ -915,6 +915,9 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
     elif action_type == "upload_jd":
         response["action"] = {"type": "upload_jd"}
 
+    elif action_type == "open_job_form":
+        response["action"] = {"type": "open_job_form"}
+
     elif action_type == "start_workflow":
         try:
             from app.agents.workflow import create_workflow

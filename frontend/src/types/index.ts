@@ -187,6 +187,10 @@ export interface ChatJdUploadAction {
   type: "upload_jd";
 }
 
+export interface ChatOpenJobFormAction {
+  type: "open_job_form";
+}
+
 export interface ChatCreateJobAction {
   type: "create_job";
   job: Job;
@@ -213,7 +217,7 @@ export interface ChatMarketAnalysisAction {
   report: MarketReport;
 }
 
-export type ChatAction = ChatEmailAction | ChatResumeUploadAction | ChatJdUploadAction | ChatCreateJobAction | ChatCreateCandidateAction | ChatMarketAnalysisAction;
+export type ChatAction = ChatEmailAction | ChatResumeUploadAction | ChatJdUploadAction | ChatOpenJobFormAction | ChatCreateJobAction | ChatCreateCandidateAction | ChatMarketAnalysisAction;
 
 export interface ChatResponse {
   reply: string;

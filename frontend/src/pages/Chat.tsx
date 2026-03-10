@@ -15,6 +15,12 @@ import Select from "@mui/material/Select";
 import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import LinearProgress from "@mui/material/LinearProgress";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import Stack from "@mui/material/Stack";
+import Grid from "@mui/material/Grid2";
 import SendOutlined from "@mui/icons-material/SendOutlined";
 import DeleteOutline from "@mui/icons-material/DeleteOutline";
 import CheckCircleOutline from "@mui/icons-material/CheckCircleOutline";
@@ -45,6 +51,7 @@ import {
   listPipelineEntries,
   updateChatMessageStatus,
   saveChatMessage,
+  createJob,
 } from "../lib/api";
 import PipelineBar from "../components/PipelineBar";
 import EmojiPickerButton from "../components/EmojiPickerButton";
@@ -755,6 +762,9 @@ export default function Chat() {
   const [streamingText, setStreamingText] = useState("");
   const [backendSuggestions, setBackendSuggestions] = useState<Suggestion[]>([]);
   const [activeWorkflow, setActiveWorkflow] = useState<ActiveWorkflow | null>(null);
+  const [jobFormOpen, setJobFormOpen] = useState(false);
+  const [jobForm, setJobForm] = useState({ title: "", company: "", postedDate: "", rawText: "" });
+  const [jobFormSubmitting, setJobFormSubmitting] = useState(false);
   const didAutoSelect = useRef(false);
   const loadedSessionRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -941,6 +951,9 @@ export default function Chat() {
       } else {
         setBackendSuggestions([]);
       }
+      if (response.action?.type === "open_job_form") {
+        setJobFormOpen(true);
+      }
       if (response.context_hint) {
         setContextView(response.context_hint);
         setPipelineStage(null);
@@ -1084,6 +1097,28 @@ export default function Chat() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  };
+
+  const handleJobFormSubmit = async () => {
+    if (!jobForm.rawText.trim()) return;
+    setJobFormSubmitting(true);
+    try {
+      await createJob({
+        title: jobForm.title,
+        company: jobForm.company,
+        posted_date: jobForm.postedDate,
+        raw_text: jobForm.rawText,
+      });
+      setJobFormOpen(false);
+      setJobForm({ title: "", company: "", postedDate: "", rawText: "" });
+      setMessages((prev) => [...prev, {
+        id: "job-created-" + Date.now(), user_id: "", role: "assistant",
+        content: t("chat.jobCreatedViaForm", { title: jobForm.title || t("jobs.newJob") }),
+        created_at: new Date().toISOString(),
+      }]);
+    } finally {
+      setJobFormSubmitting(false);
+    }
   };
 
   /* ── Render ────────────────────────────────────────────────────────────── */
@@ -1285,6 +1320,56 @@ export default function Chat() {
           onViewCandidate={handleViewCandidate} onViewJob={handleViewJob}
           onSendPrompt={(p) => handleSend(p)} />
       </Box>
+
+      {/* Job Creation Dialog */}
+      <Dialog open={jobFormOpen} onClose={() => setJobFormOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{t("jobs.newJob")}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2.5} sx={{ mt: 1 }}>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label={t("jobs.jobTitle")}
+                  size="small"
+                  fullWidth
+                  value={jobForm.title}
+                  onChange={(e) => setJobForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder={t("jobs.jobTitlePlaceholder")}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label={t("jobs.company")}
+                  size="small"
+                  fullWidth
+                  value={jobForm.company}
+                  onChange={(e) => setJobForm((f) => ({ ...f, company: e.target.value }))}
+                  placeholder={t("jobs.companyPlaceholder")}
+                />
+              </Grid>
+            </Grid>
+            <TextField
+              label={t("jobs.jobDescription")}
+              fullWidth
+              multiline
+              rows={8}
+              value={jobForm.rawText}
+              onChange={(e) => setJobForm((f) => ({ ...f, rawText: e.target.value }))}
+              placeholder={t("jobs.jobDescriptionPlaceholder")}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setJobFormOpen(false)}>{t("common.cancel")}</Button>
+          <Button
+            variant="contained"
+            onClick={handleJobFormSubmit}
+            disabled={jobFormSubmitting || !jobForm.rawText.trim()}
+          >
+            {jobFormSubmitting ? t("common.creating") : t("jobs.createJob")}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

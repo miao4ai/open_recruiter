@@ -303,6 +303,7 @@ const zh = {
     errorMessage: "抱歉，遇到了错误。请重试。",
     askErika: "向 Erika 提问...",
     failedToSendEmail: "邮件发送失败。请在设置中检查您的邮件配置。",
+    jobCreatedViaForm: "职位「{{title}}」已创建！可以在职位页面中查看。",
   },
 
   // ── Calendar ──
