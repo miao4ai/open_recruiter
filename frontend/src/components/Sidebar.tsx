@@ -15,7 +15,7 @@ import PeopleOutline from "@mui/icons-material/PeopleOutline";
 import CalendarMonthOutlined from "@mui/icons-material/CalendarMonthOutlined";
 import BoltOutlined from "@mui/icons-material/BoltOutlined";
 import SettingsOutlined from "@mui/icons-material/SettingsOutlined";
-import SmartToyOutlined from "@mui/icons-material/SmartToyOutlined";
+
 
 const DRAWER_WIDTH = 240;
 
@@ -47,7 +47,7 @@ export default function Sidebar() {
     >
       {/* Logo */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 2.5, py: 2.5 }}>
-        <SmartToyOutlined sx={{ color: "#60a5fa", fontSize: 28 }} />
+        <Box component="img" src="/ai-chan-avatar.png" alt="logo" sx={{ width: 28, height: 28, borderRadius: "50%" }} />
         <Typography variant="subtitle1" fontWeight={600} letterSpacing="-0.02em">
           {t("common.appName")}
         </Typography>

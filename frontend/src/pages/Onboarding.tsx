@@ -13,7 +13,7 @@ import StepLabel from "@mui/material/StepLabel";
 import FormHelperText from "@mui/material/FormHelperText";
 import Chip from "@mui/material/Chip";
 import LinearProgress from "@mui/material/LinearProgress";
-import SmartToyOutlined from "@mui/icons-material/SmartToyOutlined";
+
 import CheckCircleOutline from "@mui/icons-material/CheckCircleOutline";
 import ArrowForward from "@mui/icons-material/ArrowForward";
 import ArrowBack from "@mui/icons-material/ArrowBack";
@@ -286,7 +286,7 @@ export default function Onboarding({ onComplete, role = "recruiter" }: Props) {
             mb: 3,
           }}
         >
-          <SmartToyOutlined sx={{ fontSize: 32, color: "primary.main" }} />
+          <Box component="img" src="/ai-chan-avatar.png" alt="logo" sx={{ width: 32, height: 32, borderRadius: "50%" }} />
           <Typography variant="h5" fontWeight={700} letterSpacing="-0.02em">
             {t("common.appName")}
           </Typography>

@@ -11,7 +11,7 @@ import Alert from "@mui/material/Alert";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import MenuItem from "@mui/material/MenuItem";
-import SmartToyOutlined from "@mui/icons-material/SmartToyOutlined";
+
 import BusinessCenterOutlined from "@mui/icons-material/BusinessCenterOutlined";
 import SearchOutlined from "@mui/icons-material/SearchOutlined";
 import LanguageOutlined from "@mui/icons-material/LanguageOutlined";
@@ -84,7 +84,7 @@ export default function Login({ onLogin }: Props) {
       <Paper elevation={3} sx={{ width: "100%", maxWidth: 440, p: 4, borderRadius: 3 }}>
         {/* Logo */}
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, mb: 4 }}>
-          <SmartToyOutlined sx={{ fontSize: 32, color: "primary.main" }} />
+          <Box component="img" src="/ai-chan-avatar.png" alt="logo" sx={{ width: 32, height: 32, borderRadius: "50%" }} />
           <Typography variant="h5" fontWeight={700} letterSpacing="-0.02em">
             {t("common.appName")}
           </Typography>
