@@ -233,9 +233,15 @@ def parse_response(state: ChatState) -> dict:
     if reply_text and "```" in reply_text and '"message"' in reply_text:
         reply_text = _TRAILING_JSON_BLOCK_RE.sub("", reply_text).rstrip()
 
-    # Keyword fallback for action detection (weak local models)
-    if not action_data:
-        action_data = _detect_action_from_keywords(user_message)
+    # Keyword-based action override for weak local models.
+    # Small models often misclassify upload intents (e.g. returning create_job
+    # instead of upload_jd).  Keyword detection takes priority for upload
+    # intents because the user's phrasing is unambiguous.
+    keyword_action = _detect_action_from_keywords(user_message)
+    if keyword_action:
+        action_data = keyword_action
+    elif not action_data:
+        pass  # no action from either source
 
     return {
         "response_text": reply_text,
