@@ -19,7 +19,7 @@ from app.routes.settings import get_config
 router = APIRouter()
 
 OLLAMA_MODELS = [
-    {"value": "qwen3.5:0.8b", "label": "Qwen 3.5 0.8B (0.6 GB)", "size_gb": 0.6},
+    {"value": "qwen3.5:2b", "label": "Qwen 3.5 2B (2.7 GB)", "size_gb": 2.7},
     {"value": "qwen3:1.7b", "label": "Qwen 3 1.7B (1.4 GB)", "size_gb": 1.4},
     {"value": "qwen3:4b", "label": "Qwen 3 4B (2.5 GB)", "size_gb": 2.5},
     {"value": "qwen3:8b", "label": "Qwen 3 8B (5.2 GB)", "size_gb": 5.2},
@@ -27,7 +27,7 @@ OLLAMA_MODELS = [
 
 
 class PullRequest(BaseModel):
-    name: str = "qwen3.5:0.8b"
+    name: str = "qwen3.5:2b"
 
 
 @router.get("/status")
