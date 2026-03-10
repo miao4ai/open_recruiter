@@ -425,8 +425,15 @@ export default function JobSeekerHome() {
     if (loadedSessionRef.current === activeSessionId) return;
     loadedSessionRef.current = activeSessionId;
     getChatHistory(activeSessionId).then((msgs) => {
+      // Reconstruct blocks from action_json for history messages
+      const restored = msgs.map((m: RichMessage) => {
+        if (!m.blocks && m.action?.type === "job_search_results" && m.action.jobs) {
+          return { ...m, blocks: [{ type: "job_search_results" as const, jobs: m.action.jobs }] };
+        }
+        return m;
+      });
       const greeting = makeGreeting(t);
-      setMessages([greeting, ...msgs]);
+      setMessages([greeting, ...restored]);
     });
   }, [activeSessionId, t]);
 

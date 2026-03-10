@@ -93,15 +93,20 @@ extract structured job information from each result.
 
 Return a JSON array, one object per result, with:
 - "title": the job title (clean, without company name)
-- "company": the company name if identifiable
-- "location": location if mentioned
-- "url": the original URL (keep as-is)
-- "source": the source website (keep as-is)
-- "snippet": a 1-2 sentence summary of the role
+- "company": the company name if identifiable from the snippet or title
+- "location": location if mentioned in the snippet or title
+- "url": the original URL — copy it EXACTLY as provided, do NOT modify
+- "source": the source website — copy it EXACTLY as provided, do NOT modify
+- "snippet": a 1-2 sentence summary of the role from the original snippet
 - "salary_range": salary if mentioned, empty string otherwise
 
-Only include results that are actual job postings. Skip generic articles or \
-non-job content. Output valid JSON array only."""
+CRITICAL RULES:
+- ONLY use information that is explicitly present in the search results
+- NEVER invent or hallucinate data — if company name is not clear, use empty string ""
+- NEVER use placeholders like "[Company Name]", "[City, State]", "[Company]"
+- Copy url and source fields verbatim from the input — do NOT change them
+- Only include results that are actual job postings. Skip generic articles.
+- Output valid JSON array only."""
 
         data = chat_json(
             cfg,
@@ -109,10 +114,22 @@ non-job content. Output valid JSON array only."""
             messages=[{"role": "user", "content": results_text}],
         )
 
+        enriched = None
         if isinstance(data, list):
-            return data[:n_results]
-        if isinstance(data, dict) and "jobs" in data:
-            return data["jobs"][:n_results]
+            enriched = data[:n_results]
+        elif isinstance(data, dict) and "jobs" in data:
+            enriched = data["jobs"][:n_results]
+
+        # Validate: reject if LLM hallucinated placeholders
+        if enriched:
+            placeholder_count = sum(
+                1 for r in enriched
+                if any(p in str(r) for p in ["[Company", "[City", "[State", "[Location", "[Salary"])
+            )
+            if placeholder_count > len(enriched) // 2:
+                log.warning("LLM enrichment produced placeholders, using raw results")
+            else:
+                return enriched
     except Exception as e:
         log.warning("LLM enrichment failed, using raw results: %s", e)
 

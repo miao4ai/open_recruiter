@@ -217,7 +217,12 @@ export interface ChatMarketAnalysisAction {
   report: MarketReport;
 }
 
-export type ChatAction = ChatEmailAction | ChatResumeUploadAction | ChatJdUploadAction | ChatOpenJobFormAction | ChatCreateJobAction | ChatCreateCandidateAction | ChatMarketAnalysisAction;
+export interface ChatJobSearchResultsAction {
+  type: "job_search_results";
+  jobs: JobSearchResultsBlock["jobs"];
+}
+
+export type ChatAction = ChatEmailAction | ChatResumeUploadAction | ChatJdUploadAction | ChatOpenJobFormAction | ChatCreateJobAction | ChatCreateCandidateAction | ChatMarketAnalysisAction | ChatJobSearchResultsAction;
 
 export interface ChatResponse {
   reply: string;
