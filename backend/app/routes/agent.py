@@ -1912,6 +1912,51 @@ def _summarize_session(cfg, session_id: str, user_id: str) -> None:
         log.warning("Session summarization failed (non-fatal): %s", e)
 
 
+@router.post("/workflow/{workflow_id}/resume")
+async def resume_workflow(workflow_id: str, body: dict, user=Depends(get_current_user)):
+    """Resume a paused workflow with user's approval response.
+
+    The body contains the resume payload, e.g.:
+      - scheduling: {"selected_slot": {...}}
+      - pipeline_cleanup: {"approved": true, "actions": [...]}
+      - bulk_outreach: {"approved": true, "drafts": [...]}
+    """
+    from app.graphs.supervisor import supervisor_graph
+    from langgraph.types import Command
+
+    wf = db.get_workflow(workflow_id)
+    if not wf:
+        return {"error": "Workflow not found"}
+    if wf.get("status") != "paused":
+        return {"error": "Workflow is not paused"}
+
+    try:
+        result = supervisor_graph.invoke(
+            Command(resume=body),
+            config={"configurable": {"thread_id": workflow_id}},
+        )
+        # Update workflow status
+        db.update_workflow(workflow_id, {"status": "completed", "updated_at": datetime.now().isoformat()})
+        return {
+            "status": "completed",
+            "response_text": result.get("response_text", "Done"),
+            "agent_results": result.get("agent_results", {}),
+        }
+    except Exception as e:
+        log.error("Workflow resume failed: %s", e, exc_info=True)
+        return {"error": str(e)}
+
+
+@router.post("/workflow/{workflow_id}/cancel")
+async def cancel_workflow(workflow_id: str, user=Depends(get_current_user)):
+    """Cancel a paused workflow."""
+    wf = db.get_workflow(workflow_id)
+    if not wf:
+        return {"error": "Workflow not found"}
+    db.update_workflow(workflow_id, {"status": "cancelled", "updated_at": datetime.now().isoformat()})
+    return {"status": "cancelled"}
+
+
 def _maybe_summarize_previous_session(cfg, user_id: str, current_session_id: str) -> None:
     """Check if the user's previous session needs summarization and trigger it in background."""
     sessions = db.list_chat_sessions(user_id)

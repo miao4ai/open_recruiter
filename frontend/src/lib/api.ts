@@ -424,6 +424,12 @@ export const updateChatMessageStatus = (messageId: string, actionStatus: string)
 export const saveChatMessage = (sessionId: string, content: string, role = "assistant") =>
   api.post("/agent/chat/messages", { session_id: sessionId, content, role }).then((r) => r.data);
 
+// ── Workflow Resume/Cancel ─────────────────────────────────────────────────
+export const resumeWorkflow = (workflowId: string, payload: Record<string, unknown>) =>
+  api.post(`/agent/workflow/${workflowId}/resume`, payload).then((r) => r.data);
+export const cancelWorkflow = (workflowId: string) =>
+  api.post(`/agent/workflow/${workflowId}/cancel`).then((r) => r.data);
+
 // ── Chat Sessions ────────────────────────────────────────────────────────
 export const listChatSessions = () =>
   api.get<ChatSession[]>("/agent/chat/sessions").then((r) => r.data);

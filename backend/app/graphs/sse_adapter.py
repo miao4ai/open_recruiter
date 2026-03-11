@@ -258,17 +258,48 @@ def _build_blocks_from_agent_results(agent_results: dict) -> list[dict]:
                     "email_type": result.get("email_type", "outreach"),
                 },
             })
-        elif agent_name == "scheduling" and result.get("event"):
+        elif agent_name == "scheduling":
+            if result.get("event"):
+                # Completed — show confirmation
+                blocks.append({
+                    "type": "schedule_confirmation",
+                    "event": result.get("event", {}),
+                    "email_draft": result.get("email_draft", {}),
+                })
+            elif result.get("proposed_slots"):
+                # Waiting for approval — show slot picker
+                blocks.append({
+                    "type": "scheduling_approval",
+                    "workflow_id": result.get("workflow_id", ""),
+                    "candidate_name": result.get("candidate_name", ""),
+                    "job_title": result.get("job_title", ""),
+                    "slots": result.get("proposed_slots", []),
+                })
+        elif agent_name == "pipeline":
+            if result.get("executed"):
+                # Completed — show report
+                blocks.append({
+                    "type": "pipeline_report",
+                    "summary": result.get("summary", ""),
+                    "actions": result.get("executed", []),
+                })
+            elif result.get("actions"):
+                # Waiting for approval — show cleanup card
+                blocks.append({
+                    "type": "pipeline_cleanup",
+                    "workflow_id": result.get("workflow_id", ""),
+                    "actions": [
+                        {"id": a["id"], "name": a.get("name", ""), "action": a["action"], "days": a.get("days", 0)}
+                        for a in result["actions"]
+                    ],
+                })
+        elif agent_name == "communication" and result.get("drafts"):
+            # Bulk outreach — show email preview card
             blocks.append({
-                "type": "schedule_confirmation",
-                "event": result.get("event", {}),
-                "email_draft": result.get("email_draft", {}),
-            })
-        elif agent_name == "pipeline" and result.get("summary"):
-            blocks.append({
-                "type": "pipeline_report",
-                "summary": result.get("summary", ""),
-                "actions": result.get("actions", []),
+                "type": "bulk_outreach",
+                "workflow_id": result.get("workflow_id", ""),
+                "job_title": result.get("job_title", ""),
+                "drafts": result.get("drafts", []),
             })
         elif agent_name == "job_search" and result.get("jobs"):
             blocks.append({

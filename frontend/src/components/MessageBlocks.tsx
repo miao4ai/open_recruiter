@@ -1,16 +1,21 @@
 import { WorkOutline, CheckOutlined, ChevronRightOutlined, StarOutlined, TrendingUpOutlined, WarningAmberOutlined, CloseOutlined } from "@mui/icons-material";
-import type { MessageBlock, MatchRanking, ApprovalBlock } from "../types";
+import type { MessageBlock, MatchRanking, ApprovalBlock, SchedulingApprovalBlock, PipelineCleanupBlock, BulkOutreachBlock } from "../types";
 import PlanPreview from "./PlanPreview";
 import GuardrailWarning from "./GuardrailWarning";
+import SchedulingApprovalCard from "./SchedulingApprovalCard";
+import PipelineCleanupCard from "./PipelineCleanupCard";
+import BulkOutreachCard from "./BulkOutreachCard";
 
 interface Props {
   blocks: MessageBlock[];
   onSendPrompt: (prompt: string) => void;
   onViewCandidate?: (id: string) => void;
   onViewJob?: (id: string) => void;
+  onResumeWorkflow?: (workflowId: string, payload: Record<string, unknown>) => void;
+  onCancelWorkflow?: (workflowId: string) => void;
 }
 
-export default function MessageBlocks({ blocks, onSendPrompt, onViewJob }: Props) {
+export default function MessageBlocks({ blocks, onSendPrompt, onViewJob, onResumeWorkflow, onCancelWorkflow }: Props) {
   if (!blocks || blocks.length === 0) return null;
 
   return (
@@ -32,6 +37,42 @@ export default function MessageBlocks({ blocks, onSendPrompt, onViewJob }: Props
               key={i}
               block={block}
               onSendPrompt={onSendPrompt}
+            />
+          );
+        }
+        if (block.type === "scheduling_approval") {
+          return (
+            <SchedulingApprovalCard
+              key={i}
+              block={block}
+              onApprove={(wfId, slot) =>
+                onResumeWorkflow?.(wfId, { selected_slot: slot })
+              }
+              onCancel={(wfId) => onCancelWorkflow?.(wfId)}
+            />
+          );
+        }
+        if (block.type === "pipeline_cleanup") {
+          return (
+            <PipelineCleanupCard
+              key={i}
+              block={block}
+              onApprove={(wfId, actions) =>
+                onResumeWorkflow?.(wfId, { approved: true, actions })
+              }
+              onCancel={(wfId) => onCancelWorkflow?.(wfId)}
+            />
+          );
+        }
+        if (block.type === "bulk_outreach") {
+          return (
+            <BulkOutreachCard
+              key={i}
+              block={block}
+              onApprove={(wfId, drafts) =>
+                onResumeWorkflow?.(wfId, { approved: true, drafts })
+              }
+              onCancel={(wfId) => onCancelWorkflow?.(wfId)}
             />
           );
         }

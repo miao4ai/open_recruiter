@@ -335,6 +335,38 @@ export interface ApprovalBlock {
   preview_items: { label: string; detail: string }[];
 }
 
+export interface SchedulingApprovalBlock {
+  type: "scheduling_approval";
+  workflow_id: string;
+  candidate_name: string;
+  job_title: string;
+  slots: { start: string; end: string; label: string }[];
+}
+
+export interface PipelineCleanupBlock {
+  type: "pipeline_cleanup";
+  workflow_id: string;
+  actions: {
+    id: string;
+    name: string;
+    action: "follow_up" | "archive" | "reject";
+    days: number;
+  }[];
+}
+
+export interface BulkOutreachBlock {
+  type: "bulk_outreach";
+  workflow_id: string;
+  job_title: string;
+  drafts: {
+    candidate_id: string;
+    candidate_name: string;
+    match_score: number;
+    subject: string;
+    preview: string;
+  }[];
+}
+
 export interface JobSearchResultsBlock {
   type: "job_search_results";
   jobs: {
@@ -394,7 +426,7 @@ export interface GuardrailWarningBlock {
   suggestions?: string[];
 }
 
-export type MessageBlock = MatchReportBlock | ApprovalBlock | JobSearchResultsBlock | JobMatchResultBlock | PlanPreviewBlock | GuardrailWarningBlock;
+export type MessageBlock = MatchReportBlock | ApprovalBlock | SchedulingApprovalBlock | PipelineCleanupBlock | BulkOutreachBlock | JobSearchResultsBlock | JobMatchResultBlock | PlanPreviewBlock | GuardrailWarningBlock;
 
 // ── Workflow Types ──────────────────────────────────────────────────────
 

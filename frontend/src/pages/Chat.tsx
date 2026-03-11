@@ -52,6 +52,8 @@ import {
   updateChatMessageStatus,
   saveChatMessage,
   createJob,
+  resumeWorkflow,
+  cancelWorkflow,
 } from "../lib/api";
 import PipelineBar from "../components/PipelineBar";
 import EmojiPickerButton from "../components/EmojiPickerButton";
@@ -1057,6 +1059,24 @@ export default function Chat() {
     setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, actionStatus: "cancelled" as const } : m));
   };
 
+  /* ── Workflow approval handlers ─────────────────────────────────────────── */
+
+  const handleResumeWorkflow = async (workflowId: string, payload: Record<string, unknown>) => {
+    try {
+      await resumeWorkflow(workflowId, payload);
+    } catch (e) {
+      console.error("Failed to resume workflow:", e);
+    }
+  };
+
+  const handleCancelWorkflow = async (workflowId: string) => {
+    try {
+      await cancelWorkflow(workflowId);
+    } catch (e) {
+      console.error("Failed to cancel workflow:", e);
+    }
+  };
+
   /* ── Session handlers ──────────────────────────────────────────────────── */
 
   const handleNewChat = () => {
@@ -1237,6 +1257,8 @@ export default function Chat() {
                       onSendPrompt={(p) => handleSend(p)}
                       onViewCandidate={handleViewCandidate}
                       onViewJob={handleViewJob}
+                      onResumeWorkflow={handleResumeWorkflow}
+                      onCancelWorkflow={handleCancelWorkflow}
                     />
                   )}
                 </Box>
