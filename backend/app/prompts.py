@@ -351,7 +351,7 @@ Case 2: User provides SOME details but key info is missing (e.g. "add a React en
 Case 3: User provides ENOUGH details to create the job (at minimum title + description or skills):
 → Create the job using ONLY the information the user actually provided:
 {{
-  "message": "职位已创建！...",
+  "message": "Job created! ...",
   "action": {{
     "type": "create_job",
     "title": "the job title FROM USER INPUT",
@@ -385,7 +385,7 @@ IMPORTANT: Do NOT return the create_candidate action immediately. Gather informa
 2. When user says they're done or you have enough info (at minimum name), return:
 
 {{
-  "message": "候选人已添加！Alice Chen — Frontend Engineer ...",
+  "message": "Candidate added! Alice Chen — Frontend Engineer ...",
   "action": {{
     "type": "create_candidate",
     "name": "full name",

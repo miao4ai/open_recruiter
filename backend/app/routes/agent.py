@@ -42,7 +42,7 @@ def _detect_action_from_keywords(message: str) -> dict | None:
     if re.search(r"upload.*(resume|cv|简历)|上传.*(简历|cv)|添加候选人|add.*candidate", msg):
         return {"type": "upload_resume", "job_id": "", "job_title": ""}
     # JD upload
-    if re.search(r"upload.*(jd|job\s*desc)|上传.*(jd|职位|岗位)|添加职位|add.*(job|position)", msg):
+    if re.search(r"upload.*(jd|job\s*desc|file)|上传.*(jd|职位|岗位|文件)", msg):
         return {"type": "upload_jd"}
     return None
 
