@@ -1241,10 +1241,10 @@ export default function Chat() {
                       onUpload={(file) => handleJdUpload(msg.id, file)}
                       onCancel={() => handleJdCancel(msg.id)} />
                   )}
-                  {msg.action?.type === "create_job" && (
+                  {msg.action?.type === "create_job" && msg.action.job && (
                     <JobCreatedCard job={msg.action.job} />
                   )}
-                  {msg.action?.type === "create_candidate" && (
+                  {msg.action?.type === "create_candidate" && msg.action.candidate && (
                     <CandidateCreatedCard candidate={msg.action.candidate} />
                   )}
                   {msg.action?.type === "market_analysis" && msg.action.report && (

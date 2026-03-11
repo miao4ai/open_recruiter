@@ -57,6 +57,21 @@ async def stream_chat_graph(
     action = result.get("parsed_action") or None
     context_hint = None
 
+    # Keyword fallback: detect upload intents when the LLM misclassifies
+    if not action:
+        from app.routes.agent import _detect_action_from_keywords
+        user_msg = state.get("user_message", "")
+        keyword_action = _detect_action_from_keywords(user_msg)
+        if keyword_action:
+            action = keyword_action
+    # Keyword override: upload intents take priority over LLM create_job/create_candidate
+    elif action and isinstance(action, dict) and action.get("type") in ("create_job", "create_candidate"):
+        from app.routes.agent import _detect_action_from_keywords
+        user_msg = state.get("user_message", "")
+        keyword_action = _detect_action_from_keywords(user_msg)
+        if keyword_action:
+            action = keyword_action
+
     # Build response payload
     response: dict = {
         "reply": reply,
@@ -66,7 +81,10 @@ async def stream_chat_graph(
         "context_hint": context_hint,
     }
 
-    if action:
+    # Only pre-set action for safe types (upload cards); let _process_actions
+    # set it for types that need enrichment (create_job, create_candidate, etc.)
+    _SAFE_ACTION_TYPES = {"upload_resume", "upload_jd", "open_job_form"}
+    if action and action.get("type") in _SAFE_ACTION_TYPES:
         response["action"] = action
 
     # Execute action business logic (job search, match analysis, email drafting, etc.)

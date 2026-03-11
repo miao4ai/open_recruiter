@@ -79,6 +79,9 @@ def chat(cfg: Config, system: str, messages: list[dict], json_mode: bool = False
 
     if cfg.llm_provider == "ollama":
         kwargs["api_base"] = cfg.ollama_base_url
+        # Enforce English output for small local models that tend to switch to Chinese
+        system = "You MUST respond in English only. Never output Chinese characters unless directly quoting user input.\n\n" + system
+        kwargs["messages"][0]["content"] = system
         # Disable thinking mode for Qwen 3.5 to avoid <think> tags in output
         if "qwen3.5" in (cfg.llm_model or ""):
             kwargs["extra_body"] = {"options": {"num_ctx": 4096}, "think": False}
@@ -121,6 +124,9 @@ def chat_stream(cfg: Config, system: str, messages: list[dict], json_mode: bool 
 
     if cfg.llm_provider == "ollama":
         kwargs["api_base"] = cfg.ollama_base_url
+        # Enforce English output for small local models
+        system = "You MUST respond in English only. Never output Chinese characters unless directly quoting user input.\n\n" + system
+        kwargs["messages"][0]["content"] = system
         if "qwen3.5" in (cfg.llm_model or ""):
             kwargs["extra_body"] = {"options": {"num_ctx": 4096}, "think": False}
     elif json_mode:

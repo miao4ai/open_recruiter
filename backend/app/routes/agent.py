@@ -209,13 +209,15 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
     # Strip trailing JSON code blocks the LLM sometimes embeds inside the message
     reply_text = _strip_embedded_json(reply_text)
 
-    # Keyword fallback: only if the LLM did NOT return an action.
-    # Previously this was an unconditional override, but that caused
-    # "add a Machine Learning job at Google" to become upload_jd
-    # instead of create_job when the LLM correctly classified it.
-    if not action_data:
-        keyword_action = _detect_action_from_keywords(req.message)
-        if keyword_action:
+    # Keyword detection for upload intents.
+    # 1) If LLM returned no action, use keyword fallback.
+    # 2) If LLM returned create_job/create_candidate but the user explicitly
+    #    said "upload", override with the upload card (the LLM misclassified).
+    keyword_action = _detect_action_from_keywords(req.message)
+    if keyword_action:
+        if not action_data:
+            action_data = keyword_action
+        elif action_data.get("type") in ("create_job", "create_candidate"):
             action_data = keyword_action
 
     # Process actions using shared helper
