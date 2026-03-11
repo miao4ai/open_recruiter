@@ -209,11 +209,14 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
     # Strip trailing JSON code blocks the LLM sometimes embeds inside the message
     reply_text = _strip_embedded_json(reply_text)
 
-    # Keyword override: upload intents detected from user message take priority
-    # over LLM action (small models often misclassify these)
-    keyword_action = _detect_action_from_keywords(req.message)
-    if keyword_action:
-        action_data = keyword_action
+    # Keyword fallback: only if the LLM did NOT return an action.
+    # Previously this was an unconditional override, but that caused
+    # "add a Machine Learning job at Google" to become upload_jd
+    # instead of create_job when the LLM correctly classified it.
+    if not action_data:
+        keyword_action = _detect_action_from_keywords(req.message)
+        if keyword_action:
+            action_data = keyword_action
 
     # Process actions using shared helper
     response: dict = {"reply": reply_text, "session_id": session_id, "blocks": [], "suggestions": [], "context_hint": context_hint_data}
@@ -555,10 +558,11 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
             # Strip trailing JSON code blocks the LLM sometimes embeds inside the message
             reply_text = _strip_embedded_json(reply_text)
 
-            # Keyword override: upload intents take priority over LLM action
-            keyword_action = _detect_action_from_keywords(req.message)
-            if keyword_action:
-                action_data = keyword_action
+            # Keyword fallback: only if LLM did NOT return an action
+            if not action_data:
+                keyword_action = _detect_action_from_keywords(req.message)
+                if keyword_action:
+                    action_data = keyword_action
 
             # Process actions (same as chat_endpoint)
             response: dict = {
