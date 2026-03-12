@@ -63,7 +63,13 @@ async def create_job(req: JobCreate, _user: dict = Depends(get_current_user)):
     except Exception as e:
         log.warning("Failed to index job in vector store: %s", e)
 
-    return job.model_dump()
+    result = job.model_dump()
+    try:
+        rankings = vectorstore.search_candidates_for_job(job_id=job.id, n_results=200)
+        result["candidate_count"] = sum(1 for r in rankings if r["score"] >= MATCH_THRESHOLD)
+    except Exception:
+        result["candidate_count"] = 0
+    return result
 
 
 @router.post("/upload")
@@ -141,7 +147,13 @@ async def upload_jd(
     except Exception as e:
         log.warning("Failed to index job in vector store: %s", e)
 
-    return job.model_dump()
+    result = job.model_dump()
+    try:
+        rankings = vectorstore.search_candidates_for_job(job_id=job.id, n_results=200)
+        result["candidate_count"] = sum(1 for r in rankings if r["score"] >= MATCH_THRESHOLD)
+    except Exception:
+        result["candidate_count"] = 0
+    return result
 
 
 def _guess_title(filename: str) -> str:
@@ -158,6 +170,11 @@ async def get_job_route(job_id: str, _user: dict = Depends(get_current_user)):
     job = db.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    try:
+        rankings = vectorstore.search_candidates_for_job(job_id=job_id, n_results=200)
+        job["candidate_count"] = sum(1 for r in rankings if r["score"] >= MATCH_THRESHOLD)
+    except Exception:
+        pass
     return job
 
 

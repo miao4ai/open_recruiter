@@ -1091,7 +1091,13 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
                 "created_at": datetime.now().isoformat(),
             })
 
-            response["action"] = {"type": "create_job", "job": job.model_dump()}
+            job_data = job.model_dump()
+            try:
+                rankings = vectorstore.search_candidates_for_job(job_id=job.id, n_results=200)
+                job_data["candidate_count"] = sum(1 for r in rankings if r["score"] >= 0.30)
+            except Exception:
+                job_data["candidate_count"] = 0
+            response["action"] = {"type": "create_job", "job": job_data}
             response["context_hint"] = {"type": "job", "id": job.id}
             response["suggestions"] = [
                 {"label": "Find candidates", "prompt": f"Find matching candidates for job:{job.id}"},
