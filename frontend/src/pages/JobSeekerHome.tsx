@@ -552,15 +552,21 @@ export default function JobSeekerHome() {
           `**Location:** ${profile.location || "N/A"}\n\n` +
           t("jobSeekerHome.viewProfile"),
         created_at: new Date().toISOString(),
-        suggestions: [
-          { label: t("jobSeekerHome.searchJobs"), prompt: t("jobSeekerHome.promptSearchJobs") },
-        ],
       };
       setMessages((prev) => [...prev, successMsg]);
 
       if (activeSessionId) {
         saveChatMessage(activeSessionId, successMsg.content).catch(() => {});
       }
+
+      // Auto-search for matching jobs based on parsed profile
+      const title = profile.current_title || "";
+      const location = profile.location || "";
+      const skills = (profile.skills || []).slice(0, 3).join(", ");
+      const autoQuery = location
+        ? `Find me ${title} jobs near ${location}${skills ? ` related to ${skills}` : ""}`
+        : `Find me ${title} jobs${skills ? ` related to ${skills}` : ""}`;
+      setTimeout(() => handleSend(autoQuery), 500);
     } catch {
       setMessages((prev) => [
         ...prev,
