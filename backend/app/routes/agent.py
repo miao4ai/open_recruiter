@@ -44,6 +44,10 @@ def _detect_action_from_keywords(message: str) -> dict | None:
     # JD upload
     if re.search(r"upload.*(jd|job\s*desc|file)|上传.*(jd|职位|岗位|文件)", msg):
         return {"type": "upload_jd"}
+    # Match job: "find candidates for job:JOB_ID" (embedded by suggestion chip)
+    m = re.search(r"job:([a-f0-9]{8,})", msg)
+    if m and re.search(r"find.*candidate|match.*candidate|候选人", msg):
+        return {"type": "match_job", "job_id": m.group(1)}
     return None
 
 
@@ -884,6 +888,64 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
             log.error("Failed to run candidate matching: %s", e)
             response["reply"] = f"Sorry, I encountered an error while matching: {e}"
 
+    elif action_type == "match_job":
+        try:
+            from app.agents.matching import rank_candidates_for_job, match_candidate_to_job
+
+            job_id = action_data.get("job_id", "")
+            job_title = action_data.get("job_title", "")
+            job = db.get_job(job_id) if job_id else None
+            if not job:
+                response["reply"] = "I couldn't find that job. Please try again."
+            else:
+                job_title = job_title or job.get("title", "this role")
+                ranked = rank_candidates_for_job(job_id, top_k=10)
+                if not ranked:
+                    response["reply"] = f"No candidates found in the system yet. Upload some resumes first!"
+                else:
+                    top = ranked[:5]
+                    # Enrich with candidate names from DB
+                    enriched = []
+                    for r in top:
+                        cand = db.get_candidate(r["candidate_id"])
+                        if cand:
+                            current = cand.get("current_title", "")
+                            company = cand.get("current_company", "")
+                            label = f"{current} @ {company}" if current and company else current or company or ""
+                            enriched.append({
+                                "job_id": r["candidate_id"],  # reuse job_id field as nav target
+                                "title": cand.get("name", "Unknown"),
+                                "company": label,
+                                "score": r.get("score", 0),
+                                "candidate_id": r["candidate_id"],
+                                "candidate_name": cand.get("name", "Unknown"),
+                                "strengths": [],
+                                "gaps": [],
+                                "one_liner": f"{cand.get('experience_years', '?')} yrs · {', '.join((cand.get('skills') or [])[:3])}",
+                            })
+                    best = enriched[0] if enriched else None
+                    response["reply"] = (
+                        f"Found **{len(enriched)} top candidates** for **{job_title}**. "
+                        + (f"Best match: **{best['candidate_name']}** ({int(best['score']*100)}%)." if best else "")
+                    )
+                    response["blocks"].append({
+                        "type": "match_report",
+                        "candidate": {"id": "", "name": job_title, "current_title": "Job", "skills": []},
+                        "rankings": enriched,
+                        "summary": f"Top {len(enriched)} candidates ranked by profile similarity.",
+                    })
+                    response["context_hint"] = {"type": "job", "id": job_id}
+                    if enriched:
+                        top_name = enriched[0]["candidate_name"]
+                        top_id = enriched[0]["candidate_id"]
+                        response["suggestions"] = [
+                            {"label": f"Email {top_name}", "prompt": f"Draft an outreach email to {top_name}"},
+                            {"label": "Start bulk outreach", "prompt": f"Send outreach to top candidates for {job_title}"},
+                        ]
+        except Exception as e:
+            log.error("Failed to run job matching: %s", e)
+            response["reply"] = f"Sorry, I encountered an error while matching: {e}"
+
     elif action_type == "mark_candidates_replied":
         try:
             candidates_to_update = action_data.get("candidates", [])
@@ -1032,7 +1094,7 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
             response["action"] = {"type": "create_job", "job": job.model_dump()}
             response["context_hint"] = {"type": "job", "id": job.id}
             response["suggestions"] = [
-                {"label": "Find candidates", "prompt": f"Find matching candidates for {title}"},
+                {"label": "Find candidates", "prompt": f"Find matching candidates for job:{job.id}"},
                 {"label": "Upload full JD", "prompt": f"Upload a detailed JD for {title}"},
             ]
         except Exception as e:
