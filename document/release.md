@@ -6,6 +6,58 @@ Download installers from the [GitHub Releases](https://github.com/miao4ai/open_r
 
 ---
 
+## V2.0.0 (2026-03-12)
+
+### LangGraph Agentic Architecture
+- Migrated chat backend from monolithic route handler to **LangGraph state machine**: `build_context → input_guard → call_llm → parse_response → output_guard → process_action → finalize`
+- Input/output guardrails: prompt injection detection, content safety, hallucination detection
+- Parallel agent dispatch for concurrent execution
+
+### Human-in-the-Loop Approvals
+- **SchedulingApprovalCard** — time slot picker for interview scheduling; user selects a slot before calendar event is created
+- **PipelineCleanupCard** — checkbox list for bulk candidate status changes; user can deselect individuals before executing
+- **BulkOutreachCard** — email preview with expand/collapse for each draft before batch send
+- Backend `/workflow/{id}/resume` and `/cancel` endpoints to continue or abort paused workflows
+
+### Job Seeker Enhancements
+- **Resume Improvement** — after job match analysis, Ai Chan provides gap-based suggestions grouped by area (skills, keywords, experience, etc.) with high/medium/low priority
+- **Cover Letter Generation** — one-click personalized cover letter under 300 words with copy button
+- Auto-search for matching jobs immediately after resume upload
+- Real-time debounced search (300ms) in My Jobs page — no more click-to-search
+
+### Ollama (Local LLM) Support
+- Added Ollama as a fourth LLM provider alongside Anthropic, OpenAI, Gemini
+- Supports Qwen 3.5 (0.8B → 2B → 4B → 9B → 27B) and Qwen 3 series
+- Thinking mode disabled by default for Qwen models (`<think>` tags stripped)
+- Model pull UI in Settings with download progress
+
+### Search Quality
+- Hybrid search now filters low-relevance results: requires keyword hit OR semantic score ≥ 0.50 for semantic-only matches
+- Minimum hybrid score threshold of 0.20 prevents unrelated jobs from surfacing
+
+### Bug Fixes
+- Fixed: "upload a JD" intent no longer fires when user describes a job in text — `create_job` takes priority
+- Fixed: chat default language enforced as English; Qwen no longer randomly outputs Chinese
+- Fixed: job search results now persist when navigating between pages
+- Fixed: DuckDuckGo search used for web job search (was falling back to placeholder results)
+- Cleaned up release assets to 3 files only: `.dmg` (macOS), `.exe` (Windows), `.AppImage` (Linux)
+
+---
+
+## V1.5.0 (2026-03-01)
+
+### Desktop App — Production Hardening
+- **Auto-update** — Electron checks GitHub Releases on launch; prompts user to download and install
+- **System tray** — minimize to tray, restore from tray icon, quit from context menu
+- **Auto-restart** — backend process automatically restarts on crash with exponential backoff
+- **Data backup/restore** — export SQLite + ChromaDB to zip from Settings; restore from zip on first launch
+- **Offline detection** — banner shown when network unavailable; local features remain functional
+- **Log rotation** — backend logs capped at 10 MB, rotated to `.1` backup
+- **Smoke tests** — automated startup test verifies backend health before showing main window
+- **Linux AppImage build** added to CI/CD alongside macOS DMG and Windows EXE
+
+---
+
 ## V1.4.0 (2026-02-23)
 
 ### macOS DMG Support

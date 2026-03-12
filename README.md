@@ -16,10 +16,78 @@
 </p>
 <p align="center">
   <img src="https://img.shields.io/badge/BUILD-PASSING-brightgreen" />
-  <img src="https://img.shields.io/badge/RELEASE-V1.4.0-blue" />
+  <img src="https://img.shields.io/badge/RELEASE-V2.0.0-blue" />
   <img src="https://img.shields.io/badge/PYTHON-3.11+-yellow" />
   <img src="https://img.shields.io/badge/LICENSE-MIT-purple" />
 </p>
+
+---
+
+## Introduction
+
+Open Recruiter is a self-hosted, AI-powered recruitment assistant designed for independent recruiters and small hiring teams. It streamlines the entire talent discovery workflow — from uploading and parsing resumes, to semantically matching candidates against job descriptions, to composing outreach emails with one click. Powered by local vector embeddings and configurable LLMs (Claude / GPT / Gemini / Ollama), it delivers intelligent candidate-job matching without sending your data to third-party platforms. Everything runs locally with zero infrastructure: SQLite for data, ChromaDB for semantic search.
+
+**Job seekers** get their own dedicated mode powered by Ai Chan — an AI assistant that searches for matching jobs on the web, analyzes fit with your resume, suggests resume improvements, and writes personalized cover letters.
+
+---
+
+## Features
+
+### Recruiter Mode
+
+#### Job Management
+- Create and manage job postings with full descriptions, skills, location, and salary range
+- Upload job descriptions from PDF/DOCX files with auto-extraction via LLM
+- Each job card shows how many candidates match (vector similarity ≥ 30%)
+
+#### Candidate Management
+- Upload resumes (PDF/DOCX/TXT) with auto-extraction of name, email, skills, experience via LLM
+- Duplicate detection by name + email prevents re-uploading existing candidates
+- Detailed candidate profile with contact info, skills, linked job, notes, and inline editing
+
+#### AI Match Analysis
+- **Vector Matching** — Semantic similarity using ChromaDB + BAAI/bge-small-en-v1.5 local embeddings
+- **Deep Analysis** — LLM-powered scoring with strengths, gaps, and reasoning
+- **Ranked Candidates** — All candidates sorted by match score for a given job
+- Auto-match on upload when a job is linked
+
+#### Email Outreach
+- Compose personalized outreach emails using LLM with full candidate/job context
+- Draft/approve/send workflow with pending queue
+- Per-candidate email history timeline; reply tracking via IMAP
+
+#### Pipeline Kanban
+- Visual board: New → Contacted → Replied → Screening → Interview → Offer → Hired
+- Drag-and-drop candidate cards between stages
+
+#### Bot Chat (Erika Chan)
+- Context-aware AI assistant with access to your jobs, candidates, and email history
+- Multi-session conversation history with memory extraction
+- Actionable responses: draft emails, upload resumes, match candidates, start workflows
+- **Human-in-the-loop approval** — Inline cards for interview scheduling, pipeline cleanup, and bulk outreach
+- Multi-step workflow execution with SSE streaming
+
+#### Calendar & Automations
+- Schedule interviews, follow-ups, and screening events with weekly calendar view
+- Background automation rules: Auto-Match, Inbox Scanner, Auto Follow-Up, Pipeline Cleanup
+
+### Job Seeker Mode (Ai Chan)
+
+- Upload resume → auto-extract profile → immediately search for matching jobs
+- Chat-based job search powered by DuckDuckGo + LLM enrichment
+- Job match analysis: score, strengths, gaps, reasoning
+- **Resume improvement suggestions** — gap-based, prioritized, actionable
+- **Cover letter generation** — personalized, under 300 words, one-click copy
+- Save jobs to personal list with real-time search
+- Encouragement mode toggle for extra motivation
+
+### Platform
+
+- **Multi-LLM support** — Anthropic Claude, OpenAI GPT, Google Gemini, Ollama (local)
+- **Semantic search** — Hybrid keyword + vector search with relevance filtering
+- **Desktop app** — Electron wrapper for macOS, Windows, Linux
+- **Slack integration** — Receive resumes directly from channels
+- **i18n** — English, Chinese, Japanese, Korean, Traditional Chinese, Spanish
 
 ---
 
@@ -56,90 +124,6 @@ After dragging the app to `/Applications` from the DMG:
 xattr -cr /Applications/Open\ Recruiter.app
 open /Applications/Open\ Recruiter.app
 ```
-
----
-
-## Introduction
-
-Open Recruiter is a self-hosted, AI-powered recruitment assistant designed for independent recruiters and small hiring teams. It streamlines the entire talent discovery workflow — from uploading and parsing resumes, to semantically matching candidates against job descriptions, to composing outreach emails with one click. Powered by local vector embeddings and configurable LLMs (Claude / GPT), it delivers intelligent candidate-job matching without sending your data to third-party platforms. Everything runs locally with zero infrastructure: SQLite for data, ChromaDB for semantic search, and an optional Slack integration for receiving resumes directly from your team's channels.
-
-## Features
-
-### Job Management
-- Create and manage job postings with full descriptions, skills, location, and salary range
-- Edit jobs inline with live save; one-click delete
-- Each job card shows how many candidates match (vector similarity >= 30%)
-- Upload job descriptions from PDF/DOCX files with auto-extraction via LLM
-
-### Candidate Management
-- Upload resumes (PDF/DOCX/TXT) with auto-extraction of name, email, skills, experience via LLM
-- Duplicate detection by name + email prevents re-uploading existing candidates
-- Detailed candidate profile with contact info, skills, linked job, notes
-- Inline editing of all fields including linked job and skills
-- Link candidates to jobs during upload or via profile editing
-
-### AI Match Analysis
-- **Vector Matching** — Semantic similarity using ChromaDB + BAAI/bge-small-en-v1.5 local embeddings
-- **Deep Analysis** — One-click LLM-powered analysis returning score (0-1), strengths, gaps, and reasoning
-- **Typewriter Effect** — Analysis results stream in with character-by-character animation
-- **Ranked Candidates** — All candidates sorted by match score for a given job
-- Auto-match on upload when a job is linked
-
-### Email Outreach
-- Compose personalized outreach emails using LLM with full candidate/job context
-- Candidate resume attachment support (PDF)
-- Draft/approve/send workflow with pending queue
-- Per-candidate email history timeline on profile page
-- Reply tracking via IMAP integration
-
-### Pipeline Kanban
-- Visual board with columns: New, Contacted, Replied, Screening, Interview, Offer, Hired
-- Drag-and-drop candidate cards between stages
-- Match score displayed on each card
-
-### Bot Chat (Erika Chan)
-- Context-aware AI assistant with access to your jobs, candidates, and email data
-- Multi-session conversation history
-- Actionable responses: draft emails, upload resumes, start workflows, match candidates
-- Multi-step workflow execution with SSE streaming and approval checkpoints
-- Workflow types: Bulk Outreach, Candidate Review, Interview Scheduling, Pipeline Cleanup, Job Launch
-
-### Calendar
-- Schedule interviews, follow-ups, offers, and screening events
-- Weekly calendar view with event filtering by type
-- Link events to candidates and jobs
-
-### Slack Integration
-- Receive resumes directly from Slack channels (PDF/DOCX/TXT file uploads or text paste)
-- Automatic resume parsing, candidate profile creation, and duplicate detection
-- PII privacy filtering (strips SSN, passport, driver's license)
-- Top 3 job match suggestions posted as threaded reply in Slack
-
-### Background Autonomous Agents
-- **In-process background scheduler** powered by APScheduler — no external dependencies (no Redis, no RabbitMQ)
-- **Configurable automation rules** with interval or cron triggers, conditions, and actions
-- **4 built-in automation tasks:**
-
-| Task | What it does | Default Schedule |
-|------|-------------|------------------|
-| **Auto-Match** | Finds new candidates with no match score, runs LLM matching against all open jobs, saves best match | Every 30 minutes |
-| **Inbox Scanner** | Checks IMAP inbox for candidate replies, updates email records and moves candidates to "replied" status | Every 15 minutes |
-| **Auto Follow-Up** | Drafts (or auto-sends) follow-up emails for candidates who haven't replied after N days | Daily at 9:00 AM |
-| **Pipeline Cleanup** | Finds stale candidates and categorizes as flagged/rejected/withdrawn based on age thresholds | Mondays at 8:00 AM |
-
-- **Automations UI page** — toggle rules on/off, edit conditions/actions, "Run Now" button, execution history log
-- Default rules are seeded on first startup (all disabled) so you can configure before enabling
-- Each execution is logged with status, duration, items processed/affected, and error details
-
-### Settings
-- **LLM Provider** — Switch between Anthropic Claude and OpenAI; configure model and API key
-- **Email Backend** — Console (dev), Gmail, or custom SMTP with connection test
-- **IMAP** — Configure inbox monitoring for reply detection
-- **Recruiter Profile** — Name, email, company for email personalization
-
-### Dual-Role Support
-- **Recruiter** — Full access to all features above
-- **Job Seeker** — Upload resume, browse matching jobs, manage profile, chat with AI assistant
 
 ## Tech Stack
 
@@ -325,6 +309,8 @@ FastAPI Backend
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| [V2.0.0](https://github.com/miao4ai/open_recruiter/releases/tag/v2.0.0) | 2026-03-12 | LangGraph migration, human-in-the-loop approvals, resume improvement & cover letter, Ollama support, real-time search |
+| [V1.5.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.5.0) | 2026-03-01 | Desktop app (Electron): auto-update, system tray, auto-restart, backup/restore |
 | [V1.4.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.4.0) | 2026-02-23 | macOS DMG build, cross-platform CI/CD |
 | [V1.3.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.3.0) | 2026-02-22 | Encouragement mode for Ai Chan, favorite jobs from search results, chat tone fix |
 | [V1.2.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.2.0) | 2026-02-21 | Per-job pipeline status, Candidate/Jobs toggle, emoji picker |
