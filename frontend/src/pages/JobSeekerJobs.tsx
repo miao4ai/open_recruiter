@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   SearchOutlined, LocationOnOutlined, BusinessOutlined, AttachMoneyOutlined, AccessTimeOutlined, WorkOutline,
@@ -13,6 +13,7 @@ export default function JobSeekerJobs() {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const { data: jobs, loading, refresh } = useApi(
     useCallback(() => seekerListJobs(searchTerm), [searchTerm]),
   );
@@ -20,17 +21,18 @@ export default function JobSeekerJobs() {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleSearch = () => {
-    setSearchTerm(query.trim());
-  };
+  // Debounced search — fires 300ms after the user stops typing
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setSearchTerm(query.trim());
+    }, 300);
+    return () => clearTimeout(debounceRef.current);
+  }, [query]);
 
   const handleClear = () => {
     setQuery("");
     setSearchTerm("");
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") handleSearch();
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,33 +89,27 @@ export default function JobSeekerJobs() {
       </div>
 
       {/* Search bar */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
+      <div className="relative">
+        {loading && searchTerm ? (
+          <CircularProgress size={16} className="absolute left-3 top-1/2 -translate-y-1/2" sx={{ color: 'rgb(244 114 182)' }} />
+        ) : (
           <SearchOutlined className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={t("jobSeekerJobs.searchPlaceholder")}
-            className="w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-9 text-sm
-              focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
-          />
-          {query && (
-            <button
-              onClick={handleClear}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              <CloseOutlined className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-        <button
-          onClick={handleSearch}
-          className="rounded-xl bg-pink-500 px-5 py-2.5 text-sm font-medium text-white
-            hover:bg-pink-600"
-        >
-          {t("common.search")}
-        </button>
+        )}
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t("jobSeekerJobs.searchPlaceholder")}
+          className="w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-9 text-sm
+            focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+        />
+        {query && (
+          <button
+            onClick={handleClear}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            <CloseOutlined className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Loading */}
