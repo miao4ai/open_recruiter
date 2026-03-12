@@ -131,6 +131,11 @@ def _hybrid_search_jobs(query: str, n_results: int) -> list[dict]:
             hybrid = kw * 0.8  # keyword-only match (title matches without embedding)
         else:
             hybrid = sem * 0.6  # semantic-only (no title match = lower confidence)
+        # Drop weak matches: require keyword hit OR strong semantic score
+        if kw == 0 and sem < 0.50:
+            continue
+        if hybrid < 0.20:
+            continue
         scored.append((jid, hybrid))
 
     scored.sort(key=lambda x: x[1], reverse=True)
