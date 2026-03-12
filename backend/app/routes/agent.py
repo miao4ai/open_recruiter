@@ -228,7 +228,7 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
     response: dict = {"reply": reply_text, "session_id": session_id, "blocks": [], "suggestions": [], "context_hint": context_hint_data}
 
     # GUARD: job seekers may only trigger seeker-specific actions
-    _SEEKER_ALLOWED_ACTIONS = {"search_jobs", "analyze_job_match", "save_job"}
+    _SEEKER_ALLOWED_ACTIONS = {"search_jobs", "analyze_job_match", "save_job", "improve_resume", "generate_cover_letter"}
     if user_role == "job_seeker" and action_data:
         if action_data.get("type") not in _SEEKER_ALLOWED_ACTIONS:
             action_data = None
@@ -576,7 +576,7 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
                 "blocks": [], "suggestions": [], "context_hint": context_hint_data,
             }
 
-            _SEEKER_ALLOWED_ACTIONS = {"search_jobs", "analyze_job_match", "save_job"}
+            _SEEKER_ALLOWED_ACTIONS = {"search_jobs", "analyze_job_match", "save_job", "improve_resume", "generate_cover_letter"}
             if user_role == "job_seeker" and action_data:
                 if action_data.get("type") not in _SEEKER_ALLOWED_ACTIONS:
                     action_data = None
@@ -1453,8 +1453,10 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
             score_pct = round(match_result["score"] * 100)
             response["reply"] = f"Here's my analysis of your fit for **{job_title}**" + (f" at **{job_company}**" if job_company else "") + f" — match score: **{score_pct}%**."
             response["suggestions"] = [
-                {"label": "Save this job", "prompt": f"我想保存这个职位: {job_title}"},
-                {"label": "Search more", "prompt": "继续搜索其他职位"},
+                {"label": "Save this job", "prompt": f"Save this job: {job_title}"},
+                {"label": "Improve my resume", "prompt": f"How can I improve my resume for {job_title}"},
+                {"label": "Write cover letter", "prompt": f"Write a cover letter for {job_title}" + (f" at {job_company}" if job_company else "")},
+                {"label": "Search more", "prompt": "Search for more matching jobs"},
             ]
 
         except Exception as e:
@@ -1537,6 +1539,159 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
         except Exception as e:
             log.error("Save job failed: %s", e)
             response["reply"] = f"Sorry, I encountered an error saving the job: {e}"
+
+    elif action_type == "improve_resume":
+        try:
+            from app.llm import chat_json
+            from app.prompts import RESUME_IMPROVEMENT
+
+            job_title = action_data.get("job_title", "")
+            job_company = action_data.get("job_company", "")
+
+            profile = db.get_job_seeker_profile_by_user(user_id)
+            if not profile or not profile.get("name"):
+                response["reply"] = "Please upload your resume first!"
+                return response
+
+            # Find gaps from the most recent match analysis in session history
+            gaps: list[str] = []
+            match_score: float = 0.0
+            if session_id:
+                recent_msgs = db.list_chat_messages(user_id, limit=15, session_id=session_id)
+                for msg in reversed(recent_msgs):
+                    if msg.get("action_json"):
+                        try:
+                            act = json.loads(msg["action_json"]) if isinstance(msg["action_json"], str) else msg["action_json"]
+                            if isinstance(act, dict) and act.get("type") == "job_match_result":
+                                blocks = act.get("blocks", [])
+                                for b in blocks:
+                                    if b.get("type") == "job_match_result":
+                                        gaps = b.get("match", {}).get("gaps", [])
+                                        match_score = b.get("match", {}).get("score", 0.0)
+                                        if not job_title:
+                                            job_title = b.get("job", {}).get("title", "")
+                                        if not job_company:
+                                            job_company = b.get("job", {}).get("company", "")
+                                        break
+                                break
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+
+            skills = profile.get("skills", [])
+            skills_str = ", ".join(skills) if isinstance(skills, list) else str(skills)
+            user_msg = (
+                f"## Candidate Profile\n"
+                f"Name: {profile['name']}\n"
+                f"Title: {profile.get('current_title', '')}\n"
+                f"Skills: {skills_str}\n"
+                f"Experience: {profile.get('experience_years', 'N/A')} years\n"
+                f"Summary: {profile.get('resume_summary', '')}\n\n"
+                f"## Target Job\n"
+                f"Title: {job_title}\nCompany: {job_company}\n\n"
+                f"## Identified Gaps\n"
+                + ("\n".join(f"- {g}" for g in gaps) if gaps else "No specific gaps identified — provide general improvement advice.")
+            )
+
+            result = chat_json(cfg, system=RESUME_IMPROVEMENT, messages=[{"role": "user", "content": user_msg}])
+            if isinstance(result, list):
+                result = result[0] if result else {}
+
+            suggestions_data = result.get("suggestions", [])
+            summary = result.get("summary", "")
+
+            response["reply"] = f"Here are my suggestions to improve your resume" + (f" for **{job_title}**" if job_title else "") + "."
+            response["blocks"].append({
+                "type": "resume_improvement",
+                "summary": summary,
+                "job_title": job_title,
+                "job_company": job_company,
+                "suggestions": suggestions_data,
+                "match_score": match_score,
+            })
+            response["suggestions"] = [
+                {"label": "Write cover letter", "prompt": f"Write a cover letter for {job_title}" + (f" at {job_company}" if job_company else "")},
+                {"label": "Search more jobs", "prompt": "Search for more matching jobs"},
+            ]
+
+        except Exception as e:
+            log.error("Resume improvement failed: %s", e)
+            response["reply"] = f"Sorry, I encountered an error: {e}"
+
+    elif action_type == "generate_cover_letter":
+        try:
+            from app.llm import chat_json
+            from app.prompts import COVER_LETTER
+
+            job_title = action_data.get("job_title", "")
+            job_company = action_data.get("job_company", "")
+            job_snippet = action_data.get("job_snippet", "")
+
+            # Try to enrich job details from session history if not provided
+            if not job_snippet and session_id:
+                recent_msgs = db.list_chat_messages(user_id, limit=15, session_id=session_id)
+                for msg in reversed(recent_msgs):
+                    if msg.get("action_json"):
+                        try:
+                            act = json.loads(msg["action_json"]) if isinstance(msg["action_json"], str) else msg["action_json"]
+                            if isinstance(act, dict) and act.get("type") == "job_match_result":
+                                blocks = act.get("blocks", [])
+                                for b in blocks:
+                                    if b.get("type") == "job_match_result":
+                                        job_info = b.get("job", {})
+                                        if not job_title:
+                                            job_title = job_info.get("title", "")
+                                        if not job_company:
+                                            job_company = job_info.get("company", "")
+                                        if not job_snippet:
+                                            job_snippet = job_info.get("snippet", "")
+                                        break
+                                break
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+
+            profile = db.get_job_seeker_profile_by_user(user_id)
+            if not profile or not profile.get("name"):
+                response["reply"] = "Please upload your resume first so I can write a personalized cover letter!"
+                return response
+
+            skills = profile.get("skills", [])
+            skills_str = ", ".join(skills) if isinstance(skills, list) else str(skills)
+            user_msg = (
+                f"## Candidate Profile\n"
+                f"Name: {profile['name']}\n"
+                f"Title: {profile.get('current_title', '')}\n"
+                f"Skills: {skills_str}\n"
+                f"Experience: {profile.get('experience_years', 'N/A')} years\n"
+                f"Location: {profile.get('location', '')}\n"
+                f"Summary: {profile.get('resume_summary', '')}\n\n"
+                f"## Target Job\n"
+                f"Title: {job_title}\nCompany: {job_company}\n"
+                + (f"Description: {job_snippet}\n" if job_snippet else "")
+            )
+
+            result = chat_json(cfg, system=COVER_LETTER, messages=[{"role": "user", "content": user_msg}])
+            if isinstance(result, list):
+                result = result[0] if result else {}
+
+            subject = result.get("subject", f"Application for {job_title}")
+            body = result.get("body", "")
+
+            response["reply"] = f"Here's your cover letter for **{job_title}**" + (f" at **{job_company}**" if job_company else "") + ". Feel free to edit it before sending!"
+            response["blocks"].append({
+                "type": "cover_letter",
+                "job_title": job_title,
+                "job_company": job_company,
+                "subject": subject,
+                "body": body,
+            })
+            response["suggestions"] = [
+                {"label": "Improve my resume", "prompt": f"How can I improve my resume for {job_title}"},
+                {"label": "Save this job", "prompt": f"Save {job_title}" + (f" at {job_company}" if job_company else "")},
+            ]
+
+        except Exception as e:
+            log.error("Cover letter generation failed: %s", e)
+            response["reply"] = f"Sorry, I encountered an error: {e}"
 
     return response
 

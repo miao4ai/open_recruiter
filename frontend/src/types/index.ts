@@ -398,6 +398,28 @@ export interface JobMatchResultBlock {
   };
 }
 
+export interface ResumeImprovementBlock {
+  type: "resume_improvement";
+  summary: string;
+  job_title: string;
+  job_company: string;
+  match_score: number;
+  suggestions: {
+    area: "skills" | "experience" | "summary" | "formatting" | "keywords" | "projects";
+    issue: string;
+    action: string;
+    priority: "high" | "medium" | "low";
+  }[];
+}
+
+export interface CoverLetterBlock {
+  type: "cover_letter";
+  job_title: string;
+  job_company: string;
+  subject: string;
+  body: string;
+}
+
 export interface PlanPreviewBlock {
   type: "plan_preview";
   plan: {
@@ -426,7 +448,7 @@ export interface GuardrailWarningBlock {
   suggestions?: string[];
 }
 
-export type MessageBlock = MatchReportBlock | ApprovalBlock | SchedulingApprovalBlock | PipelineCleanupBlock | BulkOutreachBlock | JobSearchResultsBlock | JobMatchResultBlock | PlanPreviewBlock | GuardrailWarningBlock;
+export type MessageBlock = MatchReportBlock | ApprovalBlock | SchedulingApprovalBlock | PipelineCleanupBlock | BulkOutreachBlock | JobSearchResultsBlock | JobMatchResultBlock | ResumeImprovementBlock | CoverLetterBlock | PlanPreviewBlock | GuardrailWarningBlock;
 
 // ── Workflow Types ──────────────────────────────────────────────────────
 

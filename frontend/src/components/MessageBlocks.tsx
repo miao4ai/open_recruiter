@@ -1,5 +1,6 @@
-import { WorkOutline, CheckOutlined, ChevronRightOutlined, StarOutlined, TrendingUpOutlined, WarningAmberOutlined, CloseOutlined } from "@mui/icons-material";
-import type { MessageBlock, MatchRanking, ApprovalBlock, SchedulingApprovalBlock, PipelineCleanupBlock, BulkOutreachBlock } from "../types";
+import React from "react";
+import { WorkOutline, CheckOutlined, ChevronRightOutlined, StarOutlined, TrendingUpOutlined, WarningAmberOutlined, CloseOutlined, AutoFixHighOutlined, DescriptionOutlined, ContentCopyOutlined } from "@mui/icons-material";
+import type { MessageBlock, MatchRanking, ApprovalBlock, SchedulingApprovalBlock, PipelineCleanupBlock, BulkOutreachBlock, ResumeImprovementBlock, CoverLetterBlock } from "../types";
 import PlanPreview from "./PlanPreview";
 import GuardrailWarning from "./GuardrailWarning";
 import SchedulingApprovalCard from "./SchedulingApprovalCard";
@@ -73,6 +74,24 @@ export default function MessageBlocks({ blocks, onSendPrompt, onViewJob, onResum
                 onResumeWorkflow?.(wfId, { approved: true, drafts })
               }
               onCancel={(wfId) => onCancelWorkflow?.(wfId)}
+            />
+          );
+        }
+        if (block.type === "resume_improvement") {
+          return (
+            <ResumeImprovementCard
+              key={i}
+              block={block}
+              onSendPrompt={onSendPrompt}
+            />
+          );
+        }
+        if (block.type === "cover_letter") {
+          return (
+            <CoverLetterCard
+              key={i}
+              block={block}
+              onSendPrompt={onSendPrompt}
             />
           );
         }
@@ -318,6 +337,139 @@ function RankingRow({
             Draft email <ChevronRightOutlined sx={{ fontSize: 12 }} />
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Resume Improvement Card ────────────────────────────────────────────── */
+
+const PRIORITY_STYLES = {
+  high: "bg-red-50 text-red-700 border-red-200",
+  medium: "bg-amber-50 text-amber-700 border-amber-200",
+  low: "bg-green-50 text-green-700 border-green-200",
+};
+
+const AREA_ICONS: Record<string, string> = {
+  skills: "🛠️", experience: "💼", summary: "📝",
+  formatting: "📐", keywords: "🔍", projects: "🚀",
+};
+
+function ResumeImprovementCard({
+  block,
+  onSendPrompt,
+}: {
+  block: ResumeImprovementBlock;
+  onSendPrompt: (prompt: string) => void;
+}) {
+  const high = block.suggestions.filter((s) => s.priority === "high");
+  const rest = block.suggestions.filter((s) => s.priority !== "high");
+
+  return (
+    <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50/80 to-white p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <AutoFixHighOutlined sx={{ fontSize: 16 }} className="text-violet-600" />
+        <span className="text-sm font-semibold text-violet-900">
+          Resume Improvement{block.job_title ? ` — ${block.job_title}` : ""}
+        </span>
+        {block.job_company && (
+          <span className="text-xs text-gray-400">@ {block.job_company}</span>
+        )}
+      </div>
+
+      {block.summary && (
+        <p className="mb-3 text-xs leading-relaxed text-gray-600">{block.summary}</p>
+      )}
+
+      <div className="space-y-2">
+        {[...high, ...rest].map((s, i) => (
+          <div key={i} className={`rounded-lg border p-3 ${PRIORITY_STYLES[s.priority]}`}>
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="text-sm">{AREA_ICONS[s.area] || "💡"}</span>
+              <span className="text-xs font-semibold capitalize">{s.area}</span>
+              <span className={`ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${PRIORITY_STYLES[s.priority]}`}>
+                {s.priority}
+              </span>
+            </div>
+            <p className="text-xs text-gray-600 mb-1">{s.issue}</p>
+            <p className="text-xs font-medium">→ {s.action}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={() => onSendPrompt(`Write a cover letter for ${block.job_title}${block.job_company ? ` at ${block.job_company}` : ""}`)}
+          className="rounded-lg bg-violet-100 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-200"
+        >
+          Write Cover Letter
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Cover Letter Card ──────────────────────────────────────────────────── */
+
+function CoverLetterCard({
+  block,
+  onSendPrompt,
+}: {
+  block: CoverLetterBlock;
+  onSendPrompt: (prompt: string) => void;
+}) {
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(block.body).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 to-white p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <DescriptionOutlined sx={{ fontSize: 16 }} className="text-emerald-600" />
+        <span className="text-sm font-semibold text-emerald-900">
+          Cover Letter{block.job_title ? ` — ${block.job_title}` : ""}
+        </span>
+        {block.job_company && (
+          <span className="text-xs text-gray-400">@ {block.job_company}</span>
+        )}
+        <button
+          onClick={handleCopy}
+          className="ml-auto flex items-center gap-1 rounded-lg bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-200"
+        >
+          <ContentCopyOutlined sx={{ fontSize: 12 }} />
+          {copied ? "Copied!" : "Copy"}
+        </button>
+      </div>
+
+      {block.subject && (
+        <div className="mb-2 rounded-lg bg-white border border-emerald-100 px-3 py-1.5">
+          <span className="text-[10px] font-semibold uppercase text-gray-400 mr-2">Subject</span>
+          <span className="text-xs text-gray-700">{block.subject}</span>
+        </div>
+      )}
+
+      <div className="max-h-64 overflow-y-auto rounded-lg border border-emerald-100 bg-white p-3">
+        <pre className="whitespace-pre-wrap text-xs leading-relaxed text-gray-700 font-sans">{block.body}</pre>
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={() => onSendPrompt(`Improve my resume for ${block.job_title}`)}
+          className="rounded-lg bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-200"
+        >
+          Improve Resume
+        </button>
+        <button
+          onClick={() => onSendPrompt(`Save ${block.job_title}${block.job_company ? ` at ${block.job_company}` : ""}`)}
+          className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
+        >
+          Save Job
+        </button>
       </div>
     </div>
   );
