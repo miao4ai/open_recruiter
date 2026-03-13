@@ -458,6 +458,17 @@ def init_db() -> None:
             context_json TEXT DEFAULT '{}',
             created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS search_feedback (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            query TEXT NOT NULL,
+            result_title TEXT NOT NULL,
+            result_company TEXT DEFAULT '',
+            result_url TEXT DEFAULT '',
+            vote INTEGER NOT NULL,
+            context TEXT DEFAULT 'recruiter',
+            created_at TEXT NOT NULL
+        );
     """)
     conn.commit()
 

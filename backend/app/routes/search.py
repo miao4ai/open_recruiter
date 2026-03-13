@@ -2,6 +2,8 @@
 
 import logging
 import re
+import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -228,3 +230,38 @@ async def vector_stats(_user: dict = Depends(get_current_user)):
         "jobs_count": vectorstore.get_collection_count(vectorstore.JOBS_COLLECTION),
         "candidates_count": vectorstore.get_collection_count(vectorstore.CANDIDATES_COLLECTION),
     }
+
+
+class FeedbackRequest(BaseModel):
+    query: str
+    result_title: str
+    result_company: str = ""
+    result_url: str = ""
+    vote: int  # +1 or -1
+    context: str = "recruiter"  # "recruiter" or "job_seeker"
+
+
+@router.post("/feedback")
+async def submit_feedback(req: FeedbackRequest, user: dict = Depends(get_current_user)):
+    """Store thumbs up/down feedback for a search result."""
+    if req.vote not in (1, -1):
+        raise HTTPException(status_code=400, detail="vote must be 1 or -1")
+    conn = db.get_connection()
+    conn.execute(
+        """INSERT OR REPLACE INTO search_feedback
+           (id, user_id, query, result_title, result_company, result_url, vote, context, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            uuid.uuid4().hex[:8],
+            user["id"],
+            req.query,
+            req.result_title,
+            req.result_company,
+            req.result_url,
+            req.vote,
+            req.context,
+            datetime.now().isoformat(),
+        ),
+    )
+    conn.commit()
+    return {"status": "ok"}

@@ -15,12 +15,14 @@ interface Props<T> {
   collection: Collection;
   placeholder?: string;
   onResults: (results: SearchResult<T>[] | null) => void;
+  onQueryChange?: (query: string) => void;
 }
 
 export default function SemanticSearchBar<T extends Job | Candidate>({
   collection,
   placeholder,
   onResults,
+  onQueryChange,
 }: Props<T>) {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
@@ -121,7 +123,7 @@ export default function SemanticSearchBar<T extends Job | Candidate>({
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => { setQuery(e.target.value); onQueryChange?.(e.target.value); }}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           placeholder={placeholder ?? `Semantic search ${collection}...`}

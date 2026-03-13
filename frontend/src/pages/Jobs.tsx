@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AddOutlined,
@@ -42,6 +42,7 @@ import {
   getRankedCandidates,
   composeEmailWithAttachment,
   sendEmail,
+  submitSearchFeedback,
 } from "../lib/api";
 import type { Job, Candidate } from "../types";
 import SemanticSearchBar, { type SearchResult } from "../components/SemanticSearchBar";
@@ -58,9 +59,12 @@ export default function Jobs() {
   const [submitting, setSubmitting] = useState(false);
   const [emailJob, setEmailJob] = useState<Job | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult<Job>[] | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchVotes, setSearchVotes] = useState<Record<string, 1 | -1>>({});
 
   const handleSearchResults = useCallback((results: SearchResult<Job>[] | null) => {
     setSearchResults(results);
+    if (!results) setSearchVotes({});
   }, []);
 
   const displayJobs = searchResults
@@ -152,6 +156,7 @@ export default function Jobs() {
         collection="jobs"
         placeholder={t("searchPlaceholders.jobs")}
         onResults={handleSearchResults}
+        onQueryChange={setSearchQuery}
       />
 
       {/* Create / Edit form */}
@@ -261,17 +266,43 @@ export default function Jobs() {
                         {job.title || t("jobs.untitled")}
                       </Typography>
                       {(job as any)._score != null && (
-                        <Chip
-                          label={t("jobs.match", { percent: Math.round((job as any)._score * 100) })}
-                          size="small"
-                          sx={{
-                            fontSize: 10,
-                            height: 20,
-                            background: "linear-gradient(to right, #3b82f6, #8b5cf6)",
-                            color: "white",
-                            fontWeight: 600,
-                          }}
-                        />
+                        <>
+                          <Chip
+                            label={t("jobs.match", { percent: Math.round((job as any)._score * 100) })}
+                            size="small"
+                            sx={{
+                              fontSize: 10,
+                              height: 20,
+                              background: "linear-gradient(to right, #3b82f6, #8b5cf6)",
+                              color: "white",
+                              fontWeight: 600,
+                            }}
+                          />
+                          <span style={{ display: "inline-flex", gap: 2 }}>
+                            <button
+                              title="Relevant"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const key = job.id;
+                                if (searchVotes[key] === 1) return;
+                                setSearchVotes((p) => ({ ...p, [key]: 1 }));
+                                submitSearchFeedback({ query: searchQuery, result_title: job.title, result_company: job.company, vote: 1, context: "recruiter" }).catch(() => {});
+                              }}
+                              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, opacity: searchVotes[job.id] === 1 ? 1 : 0.35 }}
+                            >👍</button>
+                            <button
+                              title="Not relevant"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const key = job.id;
+                                if (searchVotes[key] === -1) return;
+                                setSearchVotes((p) => ({ ...p, [key]: -1 }));
+                                submitSearchFeedback({ query: searchQuery, result_title: job.title, result_company: job.company, vote: -1, context: "recruiter" }).catch(() => {});
+                              }}
+                              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, opacity: searchVotes[job.id] === -1 ? 1 : 0.35 }}
+                            >👎</button>
+                          </span>
+                        </>
                       )}
                     </Box>
                     {job.company && (

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   SendOutlined, DeleteOutline, AddOutlined, ChatBubbleOutlineOutlined, CloseOutlined, UploadOutlined,
   WorkOutlineOutlined, LocationOnOutlined, CheckCircleOutlined, WarningAmberOutlined,
@@ -20,6 +20,7 @@ import {
   uploadResumeForProfile,
   seekerSaveJob,
   seekerGetSavedUrls,
+  submitSearchFeedback,
 } from "../lib/api";
 import type { ChatMessage, ChatSession, ChatResponse, JobSearchResultsBlock, JobMatchResultBlock, MessageBlock, Suggestion } from "../types";
 
@@ -62,13 +63,32 @@ function JobSearchResultsCard({
   onSelectJob,
   onSaveJob,
   savedJobKeys,
+  query,
 }: {
   block: JobSearchResultsBlock;
   onSelectJob: (index: number, title: string, company: string) => void;
   onSaveJob: (job: JobSearchResultsBlock["jobs"][number]) => void;
   savedJobKeys: Set<string>;
+  query?: string;
 }) {
   const { t } = useTranslation();
+  const [votes, setVotes] = React.useState<Record<number, 1 | -1>>({});
+
+  const handleVote = async (job: JobSearchResultsBlock["jobs"][number], vote: 1 | -1) => {
+    if (votes[job.index] === vote) return;
+    setVotes((prev) => ({ ...prev, [job.index]: vote }));
+    try {
+      await submitSearchFeedback({
+        query: query || "",
+        result_title: job.title,
+        result_company: job.company || "",
+        result_url: job.url || "",
+        vote,
+        context: "job_seeker",
+      });
+    } catch { /* silent */ }
+  };
+
   return (
     <div className="mt-3 rounded-xl border border-pink-200 bg-pink-50/50 p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-pink-700">
@@ -120,6 +140,19 @@ function JobSearchResultsCard({
                 )}
               </div>
               <div className="ml-3 flex shrink-0 flex-col items-end gap-1.5">
+                {/* Thumbs feedback */}
+                <div className="flex gap-1">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleVote(job, 1); }}
+                    title="Relevant"
+                    className={`rounded p-0.5 text-sm transition-colors ${votes[job.index] === 1 ? "text-green-500" : "text-gray-300 hover:text-green-400"}`}
+                  >👍</button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleVote(job, -1); }}
+                    title="Not relevant"
+                    className={`rounded p-0.5 text-sm transition-colors ${votes[job.index] === -1 ? "text-red-400" : "text-gray-300 hover:text-red-300"}`}
+                  >👎</button>
+                </div>
                 <button
                   onClick={(e) => { e.stopPropagation(); onSaveJob(job); }}
                   className={`rounded-lg p-1 transition-colors ${
@@ -387,6 +420,7 @@ function SessionSidebar({
 export default function JobSeekerHome() {
   const { t } = useTranslation();
   const [input, setInput] = useState("");
+  const [lastQuery, setLastQuery] = useState("");
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [messages, setMessages] = useState<RichMessage[]>([]);
@@ -469,6 +503,7 @@ export default function JobSeekerHome() {
     const userMessage = (overrideMessage ?? input).trim();
     if (!userMessage || sending) return;
     if (!overrideMessage) setInput("");
+    setLastQuery(userMessage);
     setSending(true);
 
     if (!started) setStarted(true);
@@ -697,6 +732,7 @@ export default function JobSeekerHome() {
             onSelectJob={handleSelectJob}
             onSaveJob={handleDirectSaveJob}
             savedJobKeys={savedJobKeys}
+            query={lastQuery}
           />
         );
       }

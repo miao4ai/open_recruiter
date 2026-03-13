@@ -533,3 +533,12 @@ export const listAutomationLogs = (ruleId?: string, limit?: number) =>
     .then((r) => r.data);
 export const getSchedulerStatus = () =>
   api.get<SchedulerStatus>("/automations/status").then((r) => r.data);
+
+export const submitSearchFeedback = (payload: {
+  query: string;
+  result_title: string;
+  result_company?: string;
+  result_url?: string;
+  vote: 1 | -1;
+  context?: string;
+}) => api.post("/search/feedback", payload).then((r) => r.data);
