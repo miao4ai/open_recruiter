@@ -888,6 +888,75 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
             log.error("Failed to run candidate matching: %s", e)
             response["reply"] = f"Sorry, I encountered an error while matching: {e}"
 
+    elif action_type == "evaluate_candidate":
+        try:
+            from app.agents.evaluation_swarm import evaluate_candidate_swarm
+
+            candidate_id = action_data.get("candidate_id", "")
+            candidate_name = action_data.get("candidate_name", "")
+            job_id = action_data.get("job_id", "")
+            job_title = action_data.get("job_title", "")
+
+            result = evaluate_candidate_swarm(cfg, candidate_id, job_id=job_id)
+
+            if result.get("error"):
+                response["reply"] = f"Sorry, I couldn't evaluate {candidate_name}: {result['error']}"
+            else:
+                rec = result.get("hire_recommendation", "maybe")
+                score = result.get("overall_score", 0)
+                rec_labels = {
+                    "strong_yes": "Strong Yes",
+                    "yes": "Recommend",
+                    "maybe": "On the Fence",
+                    "no": "Not Recommended",
+                }
+                response["reply"] = (
+                    f"Multi-agent evaluation complete for **{candidate_name}**. "
+                    f"Overall score: **{score}/100** — **{rec_labels.get(rec, rec)}**.\n\n"
+                    f"{result.get('synthesis', '')}"
+                )
+
+                candidate_data = db.get_candidate(candidate_id)
+                job_data = db.get_job(job_id) if job_id else None
+                response["blocks"].append({
+                    "type": "candidate_eval",
+                    "candidate": {
+                        "id": candidate_id,
+                        "name": candidate_name,
+                        "current_title": candidate_data.get("current_title", "") if candidate_data else "",
+                    },
+                    "job_title": job_title or (job_data.get("title", "") if job_data else ""),
+                    "job_company": job_data.get("company", "") if job_data else "",
+                    "dimensions": result["dimensions"],
+                    "overall_score": result["overall_score"],
+                    "hire_recommendation": result["hire_recommendation"],
+                    "synthesis": result["synthesis"],
+                })
+
+                if not response.get("context_hint"):
+                    response["context_hint"] = {"type": "candidate", "id": candidate_id}
+
+                response["suggestions"] = [
+                    {"label": f"Draft email to {candidate_name}", "prompt": f"Draft an outreach email to {candidate_name}"},
+                    {"label": f"Match {candidate_name} to jobs", "prompt": f"What jobs match {candidate_name}?"},
+                ]
+
+                db.insert_activity({
+                    "id": uuid.uuid4().hex[:8], "user_id": user_id,
+                    "activity_type": "candidate_evaluated",
+                    "description": f"Swarm evaluation of {candidate_name}: {score}/100 ({rec})",
+                    "metadata_json": json.dumps({
+                        "candidate_id": candidate_id,
+                        "candidate_name": candidate_name,
+                        "overall_score": score,
+                        "hire_recommendation": rec,
+                    }),
+                    "created_at": datetime.now().isoformat(),
+                })
+        except Exception as e:
+            log.error("Failed to run candidate evaluation swarm: %s", e)
+            response["reply"] = f"Sorry, I encountered an error during evaluation: {e}"
+
     elif action_type == "match_job":
         try:
             from app.agents.matching import rank_candidates_for_job, match_candidate_to_job

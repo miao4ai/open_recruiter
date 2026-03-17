@@ -420,6 +420,29 @@ export interface CoverLetterBlock {
   body: string;
 }
 
+export interface CandidateEvalDimension {
+  agent: "resume" | "culture" | "risk" | "market";
+  label: string;
+  score: number;
+  verdict: string;
+  findings: string[];
+}
+
+export interface CandidateEvalBlock {
+  type: "candidate_eval";
+  candidate: {
+    id: string;
+    name: string;
+    current_title: string;
+  };
+  job_title: string;
+  job_company: string;
+  dimensions: CandidateEvalDimension[];
+  overall_score: number;
+  hire_recommendation: "strong_yes" | "yes" | "maybe" | "no";
+  synthesis: string;
+}
+
 export interface PlanPreviewBlock {
   type: "plan_preview";
   plan: {
@@ -448,7 +471,7 @@ export interface GuardrailWarningBlock {
   suggestions?: string[];
 }
 
-export type MessageBlock = MatchReportBlock | ApprovalBlock | SchedulingApprovalBlock | PipelineCleanupBlock | BulkOutreachBlock | JobSearchResultsBlock | JobMatchResultBlock | ResumeImprovementBlock | CoverLetterBlock | PlanPreviewBlock | GuardrailWarningBlock;
+export type MessageBlock = MatchReportBlock | ApprovalBlock | SchedulingApprovalBlock | PipelineCleanupBlock | BulkOutreachBlock | JobSearchResultsBlock | JobMatchResultBlock | ResumeImprovementBlock | CoverLetterBlock | PlanPreviewBlock | GuardrailWarningBlock | CandidateEvalBlock;
 
 // ── Workflow Types ──────────────────────────────────────────────────────
 

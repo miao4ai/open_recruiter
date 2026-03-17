@@ -1,6 +1,6 @@
 import React from "react";
 import { WorkOutline, CheckOutlined, ChevronRightOutlined, StarOutlined, TrendingUpOutlined, WarningAmberOutlined, CloseOutlined, AutoFixHighOutlined, DescriptionOutlined, ContentCopyOutlined } from "@mui/icons-material";
-import type { MessageBlock, MatchRanking, ApprovalBlock, SchedulingApprovalBlock, PipelineCleanupBlock, BulkOutreachBlock, ResumeImprovementBlock, CoverLetterBlock } from "../types";
+import type { MessageBlock, MatchRanking, ApprovalBlock, SchedulingApprovalBlock, PipelineCleanupBlock, BulkOutreachBlock, ResumeImprovementBlock, CoverLetterBlock, CandidateEvalBlock, CandidateEvalDimension } from "../types";
 import PlanPreview from "./PlanPreview";
 import GuardrailWarning from "./GuardrailWarning";
 import SchedulingApprovalCard from "./SchedulingApprovalCard";
@@ -107,6 +107,15 @@ export default function MessageBlocks({ blocks, onSendPrompt, onViewJob, onResum
         if (block.type === "guardrail_warning") {
           return (
             <GuardrailWarning
+              key={i}
+              block={block}
+              onSendPrompt={onSendPrompt}
+            />
+          );
+        }
+        if (block.type === "candidate_eval") {
+          return (
+            <CandidateEvalCard
               key={i}
               block={block}
               onSendPrompt={onSendPrompt}
@@ -469,6 +478,152 @@ function CoverLetterCard({
           className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
         >
           Save Job
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Candidate Eval Card (Swarm) ─────────────────────────────────────────── */
+
+const HIRE_REC_STYLES: Record<string, string> = {
+  strong_yes: "bg-green-100 text-green-800 border-green-300",
+  yes:        "bg-emerald-100 text-emerald-800 border-emerald-300",
+  maybe:      "bg-amber-100 text-amber-800 border-amber-300",
+  no:         "bg-red-100 text-red-800 border-red-300",
+};
+
+const HIRE_REC_LABELS: Record<string, string> = {
+  strong_yes: "Strong Hire",
+  yes:        "Recommend",
+  maybe:      "On the Fence",
+  no:         "Not Recommended",
+};
+
+const AGENT_ICONS: Record<string, string> = {
+  resume:  "📄",
+  culture: "🤝",
+  risk:    "🛡️",
+  market:  "📊",
+};
+
+function ScoreBar({ score }: { score: number }) {
+  const color =
+    score >= 75 ? "bg-green-500" :
+    score >= 55 ? "bg-amber-400" :
+    "bg-red-400";
+  return (
+    <div className="mt-1 h-1.5 w-full rounded-full bg-gray-100">
+      <div
+        className={`h-1.5 rounded-full ${color} transition-all`}
+        style={{ width: `${score}%` }}
+      />
+    </div>
+  );
+}
+
+function DimensionRow({ dim }: { dim: CandidateEvalDimension }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const scoreColor =
+    dim.score >= 75 ? "text-green-700 bg-green-50" :
+    dim.score >= 55 ? "text-amber-700 bg-amber-50" :
+    "text-red-700 bg-red-50";
+
+  return (
+    <div className="rounded-lg border border-gray-100 bg-white p-3">
+      <div className="flex items-center gap-2">
+        <span className="text-base">{AGENT_ICONS[dim.agent] || "🔍"}</span>
+        <span className="text-xs font-semibold text-gray-700 flex-1">{dim.label}</span>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${scoreColor}`}>
+          {dim.score}
+        </span>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-[10px] text-gray-400 hover:text-gray-600 ml-1"
+        >
+          {expanded ? "▲" : "▼"}
+        </button>
+      </div>
+      <ScoreBar score={dim.score} />
+      <p className="mt-1.5 text-xs text-gray-500 italic">{dim.verdict}</p>
+      {expanded && dim.findings.length > 0 && (
+        <ul className="mt-2 space-y-0.5">
+          {dim.findings.map((f, i) => (
+            <li key={i} className="flex items-start gap-1.5 text-[11px] text-gray-600">
+              <span className="mt-0.5 shrink-0 text-gray-300">•</span>
+              {f}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function CandidateEvalCard({
+  block,
+  onSendPrompt,
+}: {
+  block: CandidateEvalBlock;
+  onSendPrompt: (prompt: string) => void;
+}) {
+  const recStyle = HIRE_REC_STYLES[block.hire_recommendation] ?? HIRE_REC_STYLES.maybe;
+  const recLabel = HIRE_REC_LABELS[block.hire_recommendation] ?? block.hire_recommendation;
+
+  return (
+    <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50/80 to-white p-4">
+      {/* Header */}
+      <div className="mb-3 flex items-center gap-2 flex-wrap">
+        <span className="text-base">🧠</span>
+        <span className="text-sm font-semibold text-blue-900">
+          Swarm Evaluation — {block.candidate.name}
+        </span>
+        {block.candidate.current_title && (
+          <span className="text-xs text-gray-400">({block.candidate.current_title})</span>
+        )}
+        {block.job_title && (
+          <span className="ml-auto text-xs text-gray-400">
+            for {block.job_title}{block.job_company ? ` @ ${block.job_company}` : ""}
+          </span>
+        )}
+      </div>
+
+      {/* Overall score + recommendation */}
+      <div className="mb-3 flex items-center gap-3">
+        <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-full border-2 border-blue-200 bg-white">
+          <span className="text-lg font-bold text-blue-700">{block.overall_score}</span>
+          <span className="text-[9px] text-gray-400 uppercase">/ 100</span>
+        </div>
+        <div className="flex-1">
+          <span className={`inline-block rounded-full border px-3 py-1 text-xs font-semibold ${recStyle}`}>
+            {recLabel}
+          </span>
+          {block.synthesis && (
+            <p className="mt-1.5 text-xs leading-relaxed text-gray-600">{block.synthesis}</p>
+          )}
+        </div>
+      </div>
+
+      {/* 4 dimension rows */}
+      <div className="space-y-2">
+        {block.dimensions.map((dim) => (
+          <DimensionRow key={dim.agent} dim={dim} />
+        ))}
+      </div>
+
+      {/* Actions */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          onClick={() => onSendPrompt(`Draft an outreach email to ${block.candidate.name}`)}
+          className="rounded-lg bg-blue-100 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-200"
+        >
+          Draft Email
+        </button>
+        <button
+          onClick={() => onSendPrompt(`What jobs match ${block.candidate.name}?`)}
+          className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
+        >
+          Match to Jobs
         </button>
       </div>
     </div>
