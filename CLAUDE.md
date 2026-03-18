@@ -111,8 +111,8 @@ git tag -d vX.Y.Z
 ## Dev Setup
 
 ```bash
-./setup.sh        # install Python deps (uv) + node deps
-./start.sh        # starts FastAPI on :8000 + Vite on :5173
+scripts/setup.sh        # install Python deps (uv) + node deps
+scripts/start.sh        # starts FastAPI on :8000 + Vite on :5173
 ```
 
 Frontend hot-reloads. Backend requires restart on Python changes.

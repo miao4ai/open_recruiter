@@ -64,13 +64,13 @@ Open Recruiter solves this. Drop in a job description and a stack of resumes. Th
 
 **One-line installer** (macOS / Linux):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/miao4ai/open_recruiter/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/miao4ai/open_recruiter/main/scripts/install.sh | bash
 ```
 
 **Manual setup:**
 ```bash
 git clone https://github.com/miao4ai/open_recruiter.git && cd open_recruiter
-./setup.sh && ./start.sh   # then open http://localhost:5173
+scripts/setup.sh && scripts/start.sh   # then open http://localhost:5173
 ```
 
 ---
