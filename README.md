@@ -43,7 +43,7 @@ Open Recruiter solves this. Drop in a job description and a stack of resumes. Th
 | | Recruiter | Job Seeker |
 |--|-----------|------------|
 | **Parse** | Upload resumes & JDs (PDF/DOCX/TXT) → auto-extract structured data | Upload resume → instant profile |
-| **Match** | Vector + LLM scoring: strengths, gaps, reasoning per candidate | Job match analysis against any listing |
+| **Match** | Vector + LLM scoring, **multi-agent swarm evaluation** (skills, culture, risk, market) | Job match analysis against any listing |
 | **Outreach** | One-click personalized email per candidate, bulk campaigns | Cover letter generation |
 | **Pipeline** | Kanban board, reply tracking, interview scheduling | Save jobs, track applications |
 | **AI Chat** | Erika Chan — ask anything about your pipeline, get actions | Ai Chan — job search, resume tips |
@@ -79,7 +79,7 @@ scripts/setup.sh && scripts/start.sh   # then open http://localhost:5173
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| [V2.1.0](https://github.com/miao4ai/open_recruiter/releases/tag/v2.1.0) | 2026-03-13 | Search feedback (👍👎), candidate count auto-refresh on job create |
+| [V2.1.0](https://github.com/miao4ai/open_recruiter/releases/tag/v2.1.0) | 2026-03-18 | Multi-agent candidate evaluation swarm, search feedback, CLAUDE.md |
 | [V2.0.0](https://github.com/miao4ai/open_recruiter/releases/tag/v2.0.0) | 2026-03-12 | LangGraph agents, human-in-the-loop approvals, resume improvement, cover letter, Ollama |
 | [V1.5.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.5.0) | 2026-03-01 | Desktop app: auto-update, system tray, backup/restore |
 | [V1.4.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.4.0) | 2026-02-23 | macOS DMG, cross-platform CI/CD |

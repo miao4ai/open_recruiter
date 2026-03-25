@@ -6,6 +6,30 @@ Download installers from the [GitHub Releases](https://github.com/miao4ai/open_r
 
 ---
 
+## V2.1.0 (2026-03-18)
+
+### Multi-Agent Candidate Evaluation Swarm
+- **4 parallel agents** evaluate candidates simultaneously via `ThreadPoolExecutor`:
+  - **Resume Agent** — skills and experience match analysis
+  - **Culture Agent** — cultural fit, career trajectory, growth signals
+  - **Risk Agent** — red flags: job-hopping, employment gaps, inconsistencies
+  - **Market Agent** — salary benchmarking and market positioning
+- **Synthesizer** combines all 4 scores (resume 40%, culture 25%, risk 20%, market 15%) into an overall recommendation: Strong Hire / Recommend / On the Fence / Not Recommended
+- New `CandidateEvalCard` UI with score bars, collapsible findings per dimension, and hire recommendation badge
+- Triggered by "evaluate [name]" or "assess [name]" in chat
+
+### Search Result Feedback
+- Thumbs up/down buttons on search results in both Recruiter and Job Seeker modes
+- Feedback stored in `search_feedback` table with query, result metadata, and vote
+- New `POST /search/feedback` endpoint
+
+### Project Improvements
+- Added `CLAUDE.md` — project guide for AI-assisted development
+- Moved all shell scripts to `scripts/` directory to declutter project root
+- Candidate count auto-refreshes on job create/upload
+
+---
+
 ## V2.0.0 (2026-03-12)
 
 ### LangGraph Agentic Architecture
