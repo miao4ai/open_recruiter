@@ -39,7 +39,7 @@ _INJECTION_PATTERNS = [
     re.compile(r"new\s+instructions?\s*:", re.I),
     re.compile(r"system\s*prompt\s*:", re.I),
     # Instruction extraction
-    re.compile(r"(repeat|show|reveal|print|output)\s+(your|the)\s+(system\s+)?(prompt|instructions)", re.I),
+    re.compile(r"(repeat|show|reveal|print|output)\s+(me\s+)?(your|the)\s+(system\s+)?(prompt|instructions)", re.I),
     re.compile(r"what\s+(are|is)\s+your\s+(system\s+)?(prompt|instructions|rules)", re.I),
     # Delimiter injection
     re.compile(r"```\s*system\b", re.I),
