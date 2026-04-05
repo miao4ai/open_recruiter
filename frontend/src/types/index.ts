@@ -443,6 +443,22 @@ export interface CandidateEvalBlock {
   synthesis: string;
 }
 
+export interface InboxEmail {
+  from_name: string;
+  from_email: string;
+  subject: string;
+  snippet: string;
+  date: string;
+  is_read: boolean;
+}
+
+export interface InboxPreviewBlock {
+  type: "inbox_preview";
+  emails: InboxEmail[];
+  total: number;
+  unread: number;
+}
+
 export interface PlanPreviewBlock {
   type: "plan_preview";
   plan: {
@@ -471,7 +487,7 @@ export interface GuardrailWarningBlock {
   suggestions?: string[];
 }
 
-export type MessageBlock = MatchReportBlock | ApprovalBlock | SchedulingApprovalBlock | PipelineCleanupBlock | BulkOutreachBlock | JobSearchResultsBlock | JobMatchResultBlock | ResumeImprovementBlock | CoverLetterBlock | PlanPreviewBlock | GuardrailWarningBlock | CandidateEvalBlock;
+export type MessageBlock = MatchReportBlock | ApprovalBlock | SchedulingApprovalBlock | PipelineCleanupBlock | BulkOutreachBlock | JobSearchResultsBlock | JobMatchResultBlock | ResumeImprovementBlock | CoverLetterBlock | PlanPreviewBlock | GuardrailWarningBlock | CandidateEvalBlock | InboxPreviewBlock;
 
 // ── Workflow Types ──────────────────────────────────────────────────────
 

@@ -48,6 +48,9 @@ def _detect_action_from_keywords(message: str) -> dict | None:
     m = re.search(r"job:([a-f0-9]{8,})", msg)
     if m and re.search(r"find.*candidate|match.*candidate|候选人", msg):
         return {"type": "match_job", "job_id": m.group(1)}
+    # Inbox check
+    if re.search(r"check.*(inbox|email|邮箱)|查看.*(收件箱|邮箱)|有没有.*邮件|fetch.*email", msg):
+        return {"type": "check_inbox", "limit": 10}
     return None
 
 
@@ -1218,6 +1221,37 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
         except Exception as e:
             log.error("Failed to run market analysis: %s", e)
             response["reply"] = f"Sorry, I encountered an error: {e}"
+
+    elif action_type == "check_inbox":
+        try:
+            from app.tools.imap_checker import fetch_recent_inbox
+            from app.routes.settings import get_config
+
+            inbox_cfg = get_config()
+            limit = int(action_data.get("limit", 10))
+            emails = fetch_recent_inbox(inbox_cfg, limit=limit)
+
+            if not emails:
+                response["reply"] = "Your inbox is empty, or IMAP is not configured. Check your email settings."
+            else:
+                unread = sum(1 for e in emails if not e["is_read"])
+                response["reply"] = (
+                    f"Here are your **{len(emails)} most recent emails** "
+                    f"({unread} unread)."
+                )
+                response["blocks"].append({
+                    "type": "inbox_preview",
+                    "emails": emails,
+                    "total": len(emails),
+                    "unread": unread,
+                })
+                response["suggestions"] = [
+                    {"label": "Check replies", "prompt": "Check for candidate replies"},
+                    {"label": "Draft email", "prompt": "Draft an outreach email"},
+                ]
+        except Exception as e:
+            log.error("Failed to fetch inbox: %s", e)
+            response["reply"] = f"Sorry, I couldn't check your inbox: {e}. Make sure IMAP is configured in Settings."
 
     elif action_type == "recommend_to_employer":
         try:

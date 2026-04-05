@@ -53,6 +53,108 @@ def _normalize_subject(subject: str) -> str:
     return re.sub(r"^(Re|Fwd|Fw|回复|转发)\s*:\s*", "", subject, flags=re.IGNORECASE).strip()
 
 
+def fetch_recent_inbox(cfg: Config, limit: int = 10) -> list[dict]:
+    """Fetch the N most recent emails from the inbox.
+
+    Returns a list of dicts: {from_name, from_email, subject, snippet, date, is_read}
+    """
+    imap_host = cfg.imap_host
+    imap_port = cfg.imap_port
+    imap_user = cfg.imap_username or cfg.smtp_username or cfg.email_from
+    imap_pass = cfg.imap_password or cfg.smtp_password
+
+    if not imap_host or not imap_pass:
+        return []
+
+    try:
+        if imap_port == 993:
+            conn = imaplib.IMAP4_SSL(imap_host, imap_port)
+        else:
+            conn = imaplib.IMAP4(imap_host, imap_port)
+            conn.starttls()
+        conn.login(imap_user, imap_pass)
+    except Exception as e:
+        log.error("IMAP connection failed: %s", e)
+        raise
+
+    try:
+        conn.select("INBOX", readonly=True)
+        _, msg_nums = conn.search(None, "ALL")
+        if not msg_nums or not msg_nums[0]:
+            return []
+
+        all_ids = msg_nums[0].split()
+        # Take the last N (most recent)
+        recent_ids = all_ids[-limit:]
+        recent_ids.reverse()  # newest first
+
+        results: list[dict] = []
+        for num in recent_ids:
+            _, data = conn.fetch(num, "(FLAGS RFC822.HEADER BODY.PEEK[TEXT]<0.300>)")
+            if not data or not data[0]:
+                continue
+
+            # Parse flags for read status
+            flags_raw = ""
+            header_bytes = b""
+            snippet_bytes = b""
+            for part in data:
+                if isinstance(part, tuple):
+                    desc = part[0].decode("utf-8", errors="replace") if isinstance(part[0], bytes) else str(part[0])
+                    if "RFC822.HEADER" in desc or "HEADER" in desc:
+                        header_bytes = part[1]
+                    elif "BODY" in desc or "TEXT" in desc:
+                        snippet_bytes = part[1]
+                elif isinstance(part, bytes):
+                    flags_raw = part.decode("utf-8", errors="replace")
+
+            # Parse header
+            msg = email.message_from_bytes(header_bytes) if header_bytes else None
+            if not msg:
+                continue
+
+            from_name, from_addr = parseaddr(msg.get("From", ""))
+            from_name = _decode_header_value(from_name) or from_addr
+            subject = _decode_header_value(msg.get("Subject", ""))
+            date_str = msg.get("Date", "")
+
+            try:
+                from email.utils import parsedate_to_datetime
+                date_parsed = parsedate_to_datetime(date_str).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                date_parsed = date_str[:16] if date_str else ""
+
+            # Build snippet from body preview
+            snippet = ""
+            if snippet_bytes:
+                try:
+                    snippet = snippet_bytes.decode("utf-8", errors="replace").strip()
+                except Exception:
+                    snippet = ""
+            # Clean up snippet
+            snippet = re.sub(r"\s+", " ", snippet)[:150]
+
+            is_read = "\\Seen" in flags_raw
+
+            results.append({
+                "from_name": from_name,
+                "from_email": from_addr,
+                "subject": subject,
+                "snippet": snippet,
+                "date": date_parsed,
+                "is_read": is_read,
+            })
+
+        return results
+
+    finally:
+        try:
+            conn.close()
+            conn.logout()
+        except Exception:
+            pass
+
+
 def check_replies(cfg: Config) -> list[dict]:
     """Connect to IMAP inbox and find replies to our sent emails.
 

@@ -58,6 +58,21 @@ class TestKeywordFallback:
         assert result["type"] == "match_job"
         assert result["job_id"] == expected_id
 
+    # ── Inbox check ────────────────────────────────────────────────────────
+
+    @pytest.mark.parametrize("msg", [
+        "check my inbox",
+        "check my email",
+        "查看收件箱",
+        "查看邮箱",
+        "有没有新邮件",
+        "fetch my recent emails",
+    ])
+    def test_inbox_check_detected(self, msg: str):
+        result = _detect_action_from_keywords(msg)
+        assert result is not None
+        assert result["type"] == "check_inbox"
+
     # ── No action (should return None) ────────────────────────────────────
 
     @pytest.mark.parametrize("msg", [

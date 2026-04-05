@@ -1,6 +1,6 @@
 import React from "react";
 import { WorkOutline, CheckOutlined, ChevronRightOutlined, StarOutlined, TrendingUpOutlined, WarningAmberOutlined, CloseOutlined, AutoFixHighOutlined, DescriptionOutlined, ContentCopyOutlined } from "@mui/icons-material";
-import type { MessageBlock, MatchRanking, ApprovalBlock, SchedulingApprovalBlock, PipelineCleanupBlock, BulkOutreachBlock, ResumeImprovementBlock, CoverLetterBlock, CandidateEvalBlock, CandidateEvalDimension } from "../types";
+import type { MessageBlock, MatchRanking, ApprovalBlock, SchedulingApprovalBlock, PipelineCleanupBlock, BulkOutreachBlock, ResumeImprovementBlock, CoverLetterBlock, CandidateEvalBlock, CandidateEvalDimension, InboxPreviewBlock } from "../types";
 import PlanPreview from "./PlanPreview";
 import GuardrailWarning from "./GuardrailWarning";
 import SchedulingApprovalCard from "./SchedulingApprovalCard";
@@ -116,6 +116,15 @@ export default function MessageBlocks({ blocks, onSendPrompt, onViewJob, onResum
         if (block.type === "candidate_eval") {
           return (
             <CandidateEvalCard
+              key={i}
+              block={block}
+              onSendPrompt={onSendPrompt}
+            />
+          );
+        }
+        if (block.type === "inbox_preview") {
+          return (
+            <InboxPreviewCard
               key={i}
               block={block}
               onSendPrompt={onSendPrompt}
@@ -625,6 +634,73 @@ function CandidateEvalCard({
         >
           Match to Jobs
         </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Inbox Preview Card ──────────────────────────────────────────────────── */
+
+function InboxPreviewCard({
+  block,
+  onSendPrompt,
+}: {
+  block: InboxPreviewBlock;
+  onSendPrompt: (prompt: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50/80 to-white p-4">
+      {/* Header */}
+      <div className="mb-3 flex items-center gap-2">
+        <span className="text-base">📬</span>
+        <span className="text-sm font-semibold text-sky-900">
+          Inbox
+        </span>
+        <span className="text-xs text-gray-400">
+          {block.total} emails{block.unread > 0 && ` · ${block.unread} unread`}
+        </span>
+        <button
+          onClick={() => onSendPrompt("Check for candidate replies")}
+          className="ml-auto rounded-lg bg-sky-100 px-2 py-1 text-[10px] font-medium text-sky-700 hover:bg-sky-200"
+        >
+          Check Replies
+        </button>
+      </div>
+
+      {/* Email list */}
+      <div className="max-h-80 overflow-y-auto rounded-lg border border-sky-100 bg-white divide-y divide-gray-50">
+        {block.emails.map((mail, i) => (
+          <div
+            key={i}
+            className={`px-3 py-2.5 hover:bg-sky-50/50 transition-colors ${
+              !mail.is_read ? "bg-sky-50/30" : ""
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {!mail.is_read && (
+                <span className="h-2 w-2 shrink-0 rounded-full bg-sky-500" />
+              )}
+              <span className={`text-xs truncate max-w-[140px] ${
+                !mail.is_read ? "font-semibold text-gray-900" : "font-medium text-gray-600"
+              }`}>
+                {mail.from_name}
+              </span>
+              <span className="ml-auto shrink-0 text-[10px] text-gray-400">
+                {mail.date}
+              </span>
+            </div>
+            <p className={`mt-0.5 text-xs truncate ${
+              !mail.is_read ? "font-semibold text-gray-800" : "text-gray-700"
+            }`}>
+              {mail.subject || "(no subject)"}
+            </p>
+            {mail.snippet && (
+              <p className="mt-0.5 text-[11px] text-gray-400 truncate">
+                {mail.snippet}
+              </p>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );

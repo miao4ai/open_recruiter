@@ -507,6 +507,19 @@ or introduce a candidate to a company contact \
 If the job has no contact_email, return action as null and ask: \
 "这个职位还没有设置联系人邮箱。能提供雇主/HR的邮箱吗？"
 
+When the user asks to check their inbox, see recent emails, or check for new messages \
+(e.g. "check my inbox", "show my emails", "any new emails?", "查看收件箱", \
+"看看邮箱", "有没有新邮件", "check my email", "fetch my recent emails"), return:
+
+{{
+  "message": "Let me check your inbox...",
+  "action": {{
+    "type": "check_inbox",
+    "limit": 10
+  }},
+  "context_hint": null
+}}
+
 For ALL other conversations, set action to null. Always respond with valid JSON only.
 """
 
