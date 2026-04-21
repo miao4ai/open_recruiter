@@ -28,6 +28,7 @@ dependencies = [
     "pyinstaller>=6.0",
     "langgraph>=0.2",
     "langgraph-checkpoint-sqlite>=1.0",
+    "faster-whisper>=1.0",
 ]
 
 [project.scripts]

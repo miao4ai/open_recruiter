@@ -542,3 +542,12 @@ export const submitSearchFeedback = (payload: {
   vote: 1 | -1;
   context?: string;
 }) => api.post("/search/feedback", payload).then((r) => r.data);
+
+// ── Voice transcription ──────────────────────────────────────────────────
+export const transcribeAudio = (blob: Blob, filename = "voice.webm") => {
+  const form = new FormData();
+  form.append("file", blob, filename);
+  return api
+    .post<{ text: string; language?: string }>("/transcribe", form)
+    .then((r) => r.data);
+};
