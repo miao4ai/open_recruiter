@@ -1,261 +1,321 @@
 # Open Recruiter V3.0 Roadmap
 
-> V1.x 把核心招聘工作流跑通；V2.x 把单体 orchestrator 重构成 LangGraph 多 Agent 架构，并加入 guardrails、HIL、本地 LLM、语音输入。
-> **V3.0 的主旨**：从「响应式工具」进化为「自主招聘合伙人」（Autonomous Recruiting Partner）。
+> V1.x delivered the core recruiting workflow; V2.x refactored the monolithic orchestrator into a LangGraph multi-agent architecture, and added guardrails, HIL, local LLM, and voice input.
+> **The mission of V3.0**: evolve from a "reactive tool" to an "Autonomous Recruiting Partner."
 >
-> - 不再只在用户开口时工作 → 主动监控、主动推送行动建议
-> - 不再只是单次问答 → 跨 session、跨日的长程目标驱动
-> - 不再只是录入工具 → 端到端候选人生命周期闭环
+> - No longer working only when the user speaks → proactively monitor and push action suggestions
+> - No longer just single-turn Q&A → cross-session, multi-day goal-driven execution
+> - No longer just a data-entry tool → end-to-end candidate lifecycle loop
 
 ---
 
-## V2 回顾 — 已交付 vs 未交付
+## V2 Recap — Delivered vs Deferred
 
-| V2 路线图方向 | 状态 | 备注 |
-|--------------|------|------|
-| LangGraph 重构 AI 层 | ✅ 已交付 (V2.0) | 全量替换 orchestrator；加入 guardrails / HIL / SqliteSaver |
-| 4-Agent 候选人评估 swarm | ✅ 已交付 (V2.1) | resume / culture / risk / market 并行打分 + synthesizer |
-| Voice 语音输入 | ✅ 已交付 (V2.1.x) | 本地 faster-whisper，离线转写 |
-| Recruiter Chrome Extension | ⏳ 推迟到 V3 | LinkedIn DOM 选择器维护成本评估中 |
-| Job Seeker Chrome Extension | ⏳ 推迟到 V3 | 与 Recruiter 插件合并为单一插件 |
-| Voice 语音回复 (TTS) | ⏳ 推迟到 V3 | 与方向二合并 |
-
----
-
-## 五大方向
-
-### 方向一：Autonomous Agents — 主动招聘助手
-
-**目标**：从「等用户提问」转向「主动发现需要行动的时刻」。
-
-**核心能力**
-
-| 能力 | 说明 |
-|------|------|
-| Goal-driven Agents | 用户给出目标（"两周内招一个 Senior Backend"），Agent 自主拆解任务、推进、阶段性汇报 |
-| Pipeline Watcher | 持续监控 pipeline 滞留、邮件未回复、面试无反馈，主动生成行动卡片 |
-| Idle-time 任务调度 | 用户离开时后台跑评估、整理 inbox、生成日报，回来时一并呈现 |
-| 跨 session 长程工作流 | LangGraph 工作流跨进程持久化（已有 SqliteSaver 基础），支持中断后续跑 |
-| Proactive Briefing | 每天早晨自动生成"今日招聘简报"：紧急动作 / 候选人状态变化 / 待回复邮件 |
-
-**技术方案**
-- 复用 `app/scheduler.py`（APScheduler）作为触发器，但执行体替换为 LangGraph workflow
-- 新增 `app/agents/autonomous/` 模块：`pipeline_watcher.py`、`goal_driver.py`、`briefing_agent.py`
-- 持久化目标：新表 `agent_goals`（id, user_id, description, status, progress_jsonl, created_at）
-- 主动通知：复用现有 `notifications` 表 + 前端 toast
-
-**关键约束**
-- 所有破坏性操作（发邮件、改 pipeline、删数据）**必须**走 HIL 审批，不允许 Agent 静默执行
-- 用户可一键暂停/接管任意 Agent
-- Agent 行为日志可审计（新表 `agent_actions`：thread_id, agent, action, params_json, status, created_at）
-
-**成功指标**
-- 用户主动操作次数下降 ≥ 30%
-- Pipeline 阶段滞留 > 3 天的候选人比例下降 ≥ 50%
-- 每日 briefing 打开率 ≥ 60%
+| V2 Roadmap Direction | Status | Notes |
+|---------------------|--------|-------|
+| LangGraph refactor of the AI layer | ✅ Delivered (V2.0) | Full orchestrator replacement; added guardrails / HIL / SqliteSaver |
+| 4-Agent candidate evaluation swarm | ✅ Delivered (V2.1) | resume / culture / risk / market parallel scoring + synthesizer |
+| Voice input | ✅ Delivered (V2.1.x) | Local faster-whisper, offline transcription |
+| Recruiter Chrome Extension | ⏳ Deferred to V3 | LinkedIn DOM selector maintenance cost under evaluation |
+| Job Seeker Chrome Extension | ⏳ Deferred to V3 | To be merged with the Recruiter extension into a single plugin |
+| Voice reply (TTS) | ⏳ Deferred to V3 | Folded into Direction 2 |
 
 ---
 
-### 方向二：Voice Suite — 全双工语音 + 面试转写
+## Five Directions
 
-**目标**：把 V2.1 的语音输入扩展为一整套语音交互系统。
+### Direction 1: Autonomous Agents — Proactive Recruiting Assistant
 
-**核心能力**
+**Goal**: Shift from "waiting for the user to ask" to "proactively discovering moments that need action."
 
-| 能力 | 状态 | 说明 |
-|------|------|------|
-| 语音输入 (STT) | ✅ V2.1 已交付 | faster-whisper, 本地 |
-| 语音回复 (TTS) | 🆕 V3 | Piper（本地，~50MB）作为默认；ElevenLabs 作为可选云端高质量 |
-| 连续对话模式 | 🆕 V3 | VAD（voice activity detection）自动断句，无需每次点麦克风 |
-| 面试转写 | 🆕 V3 | 浏览器/会议麦克风录制 → 实时转写 → 按胜任力维度结构化笔记 |
-| 多语言自动识别 | 🆕 V3 | Whisper 自带语言检测；UI 显示检测到的语言 |
-| 语音指令 | 🆕 V3 | "保存这个候选人"、"发邮件给 HR" 等高频指令直接走 intent → action |
+**Core Capabilities**
 
-**面试转写流程**
+| Capability | Description |
+|-----------|-------------|
+| Goal-driven Agents | User gives a goal ("hire a Senior Backend within two weeks"), the Agent autonomously decomposes tasks, drives progress, and reports back at milestones |
+| Pipeline Watcher | Continuously monitors stalled pipeline stages, unanswered emails, and silent interview follow-ups, proactively producing action cards |
+| Idle-time task scheduling | While the user is away, runs evaluations, organizes inbox, and generates daily briefings in the background |
+| Cross-session long-running workflows | LangGraph workflows persist across processes (foundation already in SqliteSaver); resume execution after interrupts |
+| Proactive Briefing | Every morning auto-generates a "Today's Recruiting Briefing": urgent actions / candidate status changes / pending replies |
+
+**Technical Approach**
+- Reuse `app/scheduler.py` (APScheduler) as the trigger, but swap the execution body for LangGraph workflows
+- New `app/agents/autonomous/` module: `pipeline_watcher.py`, `goal_driver.py`, `briefing_agent.py`
+- Persistence: new table `agent_goals` (id, user_id, description, status, progress_jsonl, created_at)
+- Proactive notifications: reuse the existing `notifications` table + frontend toast
+
+**Critical Constraints**
+- All destructive actions (sending emails, modifying pipeline, deleting data) **must** go through HIL approval; no silent execution by Agents
+- User can pause / take over any Agent with one click
+- Agent behavior is fully auditable (new table `agent_actions`: thread_id, agent, action, params_json, status, created_at)
+- **Must be gated by Quota Enforcement** (see Cross-cutting Capabilities below) — autonomous mode is NOT allowed to ship without quota gates
+
+**Success Metrics**
+- Reduction in user-initiated actions ≥ 30%
+- Reduction in candidates stalled > 3 days at a pipeline stage ≥ 50%
+- Daily briefing open rate ≥ 60%
+
+---
+
+### Direction 2: Voice Suite — Full-duplex Voice + Interview Transcription
+
+**Goal**: Extend the V2.1 voice input into a complete voice interaction system.
+
+**Core Capabilities**
+
+| Capability | Status | Description |
+|-----------|--------|-------------|
+| Voice input (STT) | ✅ Delivered in V2.1 | faster-whisper, local |
+| Voice reply (TTS) | 🆕 V3 | Piper (local, ~50MB) as default; ElevenLabs as optional cloud high-quality |
+| Continuous conversation mode | 🆕 V3 | VAD (voice activity detection) auto-segments; no need to click the mic each time |
+| Interview transcription | 🆕 V3 | Browser/meeting mic capture → real-time transcription → structured notes by competency dimension |
+| Multi-language auto-detection | 🆕 V3 | Whisper's built-in language detection; UI shows detected language |
+| Voice commands | 🆕 V3 | High-frequency commands like "save this candidate", "email HR" route directly through intent → action |
+
+**Interview Transcription Flow**
 ```
-浏览器 MediaRecorder ──► 分片上传 (10s/片) ──► /api/transcribe/stream
-                                                       │
-                                                       ▼
-                                              faster-whisper
-                                                       │
-                                                       ▼
-                                              片段拼接 + 说话人分离
-                                                       │
-                                                       ▼
-                                              LangGraph 笔记 Agent
-                                                  （按维度提取）
-                                                       │
-                                                       ▼
-                                              CandidateInterviewNote 表
+Browser MediaRecorder ──► Chunked upload (10s/chunk) ──► /api/transcribe/stream
+                                                              │
+                                                              ▼
+                                                     faster-whisper
+                                                              │
+                                                              ▼
+                                              Chunk stitching + speaker diarization
+                                                              │
+                                                              ▼
+                                                  LangGraph note Agent
+                                                  (extracts by dimension)
+                                                              │
+                                                              ▼
+                                              CandidateInterviewNote table
 ```
 
-**新增依赖**
-- TTS：`piper-tts`（本地，CPU 友好）
-- 说话人分离（可选，复杂度高）：`pyannote-audio` —— 评估后再决定是否纳入 V3
+**New Dependencies**
+- TTS: `piper-tts` (local, CPU-friendly)
+- Speaker diarization (optional, high complexity): `pyannote-audio` — decision on whether to include in V3 pending evaluation
 
-**成功指标**
-- 语音转写准确率 ≥ 92%（英文）/ ≥ 88%（中文）
-- 面试笔记自动化率 ≥ 80%（recruiter 接受/微调即可）
-- 端到端延迟 ≤ 3 秒（说话结束 → 文字出现）
+**Success Metrics**
+- Voice transcription accuracy ≥ 92% (English) / ≥ 88% (Chinese)
+- Interview note automation rate ≥ 80% (recruiter only accepts or lightly edits)
+- End-to-end latency ≤ 3 seconds (speech end → text appears)
 
 ---
 
-### 方向三：Sourcing & Outbound — 主动候选人发现
+### Direction 3: Sourcing & Outbound — Proactive Candidate Discovery
 
-**目标**：从「等候选人来」变成「主动找人 + 自动跟进」。
+**Goal**: Shift from "wait for candidates to come" to "actively find people + auto follow-up."
 
-**Chrome Extension（V2 推迟项落地）**
-- 单一插件，根据登录账号角色（Recruiter / Job Seeker）切换面板
-- 一键保存 LinkedIn / Indeed / Glassdoor 页面到本地
-- 已保存候选人/职位显示标记
-- DOM 选择器多套 fallback + 错误上报到本地 SQLite 表 `extension_errors`
+**Chrome Extension (V2 deferred item lands here)**
+- Single plugin, switches panel based on the logged-in account role (Recruiter / Job Seeker)
+- One-click save LinkedIn / Indeed / Glassdoor pages to local
+- Already-saved candidates / jobs are visually marked
+- DOM selectors have multiple fallbacks + errors reported to a local SQLite table `extension_errors`
 
-**主动 Sourcing**
+**Active Sourcing**
 
-| 渠道 | 方案 |
-|------|------|
-| GitHub | 按 language / location / repo stars 搜开发者，公开 API |
-| LinkedIn 公开搜索 | 通过插件用户主动浏览触发，不做后端爬虫（合规） |
-| 公开数据集 | HuggingFace / Kaggle 上的公开简历语料，离线索引 |
-| 候选人活跃度 | GitHub commit 频率 / LinkedIn updated_at 信号 |
+| Channel | Approach |
+|---------|----------|
+| GitHub | Search developers by language / location / repo stars; public API |
+| LinkedIn public search | Triggered by extension user navigation, no backend scraping (compliance) |
+| Public datasets | Public resume corpora on HuggingFace / Kaggle, indexed offline |
+| Candidate activity signals | GitHub commit frequency / LinkedIn updated_at signals |
 
-**Outbound 序列引擎**
-- 3-touch 模板：初始接触 → 软跟进 (3 天) → 最后一次 (7 天)
-- 每封邮件由 LLM 基于候选人 profile 个性化生成
-- A/B 测试主题行（success metric: open rate）
-- 状态分支：已 reply / 已 open 未回 / 未 open
-- 整套序列受 HIL 审批控制，可批量预览/编辑/取消
+**Outbound Sequence Engine**
+- 3-touch template: initial contact → soft follow-up (3 days) → final touch (7 days)
+- Every email personalized by the LLM based on the candidate's profile
+- A/B test subject lines (success metric: open rate)
+- Conditional branching: replied / opened-but-no-reply / not-opened
+- Entire sequence under HIL approval — bulk preview / edit / cancel supported
 
-**新增 API**
+**New APIs**
 - `POST /api/candidates/from-extension`
 - `GET /api/candidates/check?linkedin_url=...`
 - `POST /api/sourcing/github/search`
-- `POST /api/outreach/sequence` — 创建 3-touch 序列
-- `GET /api/outreach/sequence/{id}/status` — 查看每个 touch 的状态
+- `POST /api/outreach/sequence` — create a 3-touch sequence
+- `GET /api/outreach/sequence/{id}/status` — view the status of each touch
 
-**成功指标**
-- 平均回复率较单封邮件提升 ≥ 2x
-- 候选人来源中"主动 sourcing"占比 ≥ 30%
-- Chrome 插件月活 ≥ 系统总用户的 50%
+**Success Metrics**
+- Average reply rate improves ≥ 2x over single-email outreach
+- Share of candidates from "active sourcing" ≥ 30%
+- Chrome extension monthly active users ≥ 50% of total users
 
 ---
 
-### 方向四：Deep Integrations — ATS / Calendar / Mail
+### Direction 4: Deep Integrations — ATS / Calendar / Mail
 
-**目标**：让 Open Recruiter 成为现有招聘工具栈的"智能层"，而不是孤立工具。
+**Goal**: Make Open Recruiter the "intelligence layer" on top of the existing recruiting toolchain, rather than an isolated tool.
 
-**ATS 集成**（按优先级）
-1. **Greenhouse** — 最广泛使用，REST API 完整
-2. **Lever** — 第二大，API 稳定
-3. **Ashby** — 增长快，新一代 ATS
+**ATS Integration** (by priority)
+1. **Greenhouse** — most widely used, complete REST API
+2. **Lever** — second-largest, stable API
+3. **Ashby** — fast-growing next-generation ATS
 
-**集成深度**：双向同步候选人 / 职位 / pipeline 状态。冲突解决策略：以最近修改方为准，冲突时弹审批卡片。
+**Integration Depth**: bidirectional sync for candidates / jobs / pipeline status. Conflict resolution strategy: last-write-wins by modification time, with an approval card surfaced on conflicts.
 
-**Calendar 升级**
-- Google Calendar OAuth + 双向同步（不只是单向写入）
+**Calendar Upgrade**
+- Google Calendar OAuth + bidirectional sync (not just one-way write)
 - Outlook / Microsoft 365
-- 冲突检测：调度面试时自动避开候选人和面试官的日程冲突
-- 时区智能：跨时区候选人自动建议双方均合理的时段
+- Conflict detection: automatically avoid candidate and interviewer schedule clashes when scheduling
+- Timezone intelligence: for cross-timezone candidates, suggest time slots reasonable for both parties
 
-**Email 升级**
-- Gmail API / Microsoft Graph 原生集成（取代 IMAP 轮询）
-- 实时 webhook：候选人回复立即入 inbox，不再 5 分钟一轮询
-- 已读/未读状态、Thread 完整结构、附件原生处理
+**Email Upgrade**
+- Native Gmail API / Microsoft Graph integration (replacing IMAP polling)
+- Real-time webhooks: candidate replies hit the inbox immediately, no more 5-minute polling
+- Read/unread state, full thread structure, native attachment handling
 
-**Slack 升级**
-- 完整工作流卡片（不只是简历接收）
-- HIL 审批可在 Slack 完成（不必回到桌面端）
-- `/recruiter` slash command 支持常用操作
+**Slack Upgrade**
+- Full workflow cards (not just resume receiving)
+- HIL approvals completable inside Slack (no need to switch back to the desktop app)
+- `/recruiter` slash command supports common operations
 
-**成功指标**
-- 至少 1 个 ATS 集成达到生产可用（端到端 sync 错误率 < 1%）
-- Calendar 双向同步冲突率 < 5%
-- 邮件回复延迟从 5 分钟降到 < 30 秒
+**Success Metrics**
+- At least 1 ATS integration is production-ready (end-to-end sync error rate < 1%)
+- Calendar bidirectional sync conflict rate < 5%
+- Email reply latency drops from 5 minutes to < 30 seconds
 
 ---
 
-### 方向五：Analytics & Forecasting
+### Direction 5: Analytics & Forecasting
 
-**目标**：把已有数据变成可决策的洞察。
+**Goal**: Turn the data we already have into actionable insights.
 
 **Pipeline Funnel**
-- 各阶段转化率可视化（Sankey diagram）
-- 按职位 / 按 recruiter / 按时间段分组
-- 异常检测：某阶段转化率突然下降时主动告警
+- Visualize stage-to-stage conversion rates (Sankey diagram)
+- Group by job / by recruiter / by time period
+- Anomaly detection: proactively alert when a stage's conversion rate drops suddenly
 
-**预测模型**（本地 ONNX，避免云端调用）
-- Time-to-hire 预测：基于职位类型、地点、薪资 → 预计天数
-- 候选人响应概率：基于 profile + 邮件内容 → 回复概率 0-100%
-- Pipeline 健康度评分：综合信号给每个 job 打 0-10 分
+**Predictive Models** (local ONNX, avoiding cloud calls)
+- Time-to-hire prediction: based on job type, location, salary → expected days
+- Candidate response probability: based on profile + email content → reply probability 0-100%
+- Pipeline health score: composite signal scoring each job 0-10
 
-**报表自动化**
-- Hiring manager 周报：每周一早自动生成 PDF + 邮件发送
-- 候选人画像分析：当前 pipeline 中候选人的技能 / 地点 / 薪资分布
+**Report Automation**
+- Hiring manager weekly digest: auto-generated PDF emailed every Monday morning
+- Candidate portfolio analysis: skills / location / salary distribution across the current pipeline
 
-**技术方案**
-- 新增 `backend/app/analytics/` 模块
-- 预测模型用 scikit-learn 训练 → 导出 ONNX → 用现有 `onnxruntime` 推理
-- 报表生成：`weasyprint` 或 `reportlab`
+**Technical Approach**
+- New `backend/app/analytics/` module
+- Predictive models trained with scikit-learn → exported to ONNX → inferred with existing `onnxruntime`
+- Report generation: `weasyprint` or `reportlab`
 
-**成功指标**
-- 预测的 time-to-hire 与实际值平均误差 ≤ 5 天
-- 响应概率模型 ROC-AUC ≥ 0.75
-- 周报订阅率 ≥ 70%
-
----
-
-## 版本规划
-
-| 阶段 | 内容 | 优先级 | 目标时间 |
-|------|------|--------|---------|
-| V3.0-alpha | Autonomous Agents 核心（方向一） | P0 | 2026 Q2 |
-| V3.0-beta | Voice Suite 全套（方向二） | P0 | 2026 Q3 |
-| V3.0-rc1 | Chrome Extension + Sourcing（方向三） | P0 | 2026 Q3 |
-| V3.0-rc2 | ATS 集成（方向四，先做 Greenhouse） | P1 | 2026 Q4 |
-| V3.0 | Analytics & Forecasting（方向五）+ 整合发布 | P1 | 2026 Q4 |
+**Success Metrics**
+- Predicted time-to-hire average error vs actual ≤ 5 days
+- Response probability model ROC-AUC ≥ 0.75
+- Weekly digest subscription rate ≥ 70%
 
 ---
 
-## 关键架构变化
+## Cross-cutting Capability: Quota Enforcement & Safety Net
 
-| 变化 | 原因 |
-|------|------|
-| Long-running agent runtime | Agent 工作流跨 session 持久化，需稳定的恢复机制（已有 SqliteSaver 基础） |
-| 用户偏好微调 | 用户接受/拒绝 Agent 建议的信号 → 本地维护偏好向量，Agent 推荐时加权 |
-| Vector DB 升级评估 | ChromaDB 在 100k+ 候选人规模下查询变慢，评估 LanceDB / Qdrant |
-| Background worker 进程独立 | 当前 APScheduler 与 FastAPI 同进程，长程 Agent 会阻塞；评估抽出独立 worker |
-| Webhook ingress | ATS / Calendar / Mail 需要接收 webhook，需考虑桌面端反向隧道（ngrok-like） |
+> This is a **prerequisite** for shipping Direction 1 (Autonomous Agents) and Direction 3 (Outbound sequences).
+> No quota gate = leaving the door open to your credit card and the candidates' inboxes.
+
+### Why this is needed
+
+V3 puts "proactive behavior" at the core: autonomous agents, outbound sequences, sourcing API calls, interview transcription. Any logic error or prompt-injection compromise could lead to:
+- Cloud LLM bill burned overnight (cloud providers bill per-token)
+- Hundreds of emails firing into candidate inboxes (brand damage + Gmail spam-rule triggers)
+- Third-party API rate limits being tripped (GitHub / DuckDuckGo / ATS webhook all going down)
+
+### Quota Dimensions
+
+| Scope | Metric | Action on Limit | Default Cap (user-adjustable) |
+|-------|--------|-----------------|------------------------------|
+| `llm.tokens.daily` | Daily cumulative tokens (counted per provider) | Auto-degrade to local Ollama; notify user | 100k tokens each for Anthropic / OpenAI / Gemini |
+| `llm.cost.monthly` | Monthly USD (estimated by provider pricing) | Hard-stop, requires manual user override | $20 / month / provider |
+| `email.outbound.hourly` | Emails sent per hour | Queue + show warning bar | 30 |
+| `email.outbound.daily` | Daily cumulative emails | Hard-stop | 200 |
+| `pipeline.bulk_change.daily` | Pipeline rows modified by autonomous flows per day | Hard-stop | 50 |
+| `sourcing.api_calls.daily` | GitHub / external sourcing API calls per day | Queue to next day | 1000 |
+
+### Technical Approach
+
+- New table `usage_log` (id, scope, period_key, count, cost_cents, ts) — append-only, aggregated on demand
+- New table `quota_config` (user_id, scope, period, limit, enforce_action) — user-configurable in Settings
+- Decorator `@enforce_quota(scope=...)` wraps key call sites:
+  - `app/llm.py` — check before LLM call + record after (with token / cost)
+  - `app/email_sender.py` — check before sending + record after
+  - `app/agents/autonomous/` — check before pipeline mutations
+  - Third-party sourcing clients — check before API calls
+- Behavior on hitting the cap is configured via `enforce_action`: `block` / `degrade_to_ollama` / `queue` / `warn_only`
+- Settings UI adds a "Usage & Quotas" page: realtime progress bars + historical usage charts + quota adjustment + notification preferences when limits are hit
+
+### Integration with Existing Systems
+
+- **Guardrails layer**: the quota check becomes a new line of defense after input guard and before action dispatch
+- **Audit log**: `agent_actions` table gains a `quota_consumed_jsonl` field recording each Agent decision's resource consumption
+- **Degradation chain**: when cloud LLM hits the cap → automatically switch to local Ollama (infra already exists), keeping the core flow uninterrupted
+
+### Success Metrics
+
+- 0 incidents of "bill events" or "email-spam events" caused by quota failures
+- 99% of normal usage does not hit the cap (default quotas should not constantly get in users' way)
+- Hit-to-notification latency ≤ 1 second
+
+### Out of Scope
+
+- ❌ Sophisticated token-bucket / leaky-bucket algorithms — a SQLite counter is enough for a single-user desktop app
+- ❌ Cross-device / cross-user quota aggregation — V3 remains single-user local-first
+- ❌ Billing / paid tiers — this is not SaaS; quotas are purely a safety guardrail
 
 ---
 
-## 风险与权衡
+## Release Plan
 
-| 风险 | 缓解措施 |
-|------|---------|
-| 自主代理 vs 用户控制感 | 所有 destructive 操作强制 HIL；提供"全局暂停"开关 |
-| Chrome 插件维护成本 | LinkedIn DOM 频繁改版 → 多套选择器 + 自动错误上报 + 版本灰度 |
-| ATS 集成爆炸 | V3 只做 1 个 reference 实现（Greenhouse），其余社区贡献 |
-| Webhook 桌面端可达性 | 桌面 App 默认无公网 IP；评估用 Cloudflare Tunnel / 本地 polling 替代 |
-| 隐私合规 (sourcing) | 不爬取登录后内容；候选人首次接触必须包含数据来源声明 |
-| 模型成本 | 本地优先策略下，sourcing / 序列生成可能耗费大量 LLM 调用 → 引入结果缓存 |
-
----
-
-## 不在 V3 范围内（明确划线）
-
-- **移动 App (iOS / Android)** — 推迟到 V4
-- **Marketplace / Plugin 商店** — 评估社区需求后再定
-- **新增语言** — 现有 6 语言够用（en / zh / zh-TW / ja / ko / es）
-- **多租户 SaaS 部署** — 保持 local-first，self-hosted 模式作为可选
-- **视频面试录制** — 只做转写，不做录制
-- **薪酬数据爬取** — 法律风险高，仅使用公开数据集
+| Stage | Content | Priority | Target Time |
+|-------|---------|----------|-------------|
+| V3.0-pre-alpha | **Quota Enforcement & Safety Net** (cross-cutting, prerequisite for Direction 1) | P0 | 2026 Q2 |
+| V3.0-alpha | Autonomous Agents core (Direction 1) | P0 | 2026 Q2 |
+| V3.0-beta | Voice Suite full set (Direction 2) | P0 | 2026 Q3 |
+| V3.0-rc1 | Chrome Extension + Sourcing (Direction 3, outbound sequence depends on quotas) | P0 | 2026 Q3 |
+| V3.0-rc2 | ATS Integration (Direction 4, start with Greenhouse) | P1 | 2026 Q4 |
+| V3.0 | Analytics & Forecasting (Direction 5) + integration release | P1 | 2026 Q4 |
 
 ---
 
-## 设计原则（沿袭 V1/V2 并强化）
+## Key Architectural Changes
 
-1. **Local-first**：默认本地推理；云端 API 只作为可选增强
-2. **Privacy by default**：候选人 PII 永不离开用户设备，除非用户明确同意
-3. **Human-in-the-loop**：自主性提升不等于失控，所有破坏性操作必须可审批
-4. **Graceful degradation**：任何外部集成（ATS / Calendar / 云 LLM）失败都不能 break 核心流程
-5. **观测优先**：每个 Agent 行为可追溯、可回放、可调试（LangGraph 自带的 thread 支持是基础）
+| Change | Reason |
+|--------|--------|
+| Long-running agent runtime | Agent workflows persist across sessions; need a robust resume mechanism (SqliteSaver foundation already exists) |
+| User preference fine-tuning | Accept/reject signals from the user on Agent suggestions → locally maintained preference vector that weights future recommendations |
+| Vector DB upgrade evaluation | ChromaDB slows down at 100k+ candidates; evaluate LanceDB / Qdrant |
+| Background worker process isolation | Today's APScheduler shares the FastAPI process; long-running Agents will block it. Evaluate extracting an independent worker |
+| Webhook ingress | ATS / Calendar / Mail require receiving webhooks; need to consider a reverse tunnel (ngrok-like) for desktop |
+| Quota Enforcement middleware | New `usage_log` / `quota_config` tables + `@enforce_quota` decorator; cross-cuts LLM / email / mutation / sourcing call sites |
+
+---
+
+## Risks and Trade-offs
+
+| Risk | Mitigation |
+|------|-----------|
+| Autonomous agency vs user sense of control | All destructive operations require HIL; offer a "global pause" switch |
+| Chrome extension maintenance cost | LinkedIn DOM changes often → multiple selector fallbacks + auto error reporting + staged version rollout |
+| ATS integration explosion | V3 ships only 1 reference implementation (Greenhouse); the rest via community contributions |
+| Desktop webhook reachability | Desktop apps have no public IP by default; evaluate Cloudflare Tunnel / local polling as alternatives |
+| Privacy compliance (sourcing) | Do not scrape post-login content; first-touch outreach must include data source disclosure |
+| Runaway model cost | Quota Enforcement forces daily-token / monthly-USD caps; auto-degrades to Ollama on hit |
+| Autonomous agent runaway emails | Outbound email quotas (30/hour / 200/day) + HIL approval — double safeguard |
+| Third-party API rate limits | Sourcing API quota rolls daily; on hit, queues to next day without blocking other flows |
+
+---
+
+## Out of Scope for V3 (explicitly drawn line)
+
+- **Mobile App (iOS / Android)** — pushed to V4
+- **Marketplace / Plugin store** — defer until community demand is validated
+- **New languages** — current 6 languages are sufficient (en / zh / zh-TW / ja / ko / es)
+- **Multi-tenant SaaS deployment** — stay local-first; self-hosted mode remains an option
+- **Video interview recording** — transcription only, no recording
+- **Salary data scraping** — high legal risk; only use public datasets
+
+---
+
+## Design Principles (carried from V1/V2 and reinforced)
+
+1. **Local-first**: default to local inference; cloud APIs are an optional enhancement only
+2. **Privacy by default**: candidate PII never leaves the user's device unless explicitly approved
+3. **Human-in-the-loop**: more autonomy does not mean loss of control — all destructive actions must be approvable
+4. **Graceful degradation**: any external integration (ATS / Calendar / cloud LLM) failing must not break the core flow
+5. **Observability first**: every Agent action is traceable, replayable, and debuggable (LangGraph's built-in thread support is the foundation)
