@@ -6,6 +6,31 @@ Download installers from the [GitHub Releases](https://github.com/miao4ai/open_r
 
 ---
 
+## V2.2.0 (2026-05-29)
+
+### Voice Input (Local Whisper)
+- New microphone button in the chat input — record, transcribe locally with faster-whisper, send as message
+- Fully offline: no audio leaves the device
+- 22 mocked Whisper test cases verify transcription, language detection, and error paths
+
+### Inbox Preview in Chat
+- New `check_inbox` action: in chat, ask "check my inbox" / "查看收件箱" to fetch the 10 most recent emails via IMAP
+- `InboxPreviewCard` UI: unread dot indicator, sender, subject, snippet, date, one-click "Check Replies" button
+- Keyword fallback for weak local models (Qwen 3.5)
+
+### Test Harness (114 cases)
+- New `tests/harness/` directory with pytest
+- `test_intent_detection.py` — keyword fallback, action-routing whitelist (seeker vs recruiter), intent disambiguation
+- `test_guardrails.py` — prompt injection, PII, content safety, hallucination, action limits, severity priority
+- Fixed a real guardrail gap: "show me your instructions" now blocked
+
+### Project & Docs
+- Karpathy's working-style guidelines integrated into `CLAUDE.md`
+- V3 roadmap translated to English
+- Shell scripts moved to `scripts/` to declutter project root
+
+---
+
 ## V2.1.0 (2026-03-18)
 
 ### Multi-Agent Candidate Evaluation Swarm

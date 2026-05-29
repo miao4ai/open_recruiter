@@ -6,7 +6,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/BUILD-PASSING-brightgreen" />
-  <img src="https://img.shields.io/badge/RELEASE-V2.1.0-blue" />
+  <img src="https://img.shields.io/badge/RELEASE-V2.2.0-blue" />
   <img src="https://img.shields.io/badge/LICENSE-MIT-purple" />
 </p>
 
@@ -79,6 +79,7 @@ scripts/setup.sh && scripts/start.sh   # then open http://localhost:5173
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| [V2.2.0](https://github.com/miao4ai/open_recruiter/releases/tag/v2.2.0) | 2026-05-29 | Voice input (Whisper), inbox preview in chat, 114-case test harness |
 | [V2.1.0](https://github.com/miao4ai/open_recruiter/releases/tag/v2.1.0) | 2026-03-18 | Multi-agent candidate evaluation swarm, search feedback, CLAUDE.md |
 | [V2.0.0](https://github.com/miao4ai/open_recruiter/releases/tag/v2.0.0) | 2026-03-12 | LangGraph agents, human-in-the-loop approvals, resume improvement, cover letter, Ollama |
 | [V1.5.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.5.0) | 2026-03-01 | Desktop app: auto-update, system tray, backup/restore |
