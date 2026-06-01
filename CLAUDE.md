@@ -4,6 +4,15 @@
 
 **Open Recruiter** is an AI-powered recruitment assistant desktop app (Electron + React + FastAPI). It runs 100% locally. Two modes: **Recruiter** (Erika Chan) and **Job Seeker** (Ai Chan).
 
+## Available Skills
+
+Topic-specific guides — read the relevant one before working in that area:
+
+- [skills/backend.md](skills/backend.md) — FastAPI structure, agents, the 6-step recipe for adding a chat action, LLM provider config
+- [skills/langgraph.md](skills/langgraph.md) — chat graph pipeline, SSE adapter, Human-in-the-Loop approval cards, multi-agent swarm pattern
+- [skills/testing.md](skills/testing.md) — pytest harness (136+ cases), how to run subsets, when a failure means a real gap vs a stale fixture
+- [skills/deployment.md](skills/deployment.md) — version bump + tag + CI release flow, artifact naming, Gatekeeper / notarization notes
+
 ---
 
 ## Working Style
