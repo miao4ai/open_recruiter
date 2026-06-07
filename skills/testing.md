@@ -15,8 +15,9 @@ All tests are pure unit tests with mocked LLM/IMAP/Whisper calls — no network,
 | `test_intent_detection.py` | ~40 | Keyword fallback (resume / JD upload, match_job, inbox), seeker vs recruiter whitelist, intent disambiguation |
 | `test_guardrails.py` | ~70 | Prompt injection (13 attack patterns), PII detection, content safety, hallucination, action limits, severity priority |
 | `test_transcribe.py` | 22 | Voice input: Whisper transcription, language detection, error paths (mocked) |
+| `test_memory.py` | 22 | 4-tier memory: sensory ring buffer, working state, entity rolling summary, 4-layer loader |
 
-Total: 136+ test cases.
+Total: 159+ test cases.
 
 ## Run subsets
 

@@ -774,6 +774,59 @@ async def get_notifications(current_user: dict = Depends(get_current_user)):
 # ── Action Processing (shared by chat + streaming) ───────────────────────
 
 
+def _update_memory_for_action(user_id: str, session_id: str, action_type: str, action_data: dict) -> None:
+    """Emit a sensory event + bump entity-memory interaction for the action.
+
+    Centralised here so individual action handlers don't have to know about memory.
+    Safe to fail silently — never let memory bookkeeping break a chat turn.
+    """
+    if not action_type or not user_id:
+        return
+    try:
+        from app.memory import emit_event, update_entity_after_action
+        from app.memory.working import add_focused_entity
+
+        candidate_id = action_data.get("candidate_id", "")
+        candidate_name = action_data.get("candidate_name", "")
+        job_id = action_data.get("job_id", "")
+        job_title = action_data.get("job_title", "")
+
+        # Sensory: one-line summary of what just happened
+        summaries = {
+            "compose_email":        f"drafted email to {candidate_name or 'candidate'}",
+            "match_candidate":      f"matched {candidate_name or 'candidate'} to jobs",
+            "evaluate_candidate":   f"swarm-evaluated {candidate_name or 'candidate'}",
+            "match_job":            f"ranked candidates for {job_title or 'job'}",
+            "update_candidate_status": f"moved {candidate_name or 'candidate'} pipeline",
+            "create_job":           f"created job {job_title or ''}",
+            "create_candidate":     f"created candidate {action_data.get('name', '')}",
+            "market_analysis":      f"pulled market data for {action_data.get('role', '')}",
+            "recommend_to_employer": f"recommended {candidate_name or 'candidate'} to employer",
+            "check_inbox":          "checked inbox",
+            "upload_resume":        "started resume upload",
+            "upload_jd":            "started JD upload",
+            "search_jobs":          f"searched jobs: {action_data.get('query', '')}",
+        }
+        summary = summaries.get(action_type, action_type)
+        emit_event(user_id, action_type, summary)
+
+        # Entity memory: bump interaction count for candidates / jobs touched by this action
+        if candidate_id:
+            update_entity_after_action(
+                user_id, "candidate", candidate_id, action_type,
+                summary_hint=summary,
+            )
+            if session_id and candidate_name:
+                add_focused_entity(session_id, user_id, "candidate", candidate_id, candidate_name)
+        if job_id:
+            update_entity_after_action(
+                user_id, "job", job_id, action_type,
+                summary_hint=summary,
+            )
+    except Exception as e:
+        log.warning("Memory update failed (non-fatal): %s", e)
+
+
 def _process_actions(response: dict, action_data, cfg, user_id: str, session_id: str = "") -> dict:
     """Process action intents from the LLM and enrich the response."""
     from app.models import Email
@@ -782,6 +835,9 @@ def _process_actions(response: dict, action_data, cfg, user_id: str, session_id:
         return response
 
     action_type = action_data.get("type")
+
+    # Update sensory + entity memory based on the action (single hook for all actions).
+    _update_memory_for_action(user_id, session_id, action_type, action_data)
 
     if action_type == "compose_email":
         try:

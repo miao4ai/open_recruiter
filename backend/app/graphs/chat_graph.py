@@ -93,7 +93,7 @@ def build_context(state: ChatState) -> dict:
         if state.get("encouragement_mode"):
             rag_context += ENCOURAGEMENT_ADDENDUM
     else:
-        context = _build_pipeline_context(user_id, current_message=user_message)
+        context = _build_pipeline_context(user_id, current_message=user_message, session_id=session_id)
         rag_context = CHAT_SYSTEM_WITH_ACTIONS.format(context=context)
 
     return {
@@ -421,8 +421,8 @@ chat_graph = build_chat_graph().compile()
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
-def _build_pipeline_context(user_id: str, current_message: str = "") -> str:
-    """Build a text summary of the recruiter's pipeline for the system prompt."""
+def _build_pipeline_context(user_id: str, current_message: str = "", session_id: str = "") -> str:
+    """Build a text summary of the recruiter's pipeline + 4-layer memory for the system prompt."""
     parts: list[str] = []
 
     # Jobs summary
@@ -459,6 +459,20 @@ def _build_pipeline_context(user_id: str, current_message: str = "") -> str:
         parts.append("\n## Pipeline Status")
         for status, count in sorted(status_counts.items()):
             parts.append(f"- {status}: {count}")
+
+    # 4-layer Agent Memory (sensory / working / long-term / entity)
+    try:
+        from app.memory.loader import build_memory_context
+        memory_block = build_memory_context(
+            user_id=user_id,
+            session_id=session_id,
+            message=current_message,
+            candidates_in_context=candidates,
+        )
+        if memory_block:
+            parts.append("\n" + memory_block)
+    except Exception as e:
+        log.warning("Memory loader failed: %s", e)
 
     return "\n".join(parts) if parts else "No data in the system yet."
 

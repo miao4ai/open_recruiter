@@ -279,6 +279,30 @@ def init_db() -> None:
             message_count INTEGER DEFAULT 0,
             created_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS session_state (
+            session_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            current_goal TEXT DEFAULT '',
+            open_workflows_json TEXT DEFAULT '[]',
+            focused_entities_json TEXT DEFAULT '[]',
+            scratchpad TEXT DEFAULT '',
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS entity_memory (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            entity_type TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            summary TEXT DEFAULT '',
+            traits_json TEXT DEFAULT '{}',
+            relations_json TEXT DEFAULT '[]',
+            interaction_count INTEGER DEFAULT 0,
+            last_interaction_at TEXT,
+            updated_at TEXT NOT NULL,
+            UNIQUE(user_id, entity_type, entity_id)
+        );
     """)
     conn.commit()
 
@@ -1779,3 +1803,139 @@ def delete_session_summary(session_id: str) -> None:
     conn.execute("DELETE FROM session_summaries WHERE session_id = ?", (session_id,))
     conn.commit()
     conn.close()
+
+
+# ── Session State (Working Memory) ────────────────────────────────────────
+
+def get_session_state(session_id: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM session_state WHERE session_id = ?", (session_id,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    d = dict(row)
+    d["open_workflows"] = json.loads(d.get("open_workflows_json") or "[]")
+    d["focused_entities"] = json.loads(d.get("focused_entities_json") or "[]")
+    return d
+
+
+def upsert_session_state(session_id: str, user_id: str, updates: dict) -> None:
+    """Insert or update working-memory state for a session.
+
+    Accepted updates keys: current_goal, open_workflows (list), focused_entities (list), scratchpad.
+    """
+    now = datetime.now().isoformat()
+    open_workflows = updates.get("open_workflows")
+    focused_entities = updates.get("focused_entities")
+
+    conn = get_conn()
+    existing = conn.execute("SELECT session_id FROM session_state WHERE session_id = ?", (session_id,)).fetchone()
+    if existing:
+        sets, vals = [], []
+        if "current_goal" in updates:
+            sets.append("current_goal = ?"); vals.append(updates["current_goal"])
+        if open_workflows is not None:
+            sets.append("open_workflows_json = ?"); vals.append(json.dumps(open_workflows))
+        if focused_entities is not None:
+            sets.append("focused_entities_json = ?"); vals.append(json.dumps(focused_entities))
+        if "scratchpad" in updates:
+            sets.append("scratchpad = ?"); vals.append(updates["scratchpad"])
+        sets.append("updated_at = ?"); vals.append(now)
+        vals.append(session_id)
+        conn.execute(f"UPDATE session_state SET {', '.join(sets)} WHERE session_id = ?", vals)
+    else:
+        conn.execute(
+            """INSERT INTO session_state
+               (session_id, user_id, current_goal, open_workflows_json,
+                focused_entities_json, scratchpad, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                session_id, user_id,
+                updates.get("current_goal", ""),
+                json.dumps(open_workflows or []),
+                json.dumps(focused_entities or []),
+                updates.get("scratchpad", ""),
+                now,
+            ),
+        )
+    conn.commit()
+    conn.close()
+
+
+# ── Entity Memory ─────────────────────────────────────────────────────────
+
+def get_entity_memory(user_id: str, entity_type: str, entity_id: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT * FROM entity_memory WHERE user_id = ? AND entity_type = ? AND entity_id = ?",
+        (user_id, entity_type, entity_id),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    d = dict(row)
+    d["traits"] = json.loads(d.get("traits_json") or "{}")
+    d["relations"] = json.loads(d.get("relations_json") or "[]")
+    return d
+
+
+def upsert_entity_memory(user_id: str, entity_type: str, entity_id: str, updates: dict) -> None:
+    """Insert or merge entity memory.
+
+    Accepted updates keys: summary, traits (dict — merged), relations (list — appended unique), bump_interaction (bool).
+    """
+    now = datetime.now().isoformat()
+    existing = get_entity_memory(user_id, entity_type, entity_id)
+
+    if existing:
+        traits = {**existing.get("traits", {}), **updates.get("traits", {})}
+        relations = existing.get("relations", [])
+        for r in updates.get("relations", []):
+            if r not in relations:
+                relations.append(r)
+        summary = updates.get("summary", existing.get("summary", ""))
+        interaction_count = existing["interaction_count"] + (1 if updates.get("bump_interaction") else 0)
+        last_interaction = now if updates.get("bump_interaction") else existing.get("last_interaction_at")
+
+        conn = get_conn()
+        conn.execute(
+            """UPDATE entity_memory
+               SET summary = ?, traits_json = ?, relations_json = ?,
+                   interaction_count = ?, last_interaction_at = ?, updated_at = ?
+               WHERE user_id = ? AND entity_type = ? AND entity_id = ?""",
+            (summary, json.dumps(traits), json.dumps(relations),
+             interaction_count, last_interaction, now,
+             user_id, entity_type, entity_id),
+        )
+        conn.commit()
+        conn.close()
+    else:
+        conn = get_conn()
+        conn.execute(
+            """INSERT INTO entity_memory
+               (id, user_id, entity_type, entity_id, summary,
+                traits_json, relations_json, interaction_count,
+                last_interaction_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                uuid.uuid4().hex[:8], user_id, entity_type, entity_id,
+                updates.get("summary", ""),
+                json.dumps(updates.get("traits", {})),
+                json.dumps(updates.get("relations", [])),
+                1 if updates.get("bump_interaction") else 0,
+                now if updates.get("bump_interaction") else None,
+                now,
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+
+def get_entity_memories_for(user_id: str, refs: list[tuple[str, str]]) -> list[dict]:
+    """Fetch entity memories for the (entity_type, entity_id) tuples given."""
+    results = []
+    for entity_type, entity_id in refs:
+        m = get_entity_memory(user_id, entity_type, entity_id)
+        if m:
+            results.append(m)
+    return results
