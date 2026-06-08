@@ -14,6 +14,16 @@ _backend_dir = Path(__file__).resolve().parent.parent
 load_dotenv(_backend_dir / ".env")
 load_dotenv(_backend_dir.parent / ".env")
 
+# LangSmith auto-tracing — opt-in via env vars. Set LANGSMITH_API_KEY and
+# LANGSMITH_TRACING=true in .env to forward every LLM/LangGraph call to
+# https://smith.langchain.com for debugging. Dev tool only — never on in prod.
+if os.environ.get("LANGSMITH_API_KEY") and os.environ.get("LANGSMITH_TRACING", "").lower() in ("true", "1"):
+    os.environ.setdefault("LANGSMITH_PROJECT", "open-recruiter")
+    import logging
+    logging.getLogger(__name__).info(
+        "LangSmith tracing enabled (project=%s)", os.environ["LANGSMITH_PROJECT"]
+    )
+
 
 @dataclass
 class Config:
