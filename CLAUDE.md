@@ -13,6 +13,7 @@ Topic-specific guides — read the relevant one before working in that area:
 - [skills/memory.md](skills/memory.md) — 4-tier agent memory (sensory / working / long-term / entity), loader integration, event emission
 - [skills/testing.md](skills/testing.md) — pytest harness (159+ cases), how to run subsets, when a failure means a real gap vs a stale fixture
 - [skills/deployment.md](skills/deployment.md) — version bump + tag + CI release flow, artifact naming, Gatekeeper / notarization notes
+- [skills/mcp.md](skills/mcp.md) — stdio MCP server exposing recruiter matching/evaluation tools to external chat agents
 
 ---
 
