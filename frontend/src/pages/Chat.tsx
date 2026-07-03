@@ -57,7 +57,6 @@ import {
 } from "../lib/api";
 import PipelineBar from "../components/PipelineBar";
 import EmojiPickerButton from "../components/EmojiPickerButton";
-import MicButton from "../components/MicButton";
 import ContextPanel from "../components/ContextPanel";
 import SmartActionBar from "../components/SmartActionBar";
 import MessageBlocks from "../components/MessageBlocks";
@@ -1323,10 +1322,6 @@ export default function Chat() {
               }}
             />
             <EmojiPickerButton onEmojiSelect={(emoji) => setInput((prev) => prev + emoji)} />
-            <MicButton
-              disabled={sending}
-              onTranscript={(text) => setInput((prev) => (prev ? prev + " " : "") + text)}
-            />
             <IconButton
               onClick={() => handleSend()}
               disabled={sending || !input.trim()}
