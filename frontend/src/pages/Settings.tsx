@@ -268,8 +268,6 @@ export default function Settings() {
           >
             <MenuItem value="anthropic">Anthropic</MenuItem>
             <MenuItem value="openai">OpenAI</MenuItem>
-            <MenuItem value="gemini">Google Gemini</MenuItem>
-            <MenuItem value="ollama">Ollama ({t("settings.localFree")})</MenuItem>
           </TextField>
           <TextField
             select

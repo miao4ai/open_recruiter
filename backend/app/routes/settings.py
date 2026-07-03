@@ -14,14 +14,17 @@ def _build_config() -> Config:
     """Build Config from DB settings, falling back to env vars."""
     db = get_settings()
     env = load_config_from_env()
-    # Slim build: chat is locked to Anthropic Claude. Ignore any other provider
-    # that may be stored in settings/env, and drop a non-Claude model so the
-    # Claude default in Config.__post_init__ applies.
+    # Slim build: chat is restricted to cloud providers with a token —
+    # Anthropic (default) or OpenAI. Any other stored provider falls back to
+    # Anthropic; when we override the provider we also clear the model so the
+    # provider default in Config.__post_init__ applies.
+    provider = db.get("llm_provider", env.llm_provider)
     model = db.get("llm_model", env.llm_model)
-    if model and not model.startswith("claude") and "/" not in model:
+    if provider not in ("anthropic", "openai"):
+        provider = "anthropic"
         model = ""
     return Config(
-        llm_provider="anthropic",
+        llm_provider=provider,
         llm_model=model,
         anthropic_api_key=db.get("anthropic_api_key", env.anthropic_api_key),
         openai_api_key=db.get("openai_api_key", env.openai_api_key),
