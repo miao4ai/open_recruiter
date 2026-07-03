@@ -1,7 +1,8 @@
-"""ChromaDB vector store with local BGE embeddings — semantic search layer.
+"""ChromaDB vector store with Voyage embeddings — semantic search layer.
 
 SQLite (database.py) handles structured CRUD.
-ChromaDB (this module) handles vector embeddings for semantic search.
+ChromaDB (this module) handles vector storage for semantic search; embeddings
+are produced by the Voyage AI API (no local model, no PyTorch/onnxruntime).
 Both share record IDs for cross-referencing.
 """
 
@@ -9,11 +10,11 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 from pathlib import Path
 from typing import Any
 
 import chromadb
+from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 from chromadb.config import Settings as ChromaSettings
 
 log = logging.getLogger(__name__)
@@ -32,87 +33,61 @@ _embedding_fn: Any = None
 JOBS_COLLECTION = "jobs"
 CANDIDATES_COLLECTION = "candidates"
 CHAT_SUMMARIES_COLLECTION = "chat_summaries"
-EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
+
+VOYAGE_API_URL = "https://api.voyageai.com/v1/embeddings"
+VOYAGE_MODEL = "voyage-4-lite"
 
 
-# ── ONNX Embedding Function ─────────────────────────────────────────────
+# ── Voyage Embedding Function ───────────────────────────────────────────
 
 
-def _find_model_dir() -> str | None:
-    """Locate the ONNX embedding model directory."""
-    # PyInstaller bundle
-    meipass = getattr(sys, "_MEIPASS", None)
-    if meipass:
-        d = os.path.join(meipass, "models")
-        if os.path.isdir(d):
-            return d
-    # Development: backend/models/
-    d = str(Path(__file__).resolve().parent.parent / "models")
-    if os.path.isdir(d):
-        return d
-    return None
+class _VoyageEmbeddingFunction(EmbeddingFunction):
+    """ChromaDB embedding function backed by the Voyage AI API.
 
-
-class _OnnxEmbeddingFunction:
-    """ChromaDB-compatible embedding function using ONNX Runtime.
-
-    Replaces SentenceTransformerEmbeddingFunction to avoid bundling PyTorch
-    (~800 MB).  Only requires onnxruntime (~30 MB) + tokenizers (~5 MB).
+    Replaces the local ONNX/BGE model — no PyTorch, no onnxruntime, no bundled
+    weights (~170 MB saved).  Requires a Voyage API key and network access.
     """
 
-    def __init__(self, model_dir: str) -> None:
-        import numpy as np
-        import onnxruntime as ort
-        from tokenizers import Tokenizer as HFTokenizer
+    def __init__(self, api_key: str, model: str = VOYAGE_MODEL) -> None:
+        self._api_key = api_key
+        self._model = model or VOYAGE_MODEL
 
-        self._np = np
-
-        tok_path = os.path.join(model_dir, "tokenizer.json")
-        model_path = os.path.join(model_dir, "model.onnx")
-
-        self._tokenizer = HFTokenizer.from_file(tok_path)
-        self._tokenizer.enable_padding()
-        self._tokenizer.enable_truncation(max_length=512)
-
-        self._session = ort.InferenceSession(
-            model_path,
-            providers=["CPUExecutionProvider"],
-        )
-        self._input_names = {inp.name for inp in self._session.get_inputs()}
-
-    def __call__(self, input: list[str]) -> list[list[float]]:
+    def __call__(self, input: Documents) -> Embeddings:
         if not input:
             return []
+        if not self._api_key:
+            raise RuntimeError(
+                "Voyage API key not configured — set VOYAGE_API_KEY or add it in Settings."
+            )
 
-        np = self._np
-        encoded = self._tokenizer.encode_batch(input)
+        import httpx
 
-        input_ids = np.array([e.ids for e in encoded], dtype=np.int64)
-        attention_mask = np.array(
-            [e.attention_mask for e in encoded], dtype=np.int64
+        resp = httpx.post(
+            VOYAGE_API_URL,
+            headers={"Authorization": f"Bearer {self._api_key}"},
+            json={"input": list(input), "model": self._model},
+            timeout=30.0,
         )
+        resp.raise_for_status()
+        data = resp.json()["data"]
+        # Voyage tags each item with its `index`; sort to preserve input order.
+        data.sort(key=lambda d: d["index"])
+        return [d["embedding"] for d in data]
 
-        feed: dict[str, Any] = {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-        }
-        if "token_type_ids" in self._input_names:
-            feed["token_type_ids"] = np.zeros_like(input_ids)
+    @staticmethod
+    def name() -> str:
+        return "voyage"
 
-        outputs = self._session.run(None, feed)
+    def get_config(self) -> dict:
+        return {"model": self._model}
 
-        # outputs[0] shape: (batch, seq_len, hidden_size)
-        embeddings = outputs[0]
+    @staticmethod
+    def build_from_config(config: dict) -> "_VoyageEmbeddingFunction":
+        # The API key is injected at init from app config, never persisted.
+        return _VoyageEmbeddingFunction(api_key="", model=config.get("model", VOYAGE_MODEL))
 
-        # Mean pooling with attention mask
-        mask = attention_mask[:, :, np.newaxis].astype(np.float32)
-        pooled = (embeddings * mask).sum(axis=1) / mask.sum(axis=1)
-
-        # L2 normalize
-        norms = np.linalg.norm(pooled, axis=1, keepdims=True)
-        normalized = pooled / np.maximum(norms, 1e-12)
-
-        return normalized.tolist()
+    def default_space(self) -> str:
+        return "cosine"
 
 
 # ── Initialisation ────────────────────────────────────────────────────────
@@ -127,24 +102,12 @@ def init_vectorstore() -> None:
 
     CHROMA_DIR.mkdir(parents=True, exist_ok=True)
 
-    model_dir = _find_model_dir()
-    onnx_path = os.path.join(model_dir, "model.onnx") if model_dir else None
+    # Lazy import avoids a circular import at module load time.
+    from app.routes.settings import get_config
 
-    if onnx_path and os.path.isfile(onnx_path):
-        log.info("Loading ONNX embedding model from %s", model_dir)
-        _embedding_fn = _OnnxEmbeddingFunction(model_dir)
-    else:
-        # Fallback: sentence-transformers (for dev without ONNX export)
-        from chromadb.utils.embedding_functions import (
-            SentenceTransformerEmbeddingFunction,
-        )
-
-        log.info("Loading sentence-transformers model: %s", EMBEDDING_MODEL)
-        _embedding_fn = SentenceTransformerEmbeddingFunction(
-            model_name=EMBEDDING_MODEL,
-        )
-
-    log.info("Embedding model loaded.")
+    cfg = get_config()
+    _embedding_fn = _VoyageEmbeddingFunction(cfg.voyage_api_key, cfg.voyage_model)
+    log.info("Voyage embedding model: %s", cfg.voyage_model or VOYAGE_MODEL)
 
     _client = chromadb.PersistentClient(
         path=str(CHROMA_DIR),
@@ -387,8 +350,8 @@ def reindex_all_candidates(candidates: list[dict]) -> int:
 def build_candidate_embed_text(c: dict | object) -> str:
     """Build text to embed for a candidate.
 
-    Prioritises summary and skills (high signal) since BGE has a 512-token
-    window and we want the most important content first.
+    Prioritises summary and skills (high signal) so the most important content
+    leads the embedded text.
     """
     # Support both dicts and Pydantic model instances
     def _get(key: str, default=""):

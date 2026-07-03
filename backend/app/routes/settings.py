@@ -14,13 +14,21 @@ def _build_config() -> Config:
     """Build Config from DB settings, falling back to env vars."""
     db = get_settings()
     env = load_config_from_env()
+    # Slim build: chat is locked to Anthropic Claude. Ignore any other provider
+    # that may be stored in settings/env, and drop a non-Claude model so the
+    # Claude default in Config.__post_init__ applies.
+    model = db.get("llm_model", env.llm_model)
+    if model and not model.startswith("claude") and "/" not in model:
+        model = ""
     return Config(
-        llm_provider=db.get("llm_provider", env.llm_provider),
-        llm_model=db.get("llm_model", env.llm_model),
+        llm_provider="anthropic",
+        llm_model=model,
         anthropic_api_key=db.get("anthropic_api_key", env.anthropic_api_key),
         openai_api_key=db.get("openai_api_key", env.openai_api_key),
         gemini_api_key=db.get("gemini_api_key", env.gemini_api_key),
         ollama_base_url=db.get("ollama_base_url", env.ollama_base_url),
+        voyage_api_key=db.get("voyage_api_key", env.voyage_api_key),
+        voyage_model=db.get("voyage_model", env.voyage_model),
         email_backend=db.get("email_backend", env.email_backend),
         sendgrid_api_key=db.get("sendgrid_api_key", env.sendgrid_api_key),
         email_from=db.get("email_from", env.email_from),
@@ -82,6 +90,7 @@ async def get_settings_route(current_user: dict = Depends(get_current_user)):
         openai_api_key=cfg.openai_api_key,
         gemini_api_key=cfg.gemini_api_key,
         ollama_base_url=cfg.ollama_base_url,
+        voyage_api_key=cfg.voyage_api_key,
         email_backend=cfg.email_backend,
         sendgrid_api_key=cfg.sendgrid_api_key,
         email_from=user_email,

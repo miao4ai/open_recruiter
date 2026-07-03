@@ -13,7 +13,7 @@ echo ""
 
 # ── Step 1: Build frontend ────────────────────────────────────────────────
 
-echo "[1/5] Building frontend..."
+echo "[1/4] Building frontend..."
 cd "$PROJECT_ROOT/frontend"
 npm ci
 npm run build
@@ -23,25 +23,10 @@ if [ ! -f "dist/index.html" ]; then
 fi
 echo "  Frontend built successfully."
 
-# ── Step 2: Pre-download embedding model ──────────────────────────────────
+# ── Step 2: Bundle backend with PyInstaller ───────────────────────────────
+# Embeddings run in the Voyage cloud — no local model to pre-download.
 
-echo "[2/5] Pre-downloading embedding model..."
-mkdir -p "$PROJECT_ROOT/backend/models"
-cd "$PROJECT_ROOT/backend"
-python3 -c "
-import os
-model_dir = 'models'
-os.environ['SENTENCE_TRANSFORMERS_HOME'] = model_dir
-from sentence_transformers import SentenceTransformer
-print('Downloading BAAI/bge-small-en-v1.5...')
-SentenceTransformer('BAAI/bge-small-en-v1.5')
-print(f'Model cached to {model_dir}')
-"
-echo "  Embedding model ready."
-
-# ── Step 3: Bundle backend with PyInstaller ───────────────────────────────
-
-echo "[3/5] Bundling backend with PyInstaller..."
+echo "[2/4] Bundling backend with PyInstaller..."
 cd "$PROJECT_ROOT/backend"
 rm -rf dist build
 pyinstaller open_recruiter.spec --noconfirm
@@ -51,17 +36,17 @@ if [ ! -f "dist/backend/backend" ] && [ ! -f "dist/backend/backend.exe" ]; then
 fi
 echo "  Backend bundled successfully."
 
-# ── Step 4: Compile Electron TypeScript ───────────────────────────────────
+# ── Step 3: Compile Electron TypeScript ───────────────────────────────────
 
-echo "[4/5] Compiling Electron TypeScript..."
+echo "[3/4] Compiling Electron TypeScript..."
 cd "$PROJECT_ROOT"
 npm ci
 npm run build:electron
 echo "  Electron compiled."
 
-# ── Step 5: Package with electron-builder ─────────────────────────────────
+# ── Step 4: Package with electron-builder ─────────────────────────────────
 
-echo "[5/5] Packaging with electron-builder..."
+echo "[4/4] Packaging with electron-builder..."
 cd "$PROJECT_ROOT"
 
 # Detect platform or accept override: build.sh [mac|linux|auto]

@@ -83,6 +83,7 @@ export default function Settings() {
     openai_api_key: "",
     gemini_api_key: "",
     ollama_base_url: "http://localhost:11434",
+    voyage_api_key: "",
     email_backend: "console",
     sendgrid_api_key: "",
     email_from: "",
@@ -417,6 +418,29 @@ export default function Settings() {
           >
             {t("settings.testLlm")}
           </Button>
+        </Section>
+
+        {/* Semantic Search (Voyage embeddings) */}
+        <Section title={t("settings.semanticSearch")}>
+          <TextField
+            label={t("settings.voyageApiKey")}
+            name="voyage_api_key"
+            type="password"
+            value={form.voyage_api_key}
+            onChange={handleChange}
+            placeholder="pa-..."
+            fullWidth
+          />
+          <FormHelperText>{t("settings.voyageHint")}</FormHelperText>
+          <Box>
+            <Button
+              variant="text"
+              size="small"
+              onClick={() => window.open("https://dashboard.voyageai.com/", "_blank")}
+            >
+              {t("settings.getVoyageKey")}
+            </Button>
+          </Box>
         </Section>
 
         {/* Email Configuration */}

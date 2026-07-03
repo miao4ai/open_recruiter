@@ -6,7 +6,8 @@ Output: backend/dist/backend/  (directory with backend.exe + dependencies)
 
 Before building, run the build script to:
   1. Build frontend:  cd frontend && npm run build
-  2. Pre-download embedding model into backend/models/
+
+Embeddings are served by the Voyage AI API — no local model is bundled.
 """
 
 from pathlib import Path
@@ -17,7 +18,6 @@ block_cipher = None
 backend_dir = Path(SPECPATH)
 project_root = backend_dir.parent
 frontend_dist = project_root / "frontend" / "dist"
-bundled_models = backend_dir / "models"
 
 # ── Data files to bundle ──────────────────────────────────────────────────
 
@@ -32,12 +32,6 @@ if frontend_dist.is_dir():
     datas.append((str(frontend_dist), "frontend/dist"))
 else:
     print("WARNING: frontend/dist not found — run 'npm run build' in frontend/ first")
-
-# ONNX embedding model (exported from BAAI/bge-small-en-v1.5)
-if bundled_models.is_dir():
-    datas.append((str(bundled_models), "models"))
-else:
-    print("WARNING: backend/models/ not found — embedding model won't be bundled")
 
 # ── Hidden imports ────────────────────────────────────────────────────────
 
@@ -105,8 +99,7 @@ hiddenimports = [
     # ChromaDB — collect ALL submodules (it uses heavy dynamic imports)
     *collect_submodules("chromadb"),
     "hnswlib",
-    # ONNX embedding inference
-    "onnxruntime",
+    # tokenizers → litellm token counting; numpy → chromadb internals
     "tokenizers",
     "numpy",
     # Database
@@ -162,12 +155,18 @@ a = Analysis(
         "PIL",
         "notebook",
         "pytest",
-        # Not needed at runtime — ONNX Runtime replaces PyTorch inference
+        # Embeddings run in the Voyage cloud — no local inference stack.
         "torch",
         "triton",
         "apex",
         "caffe2",
         "sentence_transformers",
+        "onnxruntime",
+        "transformers",
+        "scipy",
+        "sympy",
+        "sklearn",
+        "scikit-learn",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

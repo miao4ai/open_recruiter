@@ -156,6 +156,7 @@ export interface Settings {
   openai_api_key: string;
   gemini_api_key: string;
   ollama_base_url: string;
+  voyage_api_key: string;
   email_backend: string;
   sendgrid_api_key: string;
   email_from: string;

@@ -13,7 +13,7 @@ Write-Host ""
 
 # -- Step 1: Build frontend ------------------------------------------------
 
-Write-Host "[1/5] Building frontend..." -ForegroundColor Yellow
+Write-Host "[1/4] Building frontend..." -ForegroundColor Yellow
 Push-Location "$ProjectRoot\frontend"
 npm install
 npm run build
@@ -24,26 +24,10 @@ if (-not (Test-Path "dist\index.html")) {
 Pop-Location
 Write-Host "  Frontend built successfully." -ForegroundColor Green
 
-# -- Step 2: Pre-download embedding model ----------------------------------
+# -- Step 2: Bundle backend with PyInstaller --------------------------------
+# Embeddings run in the Voyage cloud - no local model to pre-download.
 
-Write-Host "[2/5] Pre-downloading embedding model..." -ForegroundColor Yellow
-$ModelsDir = "$ProjectRoot\backend\models"
-if (-not (Test-Path $ModelsDir)) {
-    New-Item -ItemType Directory -Path $ModelsDir -Force | Out-Null
-}
-
-Push-Location "$ProjectRoot\backend"
-uv run python -c "import os; os.environ['SENTENCE_TRANSFORMERS_HOME']='models'; from sentence_transformers import SentenceTransformer; print('Downloading BAAI/bge-small-en-v1.5...'); SentenceTransformer('BAAI/bge-small-en-v1.5'); print('Model ready.')"
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Model download failed"
-    exit 1
-}
-Pop-Location
-Write-Host "  Embedding model ready." -ForegroundColor Green
-
-# -- Step 3: Bundle backend with PyInstaller --------------------------------
-
-Write-Host "[3/5] Bundling backend with PyInstaller..." -ForegroundColor Yellow
+Write-Host "[2/4] Bundling backend with PyInstaller..." -ForegroundColor Yellow
 Push-Location "$ProjectRoot\backend"
 
 if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
@@ -57,18 +41,18 @@ if (-not (Test-Path "dist\backend\backend.exe")) {
 Pop-Location
 Write-Host "  Backend bundled successfully." -ForegroundColor Green
 
-# -- Step 4: Compile Electron TypeScript ------------------------------------
+# -- Step 3: Compile Electron TypeScript ------------------------------------
 
-Write-Host "[4/5] Compiling Electron TypeScript..." -ForegroundColor Yellow
+Write-Host "[3/4] Compiling Electron TypeScript..." -ForegroundColor Yellow
 Push-Location "$ProjectRoot"
 npm install
 npm run build:electron
 Pop-Location
 Write-Host "  Electron compiled." -ForegroundColor Green
 
-# -- Step 5: Package with electron-builder ----------------------------------
+# -- Step 4: Package with electron-builder ----------------------------------
 
-Write-Host "[5/5] Packaging with electron-builder..." -ForegroundColor Yellow
+Write-Host "[4/4] Packaging with electron-builder..." -ForegroundColor Yellow
 Push-Location "$ProjectRoot"
 
 # Clean previous release to avoid "Access is denied" on locked DLLs

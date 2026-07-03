@@ -34,6 +34,10 @@ class Config:
     gemini_api_key: str = ""
     ollama_base_url: str = "http://localhost:11434"
 
+    # Voyage AI — cloud embeddings for semantic search (replaces local model)
+    voyage_api_key: str = ""
+    voyage_model: str = "voyage-4-lite"
+
     email_backend: str = "console"
     sendgrid_api_key: str = ""
     email_from: str = "recruiter@example.com"
@@ -77,6 +81,8 @@ def load_config_from_env() -> Config:
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
         gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
         ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        voyage_api_key=os.getenv("VOYAGE_API_KEY", ""),
+        voyage_model=os.getenv("VOYAGE_MODEL", "voyage-4-lite"),
         email_backend=os.getenv("EMAIL_BACKEND", "console"),
         sendgrid_api_key=os.getenv("SENDGRID_API_KEY", ""),
         email_from=os.getenv("EMAIL_FROM", "recruiter@example.com"),

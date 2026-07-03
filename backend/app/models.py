@@ -320,6 +320,7 @@ class Settings(BaseModel):
     openai_api_key: str = ""
     gemini_api_key: str = ""
     ollama_base_url: str = "http://localhost:11434"
+    voyage_api_key: str = ""
     email_backend: str = "console"
     sendgrid_api_key: str = ""
     email_from: str = ""
