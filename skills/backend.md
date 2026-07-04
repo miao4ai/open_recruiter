@@ -40,11 +40,12 @@ Then add intent test cases — see `testing.md`.
 
 ## LLM providers
 
-Configured in `config.py`:
-- `anthropic` → `claude-sonnet-4-20250514`
+Configured in `config.py`. **Slim build (3.0+): chat is Anthropic (default) or OpenAI only — Gemini/Ollama were dropped, and embeddings use the Voyage API (`VOYAGE_API_KEY`), not a local model.**
+- `anthropic` → `claude-sonnet-5` (default); also `claude-opus-4-8`, `claude-haiku-4-5`
 - `openai` → `gpt-5.1`
-- `gemini` → `gemini-2.5-flash`
-- `ollama` → `qwen3.5:2b` (local, offline default)
+- embeddings → Voyage `voyage-4-lite`
+
+Model IDs get retired on a schedule — a retired ID returns `not_found_error` (not auth). Check current IDs with the `claude-api` skill before changing them.
 
 `llm.py` enables **Anthropic prompt caching** automatically for system prompts ≥ 4000 chars — 90% input cost reduction on cache hits.
 

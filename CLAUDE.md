@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Open Recruiter** is an AI-powered recruitment assistant desktop app (Electron + React + FastAPI). It runs 100% locally. Two modes: **Recruiter** (Erika Chan) and **Job Seeker** (Ai Chan).
+**Open Recruiter** is an AI-powered recruitment assistant desktop app (Electron + React + FastAPI). As of **3.0 (slim build)** it is cloud-backed — Claude/OpenAI for chat and the Voyage API for embeddings (bring your own keys); local ML (PyTorch / Whisper / ONNX) was removed. Two modes: **Recruiter** (Erika Chan) and **Job Seeker** (Ai Chan).
 
 ## Available Skills
 
@@ -119,20 +119,22 @@ electron/
 | `backend/app/routes/agent.py` | Main chat SSE endpoint, action dispatch, intent routing |
 | `backend/app/graphs/chat_graph.py` | LangGraph graph: build_context → input_guard → call_llm → parse_response → output_guard → process_action → finalize |
 | `backend/app/prompts.py` | All system prompts — edit here to change AI behavior |
-| `backend/app/config.py` | LLM provider defaults (Anthropic/OpenAI/Gemini/Ollama) |
+| `backend/app/config.py` | LLM + Voyage config (slim build: Anthropic/OpenAI only) |
 | `frontend/src/components/MessageBlocks.tsx` | Renders all chat message card types |
 | `frontend/src/types/index.ts` | MessageBlock union type — add new block types here first |
 | `frontend/src/lib/api.ts` | All API calls — add new endpoints here |
 
 ## LLM Providers & Models
 
-Configured in `backend/app/config.py`:
-- **anthropic** → `claude-sonnet-4-20250514`
-- **openai** → `gpt-5.1`
-- **gemini** → `gemini-2.5-flash`
-- **ollama** → `qwen3.5:2b` (local, offline)
+Configured in `backend/app/config.py`. **Slim build (3.0+): chat is locked to cloud providers — Anthropic (default) or OpenAI. Gemini/Ollama were dropped from the UI, and `_build_config()` forces any other stored provider back to Anthropic. Embeddings run on the Voyage API, not a local model.**
 
-Override via Settings UI or `.env` (`LLM_PROVIDER`, `LLM_MODEL`).
+- **anthropic** → `claude-sonnet-5` (default); also `claude-opus-4-8`, `claude-haiku-4-5`
+- **openai** → `gpt-5.1`
+- **embeddings (Voyage)** → `voyage-4-lite` (requires `VOYAGE_API_KEY`)
+
+> Model IDs move fast — Claude models are retired on a schedule. Verify current IDs with the `claude-api` skill before changing them; a retired ID returns `not_found_error` (not an auth error).
+
+Override via Settings UI or `.env` (`LLM_PROVIDER`, `LLM_MODEL`, `VOYAGE_API_KEY`).
 
 ## Chat System
 

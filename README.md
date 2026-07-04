@@ -58,7 +58,7 @@ Open Recruiter solves this. Drop in a job description and a stack of resumes. Th
 ## Install
 
 **Desktop app** (recommended) — download from [Releases](https://github.com/miao4ai/open_recruiter/releases):
-- **macOS** (Apple Silicon): `.dmg` → drag to Applications → run `xattr -cr /Applications/Open\ Recruiter.app` if blocked
+- **macOS** (Apple Silicon): `.dmg` → drag to Applications → open (signed & notarized — no Gatekeeper warning)
 - **Windows**: `.exe` installer
 - **Linux**: `.AppImage`
 
@@ -72,6 +72,15 @@ curl -fsSL https://raw.githubusercontent.com/miao4ai/open_recruiter/main/scripts
 git clone https://github.com/miao4ai/open_recruiter.git && cd open_recruiter
 scripts/setup.sh && scripts/start.sh   # then open http://localhost:5173
 ```
+
+### API keys (3.0+)
+
+Starting with **3.0**, Open Recruiter is a lightweight cloud-backed build — no local models are bundled, so you provide your own keys in **Settings**:
+
+- **Chat** — an **Anthropic** API key (Claude, the default) or an **OpenAI** key. Get one at [console.anthropic.com](https://console.anthropic.com).
+- **Semantic search** — a **Voyage AI** key for candidate ↔ job matching. Free to start (200M tokens) at [dashboard.voyageai.com](https://dashboard.voyageai.com); leave it blank to fall back to keyword search.
+
+> Earlier fully-offline releases remain on the [`old-version-2.2`](https://github.com/miao4ai/open_recruiter/tree/old-version-2.2) branch.
 
 ---
 
