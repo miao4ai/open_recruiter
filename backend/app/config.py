@@ -65,11 +65,11 @@ class Config:
     def __post_init__(self) -> None:
         if not self.llm_model:
             self.llm_model = {
-                "anthropic": "claude-sonnet-4-20250514",
+                "anthropic": "claude-sonnet-5",
                 "openai": "gpt-5.1",
                 "gemini": "gemini-2.5-flash",
                 "ollama": "qwen3.5:2b",
-            }.get(self.llm_provider, "claude-sonnet-4-20250514")
+            }.get(self.llm_provider, "claude-sonnet-5")
 
 
 def load_config_from_env() -> Config:

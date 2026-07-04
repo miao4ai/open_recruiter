@@ -34,9 +34,9 @@ import type { Settings as SettingsType } from "../types";
 
 const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
   anthropic: [
-    { value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
-    { value: "claude-haiku-4-20250414", label: "Claude Haiku 4" },
-    { value: "claude-opus-4-20250514", label: "Claude Opus 4" },
+    { value: "claude-sonnet-5", label: "Claude Sonnet 5" },
+    { value: "claude-opus-4-8", label: "Claude Opus 4.8" },
+    { value: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
   ],
   openai: [
     { value: "gpt-5.2-pro", label: "GPT-5.2 Pro" },
