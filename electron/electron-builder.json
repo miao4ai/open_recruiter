@@ -47,7 +47,7 @@
     "gatekeeperAssess": false,
     "entitlements": "electron/entitlements.mac.plist",
     "entitlementsInherit": "electron/entitlements.mac.plist",
-    "notarize": false
+    "notarize": true
   },
   "afterPack": "./electron/afterPack.js",
   "dmg": {
