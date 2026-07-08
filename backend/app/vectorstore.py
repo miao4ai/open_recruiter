@@ -52,20 +52,36 @@ class _VoyageEmbeddingFunction(EmbeddingFunction):
         self._api_key = api_key
         self._model = model or VOYAGE_MODEL
 
+    def _resolve(self) -> tuple[str, str]:
+        """Resolve the current Voyage key/model at call time.
+
+        Read from live config so a key added in Settings *after* startup takes
+        effect immediately — without this, the empty key captured at launch
+        would make every embed fail until the app is restarted.
+        """
+        try:
+            from app.routes.settings import get_config
+
+            cfg = get_config()
+            return (cfg.voyage_api_key or self._api_key, cfg.voyage_model or self._model)
+        except Exception:
+            return (self._api_key, self._model)
+
     def __call__(self, input: Documents) -> Embeddings:
         if not input:
             return []
-        if not self._api_key:
+        api_key, model = self._resolve()
+        if not api_key:
             raise RuntimeError(
-                "Voyage API key not configured — set VOYAGE_API_KEY or add it in Settings."
+                "Voyage API key not configured — add it in Settings → Semantic Search."
             )
 
         import httpx
 
         resp = httpx.post(
             VOYAGE_API_URL,
-            headers={"Authorization": f"Bearer {self._api_key}"},
-            json={"input": list(input), "model": self._model},
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={"input": list(input), "model": model},
             timeout=30.0,
         )
         resp.raise_for_status()
