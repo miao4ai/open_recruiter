@@ -6,7 +6,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/BUILD-PASSING-brightgreen" />
-  <img src="https://img.shields.io/badge/RELEASE-V3.0.0-blue" />
+  <img src="https://img.shields.io/badge/RELEASE-V3.0.1-blue" />
   <img src="https://img.shields.io/badge/LICENSE-MIT-purple" />
 </p>
 
@@ -88,6 +88,7 @@ Starting with **3.0**, Open Recruiter is a lightweight cloud-backed build — no
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| [V3.0.1](https://github.com/miao4ai/open_recruiter/releases/tag/v3.0.1) | 2026-07-09 | Fixes: Voyage key now applies without restart (candidate matching / analysis); failed login shows an error instead of silently reloading |
 | [V3.0.0](https://github.com/miao4ai/open_recruiter/releases/tag/v3.0.0) | 2026-07-04 | Slim build (~50% smaller install): Voyage cloud embeddings, Claude/OpenAI chat, current Claude models, signed + notarized macOS DMG; dropped local PyTorch/Whisper |
 | [V2.2.0](https://github.com/miao4ai/open_recruiter/releases/tag/v2.2.0) | 2026-05-29 | Voice input (Whisper), inbox preview in chat, 114-case test harness |
 | [V2.1.0](https://github.com/miao4ai/open_recruiter/releases/tag/v2.1.0) | 2026-03-18 | Multi-agent candidate evaluation swarm, search feedback, CLAUDE.md |
