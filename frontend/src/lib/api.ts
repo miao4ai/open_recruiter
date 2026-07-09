@@ -22,7 +22,13 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // A 401 from the login/register endpoints is an expected "wrong
+    // credentials" failure — let the auth form catch it and show the error.
+    // Only a 401 from an authenticated call means the session expired, so
+    // redirect to /login for that case.
+    const url: string = error.config?.url ?? "";
+    const isAuthAttempt = url.includes("/auth/login") || url.includes("/auth/register");
+    if (error.response?.status === 401 && !isAuthAttempt) {
       clearToken();
       window.location.href = "/login";
     }
