@@ -6,6 +6,68 @@ Download installers from the [GitHub Releases](https://github.com/miao4ai/open_r
 
 ---
 
+## V4.0.0 (unreleased)
+
+### Monorepo: product / sdk / research
+
+The repository is now split into three independently buildable parts:
+
+```
+product/     desktop app (Electron + React + FastAPI) -> .dmg / .exe / .AppImage
+sdk/         core, ranking, recruitgpt                -> PyPI packages
+research/    ranking, recruitgpt                      -> PyPI packages
+docs/        guides/ (manual, release notes) + skills/
+```
+
+- `product/` holds what used to be `electron/`, `frontend/`, `backend/`, `tests/`, `scripts/`, and `images/`
+- `document/` became `docs/guides/`; `skills/` became `docs/skills/`
+- All six Python packages are uv workspace members, but `uv sync` inside `product/backend`
+  still installs only the backend, so research dependencies cannot leak into the app build
+- The SDK and research packages ship as scaffolds in this release — name, version, and
+  layout only. `sdk/core` gains the recruiting tools and agent loop next.
+
+### Security
+
+- **Per-install JWT signing key.** The key previously fell back to a constant compiled into
+  every build, so a token forged against one install was valid against all of them. It is now
+  generated on first run and stored locally; `JWT_SECRET` still overrides it.
+  **Existing sessions are invalidated — users must log in again.**
+- **Loopback binding.** `start.sh` / `start.ps1` bound the API and the Vite dev server to
+  `0.0.0.0`, exposing the pipeline to everyone on the same network. Both now bind `127.0.0.1`.
+- **Scoped CORS.** `allow_origins` narrowed from `*` to the Vite dev origin. Packaged builds
+  serve the UI from the same origin and never needed the wildcard.
+- **Masked secrets.** `GET /api/settings` returned every API key, SMTP/IMAP password, and
+  Slack token in clear text. All nine fields are now masked; a field submitted still masked
+  means "unchanged" and no longer overwrites the stored value.
+
+### Removed
+
+- The legacy chat path in `routes/agent.py` — 176 lines sitting after an unconditional
+  `return`, plus the system prompt it was the only consumer of. Every message was building a
+  prompt that nothing read.
+- `graphs/feature_flags.py`. `use_langgraph_chat()` and `use_langgraph_workflow()` were never
+  called, so the documented fallback to the legacy pipeline did not exist.
+- The Ollama route, config, and UI, and the Gemini provider branches. `_build_config()` has
+  forced the provider to Anthropic or OpenAI since 3.0, so all of it was unreachable.
+
+### Fixed
+
+- Onboarding offered retired Claude 4.x model ids (`claude-sonnet-4-20250514` and friends),
+  so a fresh install's first API call failed with `not_found_error`. Aligned with Settings.
+- `setup.sh`, `start.sh`, `build.sh` and their `.ps1` twins resolved `ROOT` to their own
+  directory, so every `$ROOT/backend` pointed at `scripts/backend`. Broken since the scripts
+  were moved out of the project root.
+- `env.example` was missing `VOYAGE_API_KEY`, which 3.0 semantic search requires, and still
+  advertised Gemini.
+
+### Docs
+
+- README documents the monorepo layout and how each part builds
+- `CLAUDE.md` and `docs/skills/*` updated for the new paths
+- README claimed Gemini and Ollama support; the test count said 159 and is actually 137
+
+---
+
 ## V2.2.0 (2026-05-29)
 
 ### Voice Input (Local Whisper)

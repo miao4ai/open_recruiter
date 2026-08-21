@@ -7,8 +7,11 @@ User MUST explicitly approve the version number — CLAUDE.md hard rule. **Never
 ## Release flow
 
 1. **Bump version** in both files (must stay in sync):
-   - `package.json` → `"version": "X.Y.Z"`
+   - `product/package.json` → `"version": "X.Y.Z"`
    - `product/frontend/package.json` → `"version": "X.Y.Z"`
+   - both `package-lock.json` files carry the same version at the top — edit only the
+     two top-level `"version"` fields, never a bare search-and-replace (dependency
+     versions collide)
 
 2. **Update README.md**:
    - Version badge: `<img src="https://img.shields.io/badge/RELEASE-VX.Y.Z-blue" />`
@@ -18,10 +21,14 @@ User MUST explicitly approve the version number — CLAUDE.md hard rule. **Never
      ```
 
 3. **Update `docs/guides/release.md`** — add a full section above the previous version.
+   Until the tag exists, write the version unlinked and dated `*unreleased*`; swap in the
+   release link at step 5.
 
 4. **Commit and push the bump**:
    ```bash
-   git add product/package.json product/frontend/package.json README.md docs/guides/release.md
+   git add product/package.json product/frontend/package.json \
+           product/package-lock.json product/frontend/package-lock.json \
+           README.md docs/guides/release.md
    git commit -m "Bump version to X.Y.Z + release notes"
    git push
    ```
