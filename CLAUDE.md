@@ -4,6 +4,8 @@
 
 **Open Recruiter** is a monorepo: an AI-powered recruitment assistant desktop app (Electron + React + FastAPI) in `product/`, the Python SDKs it is built on in `sdk/`, and the experiments behind them in `research/`. As of **3.0 (slim build)** it is cloud-backed — Claude/OpenAI for chat and the Voyage API for embeddings (bring your own keys); local ML (PyTorch / Whisper / ONNX) was removed. Two modes: **Recruiter** (Erika Chan) and **Job Seeker** (Ai Chan).
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the per-layer setup paths.
+
 ## Available Skills
 
 Topic-specific guides — read the relevant one before working in that area:
@@ -118,21 +120,34 @@ product/               ← the desktop app — builds the 3 installers
 
 sdk/                   ← published Python packages, each `pip install`-able on its own
   core/                ← openrecruiter — the agent toolkit the product runs on
-  ranking/             ← openrecruiter-ranking — unbiased candidate ranking
-  recruitgpt/          ← recruitgpt — recruiting-domain model training
+  fairness/            ← openrecruiter-fairness — fairness-aware ranking backend
+  recruitgpt/          ← recruitgpt — distilled ranking model backend
 
 research/              ← reproducible experiments behind the SDKs
-  ranking/
-  recruitgpt/
+  fairness/            ← bias evaluation, anonymization, counterfactual testing
+  recruitgpt/          ← LLM judge, hard negatives, distillation, benchmarks
 
 docs/
   guides/              ← user manual, release notes, roadmaps
   skills/              ← the topic guides linked above
 ```
 
-Dependency direction is one-way: `product/backend → sdk/core`, and `sdk/ranking`,
-`sdk/recruitgpt`, `research/*` also depend on `sdk/core`. Nothing in `sdk/` may
-import from `product/`.
+Dependency direction is one-way and enforced in CI by
+`.github/scripts/check_architecture.py`:
+
+```
+product  ──→  sdk        product/backend consumes sdk/core
+research ──→  sdk        experiments build on the same interfaces
+product  ──X  research   production code never imports research code
+```
+
+Nothing in `sdk/` may import from `product/`. `product/backend` and `sdk/core` must
+also stay free of training dependencies (torch, transformers, datasets, …) — those
+belong in optional extras or in the research packages. The check runs on every push.
+
+`ranking` as a word is reserved for the `Ranker` capability inside `sdk/core`. The two
+research tracks are named by subject — `fairness` and `recruitgpt` — so there is never
+an `sdk/ranking` and a `research/ranking` meaning different things.
 
 
 ## Key Files

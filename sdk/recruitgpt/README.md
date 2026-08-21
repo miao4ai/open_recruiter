@@ -1,6 +1,12 @@
 # recruitgpt
 
-RecruitGPT — training and inference for recruiting-domain language models. Specification pending.
+RecruitGPT — a compact distilled ranking model, packaged as a `LocalSLMRanker`
+implementation of the `Ranker` interface in `openrecruiter`.
+
+Heavyweight dependencies (torch, transformers) live behind optional extras and the model
+is lazy-loaded, so installing `openrecruiter` never pulls them in.
+
+Specification pending.
 
 **Status: scaffold.** No implementation yet — see the repo root [README](../../README.md) for where this sits in the plan.
 

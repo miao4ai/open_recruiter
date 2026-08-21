@@ -1,6 +1,9 @@
 # recruitgpt-research
 
-Dataset construction and evaluation behind `recruitgpt`. Specification pending.
+Two-stage candidate ranking research behind `recruitgpt`: LLM-as-a-judge soft labels,
+hard-negative mining, knowledge distillation into a compact ranker, and ranking evaluation.
+
+Specification pending.
 
 **Status: scaffold.** No implementation yet — see the repo root [README](../../README.md) for where this sits in the plan.
 

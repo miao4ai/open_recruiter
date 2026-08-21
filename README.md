@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/BUILD-PASSING-brightgreen" />
+  <a href="https://github.com/miao4ai/open_recruiter/actions/workflows/test.yml"><img src="https://github.com/miao4ai/open_recruiter/actions/workflows/test.yml/badge.svg" /></a>
   <img src="https://img.shields.io/badge/RELEASE-V4.0.0-blue" />
   <img src="https://img.shields.io/badge/LICENSE-MIT-purple" />
 </p>
@@ -22,6 +22,33 @@
 
 A lightweight desktop app powered by Claude, with cloud embeddings for semantic matching — bring your own API keys, no subscription. As of **4.0** the recruiting engine underneath it is also shipped as a Python SDK, so the same parsing, matching, and outreach logic can be imported into your own tools.
 
+[Quick Start](#quick-start) · [Documentation](docs/guides/USER_MANUAL.md) · [Architecture](#architecture) · [SDK](sdk/core/) · [Research](#open-recruiter-research) · [Contributing](CONTRIBUTING.md)
+
+- **AI recruiting agent** — ask about your pipeline in plain language, get actions, not just answers
+- **Semantic candidate search** — vector retrieval over resumes and job descriptions
+- **Candidate matching** — fit scores with explained strengths and gaps
+- **Automated outreach** — personalised emails, reply tracking, follow-ups
+- **Integrations** — email, IMAP, calendar, Slack, and an MCP server for external agents
+- **Extensible SDK** — swap in your own ranking backend
+- **Open research platform** — ranking and fairness experiments live in the same repository
+
+---
+
+## Quick Start
+
+Download the desktop app from [Releases](https://github.com/miao4ai/open_recruiter/releases)
+— `.dmg` (macOS, signed and notarized), `.exe` (Windows), or `.AppImage` (Linux) — then add
+an Anthropic or OpenAI key in **Settings**. That is the whole setup.
+
+To run from source:
+
+```bash
+git clone https://github.com/miao4ai/open_recruiter.git && cd open_recruiter
+product/scripts/setup.sh && product/scripts/start.sh   # then open http://localhost:5173
+```
+
+No GPU, no PyTorch, no local model download. See [Install](#install) for details.
+
 ---
 
 ## The Problem
@@ -31,12 +58,6 @@ Small and mid-size recruiting teams often work across industries they don't have
 Open Recruiter solves this. Drop in a job description and a stack of resumes. The AI reads them, scores the fit, explains the gaps, and drafts a personalized email for each candidate — ready to send in one click. You don't need to understand the tech stack. The AI does the reading so you can focus on relationships.
 
 **For job seekers**, there's a dedicated mode (Ai Chan) that searches for matching jobs on the web, analyzes your fit, and writes your cover letter.
-
----
-
-## Demo
-
-> 🎬 *Coming soon*
 
 ---
 
@@ -86,15 +107,29 @@ Starting with **3.0**, Open Recruiter is a lightweight cloud-backed build — no
 
 ---
 
-## Repository Layout
+## Architecture
 
-This is a monorepo. Each part builds and ships on its own.
+Open Recruiter is one repository with three layers and a single rule about how they depend
+on each other:
+
+```
+product  ──→  sdk        the desktop app is a consumer of the SDK
+research ──→  sdk        experiments build on the same interfaces
+product  ──X  research   production code never imports research code
+```
+
+That last line is what keeps the app installable. The desktop build has no PyTorch, no
+Transformers, and no training dependencies; embeddings are an API call. Research may grow as
+heavy as it needs to behind that boundary. The rule is
+[enforced in CI](.github/scripts/check_architecture.py), not just documented.
+
+Each part builds and ships on its own.
 
 | Path | What it is | Produces |
 |------|-----------|----------|
 | [`product/`](product/) | The desktop app — Electron + React + FastAPI | `.dmg` · `.exe` · `.AppImage` |
 | [`sdk/core/`](sdk/core/) | `openrecruiter` — the agent toolkit the app runs on | PyPI package |
-| [`sdk/ranking/`](sdk/ranking/) | `openrecruiter-ranking` — unbiased candidate ranking | PyPI package |
+| [`sdk/fairness/`](sdk/fairness/) | `openrecruiter-fairness` — fairness-aware ranking | PyPI package |
 | [`sdk/recruitgpt/`](sdk/recruitgpt/) | `recruitgpt` — recruiting-domain model training | PyPI package |
 | [`research/`](research/) | Reproducible experiments behind the SDKs | PyPI packages |
 | [`docs/`](docs/) | Manual, release notes, roadmaps, contributor guides | — |
@@ -112,11 +147,116 @@ cd sdk/core && uv build --out-dir dist
 
 ---
 
+## SDK & Extensibility
+
+The engine behind the app is being published as `openrecruiter`, so the same parsing,
+matching, and outreach logic can be imported into your own tools rather than reimplemented.
+
+Ranking is the main extension point. One interface, several backends:
+
+```
+Ranker
+├── EmbeddingRanker   default — vector similarity, no local model, no GPU
+├── APIRanker         optional — an LLM reranks the shortlist
+├── LocalSLMRanker    optional — a distilled ranking model, lazy-loaded
+└── your own          implement rank(job, candidates) and pass it in
+```
+
+Every optional backend keeps its heavy dependencies behind extras and loads its model only
+when a user explicitly selects it. Installing `openrecruiter` never downloads a model.
+
+> **Status:** `sdk/core` is being populated now — package layout and interfaces first, the
+> engine moving over from `product/backend` next. `LocalSLMRanker` is an interface
+> reservation; no trained model exists yet.
+
+---
+
+## Open Recruiter Research
+
+Open Recruiter is also an experimental platform for research in AI-native recruiting
+systems. Everything below is **early and experimental** — the repository currently contains
+the structure and the boundaries, not results. No benchmarks or trained models have been
+published yet.
+
+The research layer never affects a normal install.
+
+### Recruiter Ranking
+
+Evolving candidate search from single-stage embedding similarity into two stages, where
+retrieval optimises recall and ranking optimises job-candidate relevance:
+
+```
+Job Description
+      │
+      ▼
+Semantic Retrieval        ← optimises recall
+      │
+      ▼
+Top 100–500 Candidates
+      │
+      ▼
+Recruiter Ranker          ← optimises relevance
+      │
+      ▼
+Top Candidates ──→ Recruiter Agent ──→ explain · outreach · follow-up
+```
+
+The planned training path uses a large model offline as a recruiter judge, then distils it
+into something small enough to serve:
+
+```
+Large LLM Recruiter Judge  ──→  Soft Labels  ──→  Compact Ranker
+        (offline)                                  (production)
+```
+
+Topics: semantic candidate retrieval · hard-negative mining · LLM-as-a-judge soft labels ·
+knowledge distillation · compact SLM ranking · multi-objective ranking (skill, domain,
+experience, seniority fit) · resume compression and cached candidate representations ·
+efficient inference.
+
+→ [`research/recruitgpt/`](research/recruitgpt/) · [`sdk/recruitgpt/`](sdk/recruitgpt/)
+
+### Fair Candidate Search
+
+A deliberately independent track asking whether demographic signals affect candidate
+ranking, whether anonymization changes results, and what the relevance/fairness trade-off
+actually costs. The goal is to **measure and reduce unwanted bias** — never to use protected
+characteristics to disadvantage candidates.
+
+Topics: bias evaluation · candidate anonymization · counterfactual testing ·
+fairness-aware ranking · relevance/fairness trade-offs.
+
+→ [`research/fairness/`](research/fairness/) · [`sdk/fairness/`](sdk/fairness/)
+
+---
+
+## Contributing
+
+**You do not need ML experience to contribute.** Most of Open Recruiter is an ordinary
+desktop application, and the default development setup installs no training stack.
+
+| I want to work on… | Where | ML needed |
+|--------------------|-------|-----------|
+| Integrations, outreach, agent workflow, API, UI | [`product/`](product/) | No |
+| Public interfaces and the recruiting engine | [`sdk/core/`](sdk/core/) | No |
+| Candidate retrieval and ranking quality | [`sdk/`](sdk/) | Some |
+| Distillation, hard negatives, benchmarks | [`research/recruitgpt/`](research/recruitgpt/) | Yes |
+| Bias evaluation and fairness | [`research/fairness/`](research/fairness/) | Yes |
+| Documentation | [`docs/`](docs/) | No |
+
+Each path has its own setup instructions in **[CONTRIBUTING.md](CONTRIBUTING.md)** — you
+never need to install the layers you are not touching. Issues are labelled by area and
+difficulty, so it is obvious at a glance which ones require an ML background.
+
+If Open Recruiter is useful to you, a ⭐ helps other recruiters and researchers find it.
+
+---
+
 ## What's New in 4.0
 
 **Split into a monorepo.** The desktop app moved to [`product/`](product/), joined by
 [`sdk/`](sdk/) for the Python packages and [`research/`](research/) for the experiments
-behind them. Every part builds and versions on its own — see [Repository Layout](#repository-layout).
+behind them. Every part builds and versions on its own — see [Architecture](#architecture).
 
 **Security.** The JWT signing key is now generated per install instead of falling back to a
 shared constant that shipped in every build, dev servers bind to loopback rather than every

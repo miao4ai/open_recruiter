@@ -15,9 +15,9 @@ open-recruiter = "app.cli:main"
 members = [
     "product/backend",
     "sdk/core",
-    "sdk/ranking",
+    "sdk/fairness",
     "sdk/recruitgpt",
-    "research/ranking",
+    "research/fairness",
     "research/recruitgpt",
 ]
 

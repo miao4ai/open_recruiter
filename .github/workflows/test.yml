@@ -1,0 +1,112 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Which layers did this change touch? Jobs below run only when relevant, so an
+  # integration fix does not pay for an SDK build and a docs PR pays for nothing.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      product: ${{ steps.filter.outputs.product }}
+      sdk: ${{ steps.filter.outputs.sdk }}
+      research: ${{ steps.filter.outputs.research }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            product:
+              - 'product/**'
+              - 'pyproject.toml'
+              - '.github/workflows/test.yml'
+            sdk:
+              - 'sdk/**'
+              - 'pyproject.toml'
+            research:
+              - 'research/**'
+              - 'pyproject.toml'
+
+  # Always runs: it is seconds of work and it is the only thing standing between
+  # us and a training stack leaking into the desktop app.
+  architecture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python .github/scripts/check_architecture.py
+
+  backend:
+    needs: changes
+    if: needs.changes.outputs.product == 'true' || needs.changes.outputs.sdk == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v4
+      - name: Install backend dependencies
+        working-directory: product/backend
+        run: uv sync
+      - name: Run test harness
+        working-directory: product/backend
+        run: uv run python -m pytest ../tests/ -v
+
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.product == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        working-directory: product/frontend
+        run: npm ci
+      - name: Typecheck and build
+        working-directory: product/frontend
+        run: npm run build
+
+  # Every SDK and research package must build and import on its own — that is the
+  # whole promise of `pip install openrecruiter` without the rest of the repo.
+  packages:
+    needs: changes
+    if: needs.changes.outputs.sdk == 'true' || needs.changes.outputs.research == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { path: sdk/core,           module: openrecruiter }
+          - { path: sdk/fairness,       module: openrecruiter_fairness }
+          - { path: sdk/recruitgpt,     module: recruitgpt }
+          - { path: research/fairness,  module: openrecruiter_research_fairness }
+          - { path: research/recruitgpt, module: recruitgpt_research }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v4
+      - name: Build ${{ matrix.path }}
+        working-directory: ${{ matrix.path }}
+        run: uv build --out-dir dist
+      - name: Install the wheel in a clean env and import it
+        working-directory: ${{ matrix.path }}
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install --quiet dist/*.whl
+          /tmp/venv/bin/python -c "import ${{ matrix.module }} as m; print(m.__name__, m.__version__)"
