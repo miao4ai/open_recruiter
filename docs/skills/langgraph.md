@@ -1,6 +1,6 @@
 # LangGraph — Chat Graph + Human-in-the-Loop
 
-## Chat graph (backend/app/graphs/chat_graph.py)
+## Chat graph (product/backend/app/graphs/chat_graph.py)
 
 Linear pipeline:
 
@@ -10,7 +10,7 @@ build_context → input_guard → call_llm → parse_response → output_guard �
 
 Each node is a pure function over the state dict. Failures at `input_guard` / `output_guard` short-circuit to `finalize` with a `guardrail_warning` block.
 
-## SSE adapter (backend/app/graphs/sse_adapter.py)
+## SSE adapter (product/backend/app/graphs/sse_adapter.py)
 
 Wraps the graph for streaming. Yields events:
 - `token` — streamed text chunks
@@ -37,7 +37,7 @@ State persists via `SqliteSaver` — workflows survive process restart.
 
 ## Multi-agent (evaluation swarm)
 
-`backend/app/agents/evaluation_swarm.py` runs 4 agents in parallel via `ThreadPoolExecutor`, then synthesizes:
+`product/backend/app/agents/evaluation_swarm.py` runs 4 agents in parallel via `ThreadPoolExecutor`, then synthesizes:
 
 ```
        Resume Agent ─┐
@@ -53,7 +53,7 @@ Pattern to follow when adding more swarms: separate prompts per agent, parallel 
 
 ## Adding a new agent
 
-1. Create `backend/app/agents/<name>.py` with a pure function: `(cfg, ...) → dict`
+1. Create `product/backend/app/agents/<name>.py` with a pure function: `(cfg, ...) → dict`
 2. Add its system prompt to `prompts.py`
 3. Wire it into either the chat graph (via `process_action`) or the swarm (via `evaluation_swarm`)
 4. Add tests — mock the LLM call to keep tests fast

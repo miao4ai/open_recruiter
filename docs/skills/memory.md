@@ -19,7 +19,7 @@
 ## Module layout
 
 ```
-backend/app/memory/
+product/backend/app/memory/
   sensory.py    — in-process ring buffer + emit_event / recent_events
   working.py    — session_state CRUD + add_focused_entity
   entity.py     — update_entity_after_action + get_entities_for_message
@@ -86,7 +86,7 @@ Traits are merged (last-write-wins per key). Relations are deduped (set-append s
 
 ## Tests
 
-`tests/harness/test_memory.py` — 22 cases covering all 4 layers:
+`product/tests/harness/test_memory.py` — 22 cases covering all 4 layers:
 - Sensory: emit/recent, per-user isolation, ring buffer cap, TTL bypass
 - Working: create/read/merge, focused entity dedup
 - Entity: first-interaction creation, count bump, relation dedup, trait merge, per-user isolation, message-based resolution

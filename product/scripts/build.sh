@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # build.sh — Build Open Recruiter desktop app (Linux/macOS)
-# Run from the project root: bash build.sh [mac|linux|auto]
+# Run from anywhere: bash product/scripts/build.sh [mac|linux|auto]
 # Default: auto-detects platform via uname
 #
 # Note: The final Windows .exe must be built on Windows with build.ps1.
 
 set -euo pipefail
-PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"   # product/
 
 echo "=== Open Recruiter — Desktop Build ==="
 echo ""

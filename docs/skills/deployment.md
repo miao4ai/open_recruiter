@@ -8,7 +8,7 @@ User MUST explicitly approve the version number — CLAUDE.md hard rule. **Never
 
 1. **Bump version** in both files (must stay in sync):
    - `package.json` → `"version": "X.Y.Z"`
-   - `frontend/package.json` → `"version": "X.Y.Z"`
+   - `product/frontend/package.json` → `"version": "X.Y.Z"`
 
 2. **Update README.md**:
    - Version badge: `<img src="https://img.shields.io/badge/RELEASE-VX.Y.Z-blue" />`
@@ -17,11 +17,11 @@ User MUST explicitly approve the version number — CLAUDE.md hard rule. **Never
      | [VX.Y.Z](https://github.com/miao4ai/open_recruiter/releases/tag/vX.Y.Z) | YYYY-MM-DD | <one-line highlights> |
      ```
 
-3. **Update `document/release.md`** — add a full section above the previous version.
+3. **Update `docs/guides/release.md`** — add a full section above the previous version.
 
 4. **Commit and push the bump**:
    ```bash
-   git add package.json frontend/package.json README.md document/release.md
+   git add product/package.json product/frontend/package.json README.md docs/guides/release.md
    git commit -m "Bump version to X.Y.Z + release notes"
    git push
    ```
@@ -57,7 +57,7 @@ GitHub Actions builds **exactly 3 artifacts** (~10 min total) and attaches them 
 | Windows | `Open.Recruiter.Setup.X.Y.Z.exe` |
 | Linux | `Open.Recruiter-X.Y.Z.AppImage` |
 
-Configured in `electron/electron-builder.json`. Triggered by tag push matching `v*.*.*` (see `.github/workflows/release.yml`).
+Configured in `product/electron/electron-builder.json`. Triggered by tag push matching `v*.*.*` (see `.github/workflows/release.yml`).
 
 ## macOS Gatekeeper note
 

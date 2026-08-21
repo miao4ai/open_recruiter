@@ -4,7 +4,8 @@
 #  Run:  chmod +x start.sh && ./start.sh
 # ============================================================================
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"          # product/
+REPO_ROOT="$(cd "$ROOT/.." && pwd)"               # repo root — the uv workspace, so .venv lives here
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -26,7 +27,7 @@ trap cleanup SIGINT SIGTERM
 
 # Start backend
 cd "$ROOT/backend"
-"$ROOT/.venv/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload &
+"$REPO_ROOT/.venv/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload &
 BACKEND_PID=$!
 
 # Wait for backend to be ready (health check)

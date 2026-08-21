@@ -4,14 +4,15 @@
 #  Run:  powershell -ExecutionPolicy Bypass -File start.ps1
 # ============================================================================
 
-$ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ROOT = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)   # product\
+$RepoRoot = Split-Path -Parent $ROOT
 
 Write-Host ""
 Write-Host "  Starting Open Recruiter..." -ForegroundColor Cyan
 Write-Host ""
 
 # Start backend in a new window
-$backendCmd = "cd '$ROOT\backend'; & '$ROOT\.venv\Scripts\python' -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+$backendCmd = "cd '$ROOT\backend'; & '$RepoRoot\.venv\Scripts\python' -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendCmd
 
 # Wait for backend to load (embedding model takes a few seconds)

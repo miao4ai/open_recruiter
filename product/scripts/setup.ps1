@@ -5,7 +5,8 @@
 # ============================================================================
 
 $ErrorActionPreference = "Stop"
-$ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ROOT = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)   # product\
+$RepoRoot = Split-Path -Parent $ROOT
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -238,5 +239,5 @@ Write-Host ""
 Write-Host "  Start now? (Y/n): " -ForegroundColor Cyan -NoNewline
 $startNow = Read-Host
 if ($startNow -ne "n" -and $startNow -ne "N") {
-    & "$ROOT\start.ps1"
+    & "$ROOT\scripts\start.ps1"
 }

@@ -1,6 +1,6 @@
 # MCP Server — recruiter tools for external agents
 
-`backend/app/mcp_server.py` exposes the recruiter's **matching & evaluation**
+`product/backend/app/mcp_server.py` exposes the recruiter's **matching & evaluation**
 capabilities as an [MCP](https://modelcontextprotocol.io) server over **stdio**,
 so any MCP client (Claude Desktop, Cursor, another chat agent) can call them.
 

@@ -10,8 +10,8 @@ venv/
 
 # Node
 node_modules/
-frontend/dist/
-electron/dist/
+product/frontend/dist/
+product/electron/dist/
 
 # Database
 *.db
@@ -39,10 +39,14 @@ credentials.json
 token.json
 
 # Uploads (resumes)
-backend/uploads/
+product/backend/uploads/
 
 # Build artifacts
 *.tsbuildinfo
 
 # Electron build
 release/
+product/release/
+
+# Python package builds
+dist/

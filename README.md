@@ -1,7 +1,7 @@
-# <img src="images/small_logo.png" height="36" /> Open Recruiter
+# <img src="product/images/small_logo.png" height="36" /> Open Recruiter
 
 <p align="center">
-  <img src="images/large_logo.png" width="320" />
+  <img src="product/images/large_logo.png" width="320" />
 </p>
 
 <p align="center">
@@ -11,8 +11,8 @@
 </p>
 
 <p align="center">
-  <a href="document/USER_MANUAL.md"><img src="https://img.shields.io/badge/USER_MANUAL-green?style=for-the-badge" /></a>
-  <a href="document/release.md"><img src="https://img.shields.io/badge/RELEASE_NOTES-orange?style=for-the-badge" /></a>
+  <a href="docs/guides/USER_MANUAL.md"><img src="https://img.shields.io/badge/USER_MANUAL-green?style=for-the-badge" /></a>
+  <a href="docs/guides/release.md"><img src="https://img.shields.io/badge/RELEASE_NOTES-orange?style=for-the-badge" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-MIT-purple?style=for-the-badge" /></a>
 </p>
 
@@ -64,13 +64,13 @@ Open Recruiter solves this. Drop in a job description and a stack of resumes. Th
 
 **One-line installer** (macOS / Linux):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/miao4ai/open_recruiter/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/miao4ai/open_recruiter/main/product/scripts/install.sh | bash
 ```
 
 **Manual setup:**
 ```bash
 git clone https://github.com/miao4ai/open_recruiter.git && cd open_recruiter
-scripts/setup.sh && scripts/start.sh   # then open http://localhost:5173
+product/scripts/setup.sh && product/scripts/start.sh   # then open http://localhost:5173
 ```
 
 ### API keys (3.0+)
@@ -100,7 +100,33 @@ Starting with **3.0**, Open Recruiter is a lightweight cloud-backed build — no
 | [V1.1.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.1.0) | 2026-02-20 | i18n (6 languages), ONNX migration, calendar |
 | [V1.0.0](https://github.com/miao4ai/open_recruiter/releases/tag/v1.0.0) | 2026-02-20 | Initial release |
 
-Full changelog: [document/release.md](document/release.md)
+Full changelog: [docs/guides/release.md](docs/guides/release.md)
+
+---
+
+## Repository Layout
+
+This is a monorepo. Each part builds and ships on its own.
+
+| Path | What it is | Produces |
+|------|-----------|----------|
+| [`product/`](product/) | The desktop app — Electron + React + FastAPI | `.dmg` · `.exe` · `.AppImage` |
+| [`sdk/core/`](sdk/core/) | `openrecruiter` — the agent toolkit the app runs on | PyPI package |
+| [`sdk/ranking/`](sdk/ranking/) | `openrecruiter-ranking` — unbiased candidate ranking | PyPI package |
+| [`sdk/recruitgpt/`](sdk/recruitgpt/) | `recruitgpt` — recruiting-domain model training | PyPI package |
+| [`research/`](research/) | Reproducible experiments behind the SDKs | PyPI packages |
+| [`docs/`](docs/) | Manual, release notes, roadmaps, contributor guides | — |
+
+The SDKs are not a side product: the desktop app is a consumer of `openrecruiter`,
+so everything shipped in the package is exercised by the app itself.
+
+```bash
+# desktop app
+cd product && npm run dist
+
+# any Python package
+cd sdk/core && uv build --out-dir dist
+```
 
 ---
 

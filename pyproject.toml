@@ -8,14 +8,24 @@ dependencies = ["open-recruiter-backend"]
 [project.scripts]
 open-recruiter = "app.cli:main"
 
+# Monorepo: the desktop app (product/), the shipped SDKs (sdk/), and the
+# experiments behind them (research/). Each member also builds standalone —
+# `cd sdk/core && uv build` needs nothing from this file.
 [tool.uv.workspace]
-members = ["backend"]
+members = [
+    "product/backend",
+    "sdk/core",
+    "sdk/ranking",
+    "sdk/recruitgpt",
+    "research/ranking",
+    "research/recruitgpt",
+]
 
 [tool.uv.sources]
 open-recruiter-backend = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
-packages = ["backend/app"]
+packages = ["product/backend/app"]
 
 [build-system]
 requires = ["hatchling"]

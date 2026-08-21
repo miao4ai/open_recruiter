@@ -3,7 +3,7 @@
 ## Run
 
 ```bash
-cd backend && uv run python -m pytest ../tests/harness/ -v
+cd product/backend && uv run python -m pytest ../tests/harness/ -v
 ```
 
 All tests are pure unit tests with mocked LLM/IMAP/Whisper calls — no network, runs in <1s.
@@ -59,7 +59,7 @@ Three possibilities — **never** modify a test just to make it pass:
 ## Frontend type check
 
 ```bash
-cd frontend && npx tsc --noEmit
+cd product/frontend && npx tsc --noEmit
 ```
 
 Required after every change to `types/index.ts` or any component.

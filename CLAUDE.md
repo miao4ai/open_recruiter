@@ -2,18 +2,18 @@
 
 ## Project Overview
 
-**Open Recruiter** is an AI-powered recruitment assistant desktop app (Electron + React + FastAPI). As of **3.0 (slim build)** it is cloud-backed — Claude/OpenAI for chat and the Voyage API for embeddings (bring your own keys); local ML (PyTorch / Whisper / ONNX) was removed. Two modes: **Recruiter** (Erika Chan) and **Job Seeker** (Ai Chan).
+**Open Recruiter** is a monorepo: an AI-powered recruitment assistant desktop app (Electron + React + FastAPI) in `product/`, the Python SDKs it is built on in `sdk/`, and the experiments behind them in `research/`. As of **3.0 (slim build)** it is cloud-backed — Claude/OpenAI for chat and the Voyage API for embeddings (bring your own keys); local ML (PyTorch / Whisper / ONNX) was removed. Two modes: **Recruiter** (Erika Chan) and **Job Seeker** (Ai Chan).
 
 ## Available Skills
 
 Topic-specific guides — read the relevant one before working in that area:
 
-- [skills/backend.md](skills/backend.md) — FastAPI structure, agents, the 6-step recipe for adding a chat action, LLM provider config
-- [skills/langgraph.md](skills/langgraph.md) — chat graph pipeline, SSE adapter, Human-in-the-Loop approval cards, multi-agent swarm pattern
-- [skills/memory.md](skills/memory.md) — 4-tier agent memory (sensory / working / long-term / entity), loader integration, event emission
-- [skills/testing.md](skills/testing.md) — pytest harness (137 cases), how to run subsets, when a failure means a real gap vs a stale fixture
-- [skills/deployment.md](skills/deployment.md) — version bump + tag + CI release flow, artifact naming, Gatekeeper / notarization notes
-- [skills/mcp.md](skills/mcp.md) — stdio MCP server exposing recruiter matching/evaluation tools to external chat agents
+- [docs/skills/backend.md](docs/skills/backend.md) — FastAPI structure, agents, the 6-step recipe for adding a chat action, LLM provider config
+- [docs/skills/langgraph.md](docs/skills/langgraph.md) — chat graph pipeline, SSE adapter, Human-in-the-Loop approval cards, multi-agent swarm pattern
+- [docs/skills/memory.md](docs/skills/memory.md) — 4-tier agent memory (sensory / working / long-term / entity), loader integration, event emission
+- [docs/skills/testing.md](docs/skills/testing.md) — pytest harness (137 cases), how to run subsets, when a failure means a real gap vs a stale fixture
+- [docs/skills/deployment.md](docs/skills/deployment.md) — version bump + tag + CI release flow, artifact naming, Gatekeeper / notarization notes
+- [docs/skills/mcp.md](docs/skills/mcp.md) — stdio MCP server exposing recruiter matching/evaluation tools to external chat agents
 
 ---
 
@@ -80,7 +80,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ### Project-specific hard rules
 
 - **Never bump version numbers** without explicit user instruction.
-- **Never commit `frontend/tsconfig.tsbuildinfo` or `uv.lock`** — these appear modified but should not be staged.
+- **Never commit `product/frontend/tsconfig.tsbuildinfo` or `uv.lock`** — these appear modified but should not be staged.
 - All system prompts must instruct the LLM to **always respond in English** (Ollama/Qwen can drift to Chinese).
 - When editing files, always **read first** before editing.
 - Releases: macOS `.dmg`, Windows `.exe`, Linux `.AppImage` — exactly 3 artifacts.
@@ -90,43 +90,66 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ## Architecture
 
 ```
-electron/          ← Electron shell (main.js, preload.js)
-frontend/          ← React 19 + TypeScript + TailwindCSS (Vite)
-  src/
-    pages/         ← Full-page views (Jobs, Candidates, Chat, JobSeekerHome, …)
-    components/    ← Reusable UI (MessageBlocks, SemanticSearchBar, …)
-    lib/api.ts     ← All fetch calls to FastAPI backend
-    types/index.ts ← Shared TypeScript interfaces
-backend/           ← FastAPI + Python
-  app/
-    routes/        ← HTTP endpoints (agent.py is the main chat endpoint)
-    agents/        ← Domain agents (resume, jd, matching, communication, …)
-    graphs/        ← LangGraph state machine (chat_graph.py, sse_adapter.py)
-    guardrails/    ← Input/output guard (policy.py)
-    prompts.py     ← All LLM system prompts
-    config.py      ← Runtime config (LLM provider, email, IMAP, Slack)
-    database.py    ← SQLite init_db()
-    vectorstore.py ← ChromaDB wrapper
-tests/             ← Pytest harness (intent detection, guardrails)
-electron/
-  electron-builder.json  ← Produces: macOS DMG, Windows EXE, Linux AppImage
+product/               ← the desktop app — builds the 3 installers
+  electron/            ← Electron shell (main.ts, preload.ts)
+  frontend/            ← React 19 + TypeScript + MUI (Vite)
+    src/
+      pages/           ← Full-page views (Jobs, Candidates, Chat, JobSeekerHome, …)
+      components/      ← Reusable UI (MessageBlocks, SemanticSearchBar, …)
+      lib/api.ts       ← All fetch calls to FastAPI backend
+      types/index.ts   ← Shared TypeScript interfaces
+      i18n/            ← 6 locales
+  backend/             ← FastAPI + Python
+    app/
+      routes/          ← HTTP endpoints (agent.py is the main chat endpoint)
+      agents/          ← Domain agents (resume, jd, matching, communication, …)
+      graphs/          ← LangGraph state machine (chat_graph.py, sse_adapter.py)
+      guardrails/      ← Input/output guard (policy.py)
+      memory/          ← 4-tier agent memory
+      prompts.py       ← All LLM system prompts
+      config.py        ← Runtime config (LLM provider, email, IMAP, Slack)
+      database.py      ← SQLite init_db()
+      vectorstore.py   ← ChromaDB + Voyage embeddings
+    open_recruiter.spec ← PyInstaller bundle
+  tests/               ← Pytest harness (intent detection, guardrails, memory)
+  scripts/             ← setup / start / build, for macOS·Linux (.sh) and Windows (.ps1)
+  images/              ← app icons, also used by electron-builder
+  electron/electron-builder.json  ← Produces: macOS DMG, Windows EXE, Linux AppImage
+
+sdk/                   ← published Python packages, each `pip install`-able on its own
+  core/                ← openrecruiter — the agent toolkit the product runs on
+  ranking/             ← openrecruiter-ranking — unbiased candidate ranking
+  recruitgpt/          ← recruitgpt — recruiting-domain model training
+
+research/              ← reproducible experiments behind the SDKs
+  ranking/
+  recruitgpt/
+
+docs/
+  guides/              ← user manual, release notes, roadmaps
+  skills/              ← the topic guides linked above
 ```
+
+Dependency direction is one-way: `product/backend → sdk/core`, and `sdk/ranking`,
+`sdk/recruitgpt`, `research/*` also depend on `sdk/core`. Nothing in `sdk/` may
+import from `product/`.
+
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `backend/app/routes/agent.py` | Main chat SSE endpoint, action dispatch, intent routing |
-| `backend/app/graphs/chat_graph.py` | LangGraph graph: build_context → input_guard → call_llm → parse_response → output_guard → process_action → finalize |
-| `backend/app/prompts.py` | All system prompts — edit here to change AI behavior |
-| `backend/app/config.py` | LLM + Voyage config (slim build: Anthropic/OpenAI only) |
-| `frontend/src/components/MessageBlocks.tsx` | Renders all chat message card types |
-| `frontend/src/types/index.ts` | MessageBlock union type — add new block types here first |
-| `frontend/src/lib/api.ts` | All API calls — add new endpoints here |
+| `product/backend/app/routes/agent.py` | Main chat SSE endpoint, action dispatch, intent routing |
+| `product/backend/app/graphs/chat_graph.py` | LangGraph graph: build_context → input_guard → call_llm → parse_response → output_guard → process_action → finalize |
+| `product/backend/app/prompts.py` | All system prompts — edit here to change AI behavior |
+| `product/backend/app/config.py` | LLM + Voyage config (slim build: Anthropic/OpenAI only) |
+| `product/frontend/src/components/MessageBlocks.tsx` | Renders all chat message card types |
+| `product/frontend/src/types/index.ts` | MessageBlock union type — add new block types here first |
+| `product/frontend/src/lib/api.ts` | All API calls — add new endpoints here |
 
 ## LLM Providers & Models
 
-Configured in `backend/app/config.py`. **Slim build (3.0+): chat is locked to cloud providers — Anthropic (default) or OpenAI. Gemini/Ollama were dropped from the UI, and `_build_config()` forces any other stored provider back to Anthropic. Embeddings run on the Voyage API, not a local model.**
+Configured in `product/backend/app/config.py`. **Slim build (3.0+): chat is locked to cloud providers — Anthropic (default) or OpenAI. Gemini/Ollama were dropped from the UI, and `_build_config()` forces any other stored provider back to Anthropic. Embeddings run on the Voyage API, not a local model.**
 
 - **anthropic** → `claude-sonnet-5` (default); also `claude-opus-4-8`, `claude-haiku-4-5`
 - **openai** → `gpt-5.1`
@@ -147,9 +170,9 @@ Override via Settings UI or `.env` (`LLM_PROVIDER`, `LLM_MODEL`, `VOYAGE_API_KEY
 1. Add action name to allowed list in `agent.py`
 2. Add handler function `_handle_<action>()` in `agent.py`
 3. Add trigger phrases to the relevant system prompt in `prompts.py`
-4. Add new `MessageBlock` type in `frontend/src/types/index.ts`
-5. Add render card in `frontend/src/components/MessageBlocks.tsx`
-6. Add intent test cases in `tests/harness/test_intent_detection.py`
+4. Add new `MessageBlock` type in `product/frontend/src/types/index.ts`
+5. Add render card in `product/frontend/src/components/MessageBlocks.tsx`
+6. Add intent test cases in `product/tests/harness/test_intent_detection.py`
 
 ### Human-in-the-Loop
 Uses LangGraph `interrupt()`. Frontend shows approval cards:
@@ -161,7 +184,7 @@ Resume/cancel via `POST /api/workflow/{thread_id}/resume` and `/cancel`.
 
 ## Search
 
-`backend/app/routes/search.py` — hybrid search (ChromaDB semantic + SQLite keyword).
+`product/backend/app/routes/search.py` — hybrid search (ChromaDB semantic + SQLite keyword).
 
 Relevance thresholds (to avoid garbage results):
 - Keyword-only hit OR semantic score ≥ 0.50 (semantic-only)
@@ -171,12 +194,12 @@ Search feedback stored in `search_feedback` table (👍👎 from UI).
 
 ## Test Harness
 
-Pytest tests at `tests/harness/`:
+Pytest tests at `product/tests/harness/`:
 - `test_intent_detection.py` — keyword fallback, action whitelist, intent disambiguation
 - `test_guardrails.py` — input/output validation, action limits, severity priority
 - `test_memory.py` — 4-tier memory layers, loader budget, event emission
 
-Run from `backend/`:
+Run from `product/backend/`:
 ```bash
 uv run python -m pytest ../tests/harness/ -v
 ```
@@ -202,13 +225,13 @@ git tag -d vX.Y.Z
 ## Dev Setup
 
 ```bash
-scripts/setup.sh        # install Python deps (uv) + node deps
-scripts/start.sh        # starts FastAPI on :8000 + Vite on :5173
+product/scripts/setup.sh   # install Python deps (uv) + node deps
+product/scripts/start.sh   # starts FastAPI on :8000 + Vite on :5173
 ```
 
 Frontend hot-reloads. Backend requires restart on Python changes.
 
-Electron dev: `npm run electron:dev` from project root.
+Electron dev: `npm run electron:dev` from `product/`.
 
 ---
 

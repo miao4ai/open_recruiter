@@ -6,7 +6,8 @@
 
 set -e
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"          # product/
+REPO_ROOT="$(cd "$ROOT/.." && pwd)"               # repo root — the uv workspace, so .venv lives here
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -263,7 +264,7 @@ echo -e "${GREEN}  Setup complete!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo -e "  ${CYAN}To start Open Recruiter:${NC}"
-echo "    ./start.sh"
+echo "    product/scripts/start.sh"
 echo ""
 echo -e "  ${CYAN}Or manually:${NC}"
 echo "    Terminal 1:  cd backend && .venv/bin/python -m uvicorn app.main:app --port 8000 --reload"
@@ -274,5 +275,5 @@ echo ""
 echo -ne "  ${CYAN}Start now? (Y/n): ${NC}"
 read -r START_NOW
 if [ "$START_NOW" != "n" ] && [ "$START_NOW" != "N" ]; then
-    exec "$ROOT/start.sh"
+    exec "$ROOT/scripts/start.sh"
 fi

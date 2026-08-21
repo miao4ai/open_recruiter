@@ -3,7 +3,7 @@
 ## Structure
 
 ```
-backend/app/
+product/backend/app/
   routes/         ← HTTP endpoints
     agent.py      ← Main chat SSE endpoint (action dispatch + intent routing)
     seeker.py     ← Job seeker endpoints
@@ -53,4 +53,4 @@ Model IDs get retired on a schedule — a retired ID returns `not_found_error` (
 
 - All system prompts must instruct the LLM to **respond in English** (Ollama/Qwen drifts to Chinese).
 - Always **read first** before editing — Edit tool enforces this.
-- Never commit `frontend/tsconfig.tsbuildinfo` or `uv.lock`.
+- Never commit `product/frontend/tsconfig.tsbuildinfo` or `uv.lock`.
