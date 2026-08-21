@@ -66,11 +66,12 @@ GitHub Actions builds **exactly 3 artifacts** (~10 min total) and attaches them 
 
 Configured in `product/electron/electron-builder.json`. Triggered by tag push matching `v*.*.*` (see `.github/workflows/release.yml`).
 
-## macOS Gatekeeper note
+## macOS signing and notarization
 
-App is NOT notarized — users get "damaged" warnings on first launch. README documents the workaround:
-```bash
-xattr -cr /Applications/Open\ Recruiter.app
-```
+Enabled since 3.0.0 — the DMG is signed and notarized, so there is no Gatekeeper warning and
+the old `xattr -cr` workaround is no longer needed.
 
-To enable notarization later: add 3 GitHub secrets (`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`), flip `notarize: true` in `electron-builder.json`.
+Driven by `notarize: true` in `electron-builder.json` plus five repo secrets: `CSC_LINK`,
+`CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`. If any are
+missing or the certificate has expired, the macOS job fails at the packaging step — check
+that first before debugging electron-builder.

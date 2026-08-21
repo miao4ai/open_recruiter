@@ -68,6 +68,93 @@ docs/        guides/ (manual, release notes) + skills/
 
 ---
 
+## V3.0.1 (2026-07-09)
+
+Bug-fix release for two issues that made 3.0.0 look broken on a fresh install.
+
+### Voyage key now applies without a restart
+`_VoyageEmbeddingFunction` captured the API key in `init_vectorstore()` at launch, but users
+enter the Voyage key in **Settings** *after* first launch. The embedding function held an
+empty key, so every index and search failed silently (swallowed as a warning): candidate
+uploads did not update job match counts and match analysis stayed empty until the app was
+restarted. The key is now read from live config on each call.
+
+### Failed login shows an error instead of silently reloading
+The global 401 interceptor redirected to `/login` on *any* 401 — including the login
+request's own "invalid credentials" 401. The page reloaded before `Login.tsx` could render
+its error, so a wrong password looked like nothing happened. The redirect now skips the auth
+endpoints, so the form surfaces the backend's "Invalid email or password"; 401s from
+authenticated calls still redirect.
+
+---
+
+## V3.0.0 (2026-07-04)
+
+The slim build. Local inference is gone — embeddings move to the Voyage AI API and chat is
+cloud-only — which halves the install and makes the app bring-your-own-key.
+
+### Slim build: Voyage cloud embeddings
+- The local ONNX/BGE embedding model is replaced by the **Voyage AI embeddings API** for
+  semantic candidate ↔ job matching. `_VoyageEmbeddingFunction` is a ChromaDB
+  `EmbeddingFunction` calling Voyage over httpx; `onnxruntime` is never imported.
+- Drops PyTorch, sentence-transformers, transformers, scipy and scikit-learn from the
+  install (~800 MB of dev deps, ~170 MB from the shipped bundle) and removes the bundled
+  129 MB model.
+- New `voyage_api_key` / `voyage_model` in config, env, and the Settings API. Without a key,
+  search falls back to keyword-only.
+
+### Slim build: local voice transcription removed
+- `/api/transcribe` and the `MicButton` UI are gone. faster-whisper pulled in ctranslate2 and
+  PyAV (~168 MB) for a non-core feature. **Backend bundle: 524 MB → 356 MB.**
+
+### Chat providers: Anthropic + OpenAI only
+- Chat is locked to the two supported cloud providers; any other stored provider falls back
+  to Anthropic. Gemini and Ollama were dropped from the Settings dropdown.
+- Retired `claude-sonnet-4` / `opus-4` / `haiku-4` ids (which now 404) in favour of
+  `claude-sonnet-5` (default), `claude-opus-4-8`, and `claude-haiku-4-5`.
+
+### 4-tier agent memory
+New `backend/app/memory/` package composing one memory block into the system prompt
+(~1600 token budget, per-layer caps):
+- **sensory** — per-user in-process ring buffer, last 10 events, 30 min TTL
+- **working** — `session_state` table: current goal, open workflows, focused entities
+- **entity** — per-candidate/job rolling summary, traits, relations, interaction count
+- **long-term** — high-confidence preferences from the existing `memories` table
+
+Wired through `build_context`, with a single `_update_memory_for_action()` hook in `agent.py`
+instead of touching every handler. All memory reads and writes are wrapped — they can never
+break a chat turn.
+
+### MCP server
+`backend/app/mcp_server.py` (FastMCP, stdio) lets external MCP clients — Claude Desktop,
+Cursor, other chat agents — call the recruiter's matching and evaluation capabilities. It
+imports the agent and db functions directly and reads the same local SQLite + ChromaDB, so
+the FastAPI backend does not need to be running.
+
+Read-only tools: `list_jobs`, `list_candidates`, `rank_candidates_for_job`,
+`match_candidate_to_job`, `match_candidate_to_jobs`, `evaluate_candidate`.
+
+### Anthropic prompt caching
+`CHAT_SYSTEM_WITH_ACTIONS` is ~10K tokens and was re-processed every turn. Adding
+`cache_control: ephemeral` on the system message drops input cost ~90% and TTFB ~80% on
+cached hits. Anthropic only, and only for prompts ≥ 4000 characters.
+
+### Signed and notarized macOS builds
+`notarize: true` plus `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` in CI —
+the DMG no longer triggers a Gatekeeper warning, so the `xattr -cr` workaround is obsolete.
+
+### Developer tooling
+- Opt-in **LangSmith tracing**: set `LANGSMITH_API_KEY` and `LANGSMITH_TRACING=true` to
+  forward every LangGraph and LLM call to smith.langchain.com. Off by default.
+- Topic guides moved to a project-root `skills/` folder, linked from `CLAUDE.md`.
+- CI no longer runs the per-platform torch + optimum ONNX export step — dead work once the
+  build stopped bundling a local model.
+
+> Earlier fully-offline releases remain on the
+> [`old-version-2.2`](https://github.com/miao4ai/open_recruiter/tree/old-version-2.2) branch.
+
+---
+
 ## V2.2.0 (2026-05-29)
 
 ### Voice Input (Local Whisper)
