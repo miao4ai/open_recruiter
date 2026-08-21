@@ -28,8 +28,6 @@ def _build_config() -> Config:
         llm_model=model,
         anthropic_api_key=db.get("anthropic_api_key", env.anthropic_api_key),
         openai_api_key=db.get("openai_api_key", env.openai_api_key),
-        gemini_api_key=db.get("gemini_api_key", env.gemini_api_key),
-        ollama_base_url=db.get("ollama_base_url", env.ollama_base_url),
         voyage_api_key=db.get("voyage_api_key", env.voyage_api_key),
         voyage_model=db.get("voyage_model", env.voyage_model),
         email_backend=db.get("email_backend", env.email_backend),
@@ -58,20 +56,48 @@ def get_config() -> Config:
     return _build_config()
 
 
+# ── Secret masking ────────────────────────────────────────────────────────
+# Secrets are stored in plain text in the local SQLite settings table, but we
+# never echo them back over HTTP — the UI only needs to show that a value is
+# set. On PUT, a field that still carries the mask means "unchanged", so we
+# drop it instead of overwriting the real secret with bullets.
+
+_SECRET_FIELDS = frozenset({
+    "anthropic_api_key",
+    "openai_api_key",
+    "voyage_api_key",
+    "sendgrid_api_key",
+    "smtp_password",
+    "imap_password",
+    "slack_bot_token",
+    "slack_app_token",
+    "slack_signing_secret",
+})
+
+_MASK_CHAR = "\u2022"
+
+
+def _mask(value: str) -> str:
+    """Show only the last 4 characters of a secret."""
+    if not value:
+        return ""
+    return _MASK_CHAR * 8 + value[-4:]
+
+
+def _is_masked(value: object) -> bool:
+    return isinstance(value, str) and _MASK_CHAR in value
+
+
 @router.get("/setup-status")
 async def setup_status(current_user: dict = Depends(get_current_user)):
     """Check if LLM is configured — used by the onboarding flow."""
     cfg = _build_config()
     provider = cfg.llm_provider
-    if provider == "ollama":
-        has_key = True  # Ollama doesn't need an API key
-    else:
-        key_map = {
-            "anthropic": cfg.anthropic_api_key,
-            "openai": cfg.openai_api_key,
-            "gemini": cfg.gemini_api_key,
-        }
-        has_key = bool(key_map.get(provider, ""))
+    key_map = {
+        "anthropic": cfg.anthropic_api_key,
+        "openai": cfg.openai_api_key,
+    }
+    has_key = bool(key_map.get(provider, ""))
     has_model = bool(cfg.llm_model)
     return {
         "llm_configured": has_key and has_model,
@@ -89,28 +115,26 @@ async def get_settings_route(current_user: dict = Depends(get_current_user)):
     return Settings(
         llm_provider=cfg.llm_provider,
         llm_model=cfg.llm_model,
-        anthropic_api_key=cfg.anthropic_api_key,
-        openai_api_key=cfg.openai_api_key,
-        gemini_api_key=cfg.gemini_api_key,
-        ollama_base_url=cfg.ollama_base_url,
-        voyage_api_key=cfg.voyage_api_key,
+        anthropic_api_key=_mask(cfg.anthropic_api_key),
+        openai_api_key=_mask(cfg.openai_api_key),
+        voyage_api_key=_mask(cfg.voyage_api_key),
         email_backend=cfg.email_backend,
-        sendgrid_api_key=cfg.sendgrid_api_key,
+        sendgrid_api_key=_mask(cfg.sendgrid_api_key),
         email_from=user_email,
         smtp_host=cfg.smtp_host,
         smtp_port=cfg.smtp_port,
         smtp_username=cfg.smtp_username,
-        smtp_password=cfg.smtp_password,
+        smtp_password=_mask(cfg.smtp_password),
         recruiter_name=cfg.recruiter_name or current_user.get("name", ""),
         recruiter_email=user_email,
         recruiter_company=cfg.recruiter_company,
         imap_host=cfg.imap_host,
         imap_port=cfg.imap_port,
         imap_username=cfg.imap_username,
-        imap_password=cfg.imap_password,
-        slack_bot_token=cfg.slack_bot_token,
-        slack_app_token=cfg.slack_app_token,
-        slack_signing_secret=cfg.slack_signing_secret,
+        imap_password=_mask(cfg.imap_password),
+        slack_bot_token=_mask(cfg.slack_bot_token),
+        slack_app_token=_mask(cfg.slack_app_token),
+        slack_signing_secret=_mask(cfg.slack_signing_secret),
         slack_intake_channel=cfg.slack_intake_channel,
     )
 
@@ -118,12 +142,14 @@ async def get_settings_route(current_user: dict = Depends(get_current_user)):
 @router.put("")
 async def update_settings(s: Settings, _user: dict = Depends(get_current_user)):
     data = s.model_dump()
+    # A masked secret means the user did not touch the field — keep the stored value.
+    data = {
+        k: v for k, v in data.items()
+        if not (k in _SECRET_FIELDS and _is_masked(v))
+    }
     # Store all non-empty values; convert non-str to str for DB
     to_store = {k: str(v) for k, v in data.items() if v}
     put_settings(to_store)
-    # Invalidate feature flag cache so new values take effect immediately
-    from app.graphs.feature_flags import reload as reload_flags
-    reload_flags()
     return {"status": "ok"}
 
 

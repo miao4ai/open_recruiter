@@ -11,7 +11,7 @@ Write-Host "  Starting Open Recruiter..." -ForegroundColor Cyan
 Write-Host ""
 
 # Start backend in a new window
-$backendCmd = "cd '$ROOT\backend'; & '$ROOT\.venv\Scripts\python' -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+$backendCmd = "cd '$ROOT\backend'; & '$ROOT\.venv\Scripts\python' -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendCmd
 
 # Wait for backend to load (embedding model takes a few seconds)
@@ -19,7 +19,7 @@ Write-Host "  Backend starting on http://localhost:8000 ..." -ForegroundColor Ye
 Start-Sleep -Seconds 3
 
 # Start frontend in a new window
-$frontendCmd = "cd '$ROOT\frontend'; npx vite --host 0.0.0.0"
+$frontendCmd = "cd '$ROOT\frontend'; npx vite"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $frontendCmd
 
 Start-Sleep -Seconds 2

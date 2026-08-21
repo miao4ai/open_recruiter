@@ -8,12 +8,9 @@ import MenuItem from "@mui/material/MenuItem";
 import Button from "@mui/material/Button";
 import FormHelperText from "@mui/material/FormHelperText";
 import Stack from "@mui/material/Stack";
-import Chip from "@mui/material/Chip";
-import LinearProgress from "@mui/material/LinearProgress";
 import Alert from "@mui/material/Alert";
 import SaveOutlined from "@mui/icons-material/SaveOutlined";
 import ScienceOutlined from "@mui/icons-material/ScienceOutlined";
-import DownloadOutlined from "@mui/icons-material/DownloadOutlined";
 import BackupOutlined from "@mui/icons-material/BackupOutlined";
 import RestoreOutlined from "@mui/icons-material/RestoreOutlined";
 import { useSnackbar } from "notistack";
@@ -23,13 +20,9 @@ import {
   updateSettings,
   testLlm,
   testEmail,
-  getOllamaStatus,
-  pullOllamaModel,
-  startOllama,
   exportBackup,
   importBackup,
 } from "../lib/api";
-import type { OllamaStatus } from "../lib/api";
 import type { Settings as SettingsType } from "../types";
 
 const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
@@ -44,24 +37,11 @@ const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
     { value: "gpt-4.1", label: "GPT-4.1" },
     { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
   ],
-  gemini: [
-    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-    { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
-  ],
-  ollama: [
-    { value: "qwen3.5:2b", label: "Qwen 3.5 2B (2.7 GB)" },
-    { value: "qwen3:1.7b", label: "Qwen 3 1.7B (1.4 GB)" },
-    { value: "qwen3:4b", label: "Qwen 3 4B (2.5 GB)" },
-    { value: "qwen3:8b", label: "Qwen 3 8B (5.2 GB)" },
-  ],
 };
 
 const DEFAULT_MODEL: Record<string, string> = {
-  anthropic: "claude-sonnet-4-20250514",
+  anthropic: "claude-sonnet-5",
   openai: "gpt-5.1",
-  gemini: "gemini-2.5-flash",
-  ollama: "qwen3.5:2b",
 };
 
 const LANGUAGES = [
@@ -81,8 +61,6 @@ export default function Settings() {
     llm_model: "",
     anthropic_api_key: "",
     openai_api_key: "",
-    gemini_api_key: "",
-    ollama_base_url: "http://localhost:11434",
     voyage_api_key: "",
     email_backend: "console",
     sendgrid_api_key: "",
@@ -102,12 +80,6 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
 
-  // Ollama state
-  const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus | null>(null);
-  const [pulling, setPulling] = useState(false);
-  const [pullProgress, setPullProgress] = useState(0);
-  const [pullStatus, setPullStatus] = useState("");
-  const [starting, setStarting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -126,13 +98,6 @@ export default function Settings() {
   useEffect(() => {
     if (saved) setForm(saved);
   }, [saved]);
-
-  // Fetch Ollama status when provider changes to ollama
-  useEffect(() => {
-    if (form.llm_provider === "ollama") {
-      getOllamaStatus().then(setOllamaStatus).catch(() => setOllamaStatus(null));
-    }
-  }, [form.llm_provider]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -203,33 +168,6 @@ export default function Settings() {
     }
   };
 
-  const handlePullModel = async () => {
-    setPulling(true);
-    setPullProgress(0);
-    setPullStatus(t("settings.downloading"));
-    try {
-      await pullOllamaModel(form.llm_model, (progress) => {
-        setPullStatus(progress.status);
-        if (progress.total && progress.completed) {
-          setPullProgress(Math.round((progress.completed / progress.total) * 100));
-        }
-      });
-      setPullStatus("");
-      setPullProgress(100);
-      const status = await getOllamaStatus();
-      setOllamaStatus(status);
-      enqueueSnackbar(t("settings.modelDownloaded"), { variant: "success" });
-    } catch {
-      enqueueSnackbar(t("settings.modelDownloadFailed"), { variant: "error" });
-    } finally {
-      setPulling(false);
-    }
-  };
-
-  const isModelInstalled = ollamaStatus?.running && ollamaStatus.installed_models.some(
-    (m) => m === form.llm_model || m.startsWith(form.llm_model.split(":")[0] + ":" + form.llm_model.split(":")[1])
-  );
-
   return (
     <Box sx={{ maxWidth: 640, mx: "auto" }}>
       <Stack spacing={3}>
@@ -253,7 +191,7 @@ export default function Settings() {
 
         {/* LLM Configuration */}
         <Section title={t("settings.llmConfig")}>
-          {!isOnline && form.llm_provider !== "ollama" && (
+          {!isOnline && (
             <Alert severity="warning" variant="outlined">
               {t("settings.offlineCloudWarning")}
             </Alert>
@@ -304,110 +242,6 @@ export default function Settings() {
               placeholder="sk-..."
               fullWidth
             />
-          )}
-          {form.llm_provider === "gemini" && (
-            <TextField
-              label={t("settings.geminiApiKey")}
-              name="gemini_api_key"
-              type="password"
-              value={form.gemini_api_key}
-              onChange={handleChange}
-              placeholder="AI..."
-              fullWidth
-            />
-          )}
-          {form.llm_provider === "ollama" && (
-            <>
-              {!isOnline && (
-                <Alert severity="info" variant="outlined">
-                  {t("settings.offlineOllamaHint")}
-                </Alert>
-              )}
-              {/* Ollama status */}
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                <Chip
-                  label={ollamaStatus?.running ? t("settings.ollamaRunning") : t("settings.ollamaNotRunning")}
-                  color={ollamaStatus?.running ? "success" : "error"}
-                  size="small"
-                />
-              </Box>
-              {!ollamaStatus?.running && (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={async () => {
-                      setStarting(true);
-                      try {
-                        const res = await startOllama();
-                        if (res.started) {
-                          enqueueSnackbar(t("settings.ollamaStarted"), { variant: "success" });
-                          const status = await getOllamaStatus();
-                          setOllamaStatus(status);
-                        } else if (!res.installed) {
-                          enqueueSnackbar(t("settings.ollamaNotInstalled"), { variant: "warning" });
-                        } else {
-                          enqueueSnackbar(t("settings.ollamaStartFailed"), { variant: "error" });
-                        }
-                      } catch {
-                        enqueueSnackbar(t("settings.ollamaStartFailed"), { variant: "error" });
-                      } finally {
-                        setStarting(false);
-                      }
-                    }}
-                    disabled={starting}
-                  >
-                    {starting ? t("settings.ollamaStarting") : t("settings.startOllama")}
-                  </Button>
-                  <Button
-                    variant="text"
-                    size="small"
-                    onClick={() => window.open("https://ollama.com/download", "_blank")}
-                  >
-                    {t("settings.installOllama")}
-                  </Button>
-                </Box>
-              )}
-
-              {/* Model download */}
-              {ollamaStatus?.running && !isModelInstalled && (
-                <Box>
-                  {pulling ? (
-                    <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        {pullStatus}
-                      </Typography>
-                      <LinearProgress variant="determinate" value={pullProgress} />
-                    </Box>
-                  ) : (
-                    <Button
-                      variant="outlined"
-                      startIcon={<DownloadOutlined />}
-                      onClick={handlePullModel}
-                    >
-                      {t("settings.downloadModel")}
-                    </Button>
-                  )}
-                </Box>
-              )}
-
-              {/* Model installed */}
-              {isModelInstalled && (
-                <Chip label={t("settings.modelReady")} color="success" size="small" />
-              )}
-
-              <FormHelperText>{t("settings.noApiKeyNeeded")}</FormHelperText>
-
-              {/* Base URL */}
-              <TextField
-                label={t("settings.ollamaBaseUrl")}
-                name="ollama_base_url"
-                value={form.ollama_base_url || "http://localhost:11434"}
-                onChange={handleChange}
-                fullWidth
-                size="small"
-              />
-            </>
           )}
           <Button
             variant="outlined"

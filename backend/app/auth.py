@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -12,10 +13,36 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app import database as db
 
-# Secret key for JWT signing (generate a random one if not set in env)
-JWT_SECRET = os.environ.get("JWT_SECRET", "open-recruiter-dev-secret-change-me")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_DAYS = 7
+
+# Resolved lazily and cached — the settings table only exists after init_db().
+_jwt_secret: str | None = None
+
+
+def _jwt_secret_key() -> str:
+    """Return this install's JWT signing key.
+
+    JWT_SECRET env var wins; otherwise the key stored in the settings table is
+    used, and a random one is generated and persisted on first use. Shipping a
+    build-time default would give every install the same signing key, so there
+    is deliberately no fallback constant here.
+    """
+    global _jwt_secret
+    if _jwt_secret is not None:
+        return _jwt_secret
+
+    env_secret = os.environ.get("JWT_SECRET", "")
+    if env_secret:
+        _jwt_secret = env_secret
+        return _jwt_secret
+
+    stored = db.get_settings().get("jwt_secret", "")
+    if not stored:
+        stored = secrets.token_urlsafe(48)
+        db.put_settings({"jwt_secret": stored})
+    _jwt_secret = stored
+    return _jwt_secret
 
 _bearer_scheme = HTTPBearer()
 
@@ -38,11 +65,11 @@ def create_token(user_id: str, email: str) -> str:
         "email": email,
         "exp": datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRE_DAYS),
     }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, _jwt_secret_key(), algorithm=JWT_ALGORITHM)
 
 
 def decode_token(token: str) -> dict:
-    return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    return jwt.decode(token, _jwt_secret_key(), algorithms=[JWT_ALGORITHM])
 
 
 # ── FastAPI dependency ────────────────────────────────────────────────────

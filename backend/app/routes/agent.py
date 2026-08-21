@@ -124,10 +124,8 @@ async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_curre
     cfg = get_config()
 
     has_key = (
-        cfg.llm_provider == "ollama"
-        or (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
+        (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
         or (cfg.llm_provider == "openai" and cfg.openai_api_key)
-        or (cfg.llm_provider == "gemini" and cfg.gemini_api_key)
     )
     if not has_key:
         return {"reply": "Please configure an LLM API key in Settings before using the chat assistant."}
@@ -387,19 +385,14 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
     with the complete structured response (blocks, actions, suggestions).
     """
     from app.routes.settings import get_config
-    from app.llm import chat_stream, chat_json, chat
-    from app.prompts import CHAT_SYSTEM_WITH_ACTIONS
-    from app.models import Email
 
     user_id = current_user["id"]
     user_role = current_user.get("role", "recruiter")
     cfg = get_config()
 
     has_key = (
-        cfg.llm_provider == "ollama"
-        or (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
+        (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
         or (cfg.llm_provider == "openai" and cfg.openai_api_key)
-        or (cfg.llm_provider == "gemini" and cfg.gemini_api_key)
     )
     if not has_key:
         async def err_gen():
@@ -421,17 +414,6 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
         })
     else:
         db.update_chat_session(session_id, {"updated_at": datetime.now().isoformat()})
-
-    # Build prompt
-    if user_role == "job_seeker":
-        from app.prompts import CHAT_SYSTEM_JOB_SEEKER, ENCOURAGEMENT_ADDENDUM
-        context = _build_job_seeker_context(user_id, session_id=session_id)
-        system_prompt = CHAT_SYSTEM_JOB_SEEKER.format(context=context)
-        if req.encouragement_mode:
-            system_prompt += ENCOURAGEMENT_ADDENDUM
-    else:
-        context = _build_chat_context(user_id, current_message=req.message)
-        system_prompt = CHAT_SYSTEM_WITH_ACTIONS.format(context=context)
 
     # Background: summarize previous session if needed
     _maybe_summarize_previous_session(cfg, user_id, session_id)
@@ -484,181 +466,6 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
         ):
             yield ev
         return
-
-        # ── LEGACY PATH (retained for reference, unreachable) ──
-        loop = asyncio.get_running_loop()
-        q: asyncio.Queue[str | Exception | None] = asyncio.Queue()
-
-        def _produce():
-            try:
-                for chunk in chat_stream(cfg, system=system_prompt, messages=messages, json_mode=True):
-                    loop.call_soon_threadsafe(q.put_nowait, chunk)
-            except Exception as exc:
-                loop.call_soon_threadsafe(q.put_nowait, exc)
-            finally:
-                loop.call_soon_threadsafe(q.put_nowait, None)
-
-        thread = threading.Thread(target=_produce, daemon=True)
-        thread.start()
-
-        full_text = ""
-        error_occurred = False
-        while True:
-            item = await q.get()
-            if item is None:
-                break
-            if isinstance(item, Exception):
-                log.error("Streaming LLM error: %s", item)
-                error_occurred = True
-                break
-            full_text += item
-            yield {"event": "token", "data": json.dumps({"t": item})}
-
-        # --- Post-streaming processing (wrapped in try/except) ---
-        try:
-            # Parse accumulated JSON
-            reply_text = ""
-            action_data = None
-            context_hint_data = None
-            if not error_occurred and full_text.strip():
-                try:
-                    raw = full_text.strip()
-                    if raw.startswith("```"):
-                        raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
-                        if raw.endswith("```"):
-                            raw = raw[:-3]
-                        raw = raw.strip()
-                    result = json.loads(raw)
-                    reply_text = result.get("message", "") if isinstance(result, dict) else str(result)
-                    action_data = result.get("action") if isinstance(result, dict) else None
-                    context_hint_data = result.get("context_hint") if isinstance(result, dict) else None
-                except Exception:
-                    log.warning("Stream JSON parse failed, trying regex fallback")
-                    # Try to extract "message" field via regex even from malformed JSON
-                    import re
-                    m = re.search(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)"', full_text)
-                    if m:
-                        reply_text = (m.group(1)
-                            .replace("\\n", "\n")
-                            .replace('\\"', '"')
-                            .replace("\\\\", "\\"))
-                    else:
-                        reply_text = full_text.strip()
-            elif error_occurred:
-                # Fallback to non-streaming
-                try:
-                    reply_text = chat(cfg, system=system_prompt, messages=messages)
-                except Exception as e:
-                    reply_text = f"I encountered an error: {e!s}"
-
-            # Safety net: if reply_text is still raw JSON, extract message
-            if reply_text and reply_text.strip().startswith("{") and '"message"' in reply_text:
-                try:
-                    _parsed = json.loads(reply_text)
-                    if isinstance(_parsed, dict) and "message" in _parsed:
-                        reply_text = _parsed["message"]
-                        if not action_data:
-                            action_data = _parsed.get("action")
-                        if not context_hint_data:
-                            context_hint_data = _parsed.get("context_hint")
-                except Exception:
-                    pass
-
-            # Strip trailing JSON code blocks the LLM sometimes embeds inside the message
-            reply_text = _strip_embedded_json(reply_text)
-
-            # Keyword fallback: only if LLM did NOT return an action
-            if not action_data:
-                keyword_action = _detect_action_from_keywords(req.message)
-                if keyword_action:
-                    action_data = keyword_action
-
-            # Process actions (same as chat_endpoint)
-            response: dict = {
-                "reply": reply_text, "session_id": session_id,
-                "blocks": [], "suggestions": [], "context_hint": context_hint_data,
-            }
-
-            _SEEKER_ALLOWED_ACTIONS = {"search_jobs", "analyze_job_match", "save_job", "improve_resume", "generate_cover_letter"}
-            if user_role == "job_seeker" and action_data:
-                if action_data.get("type") not in _SEEKER_ALLOWED_ACTIONS:
-                    action_data = None
-
-            response = _process_actions(response, action_data, cfg, user_id, session_id)
-
-            # ── POST-STREAMING: check if a workflow was started ──
-            if response.get("_start_workflow"):
-                # Save the LLM reply as assistant message first
-                assistant_msg_id = uuid.uuid4().hex[:8]
-                db.insert_chat_message({
-                    "id": assistant_msg_id, "user_id": user_id,
-                    "session_id": session_id, "role": "assistant",
-                    "content": reply_text,
-                    "created_at": datetime.now().isoformat(),
-                })
-
-                from app.graphs.sse_adapter import stream_supervisor_graph
-                wf = db.get_workflow(response["workflow_id"])
-                graph_state = {
-                    "user_message": req.message,
-                    "session_id": session_id,
-                    "user_id": user_id,
-                    "cfg": cfg,
-                    "plan_status": "needs_plan",
-                    "workflow_id": response["workflow_id"],
-                    "plan": {
-                        "workflow_type": wf.get("workflow_type", "") if wf else "",
-                        "context": json.loads(wf.get("context_json", "{}")) if wf else {},
-                    },
-                }
-                async for ev in stream_supervisor_graph(graph_state, session_id=session_id, user_id=user_id):
-                    yield ev
-                return
-
-            # Build suggestions
-            if not response.get("suggestions") and user_role == "recruiter":
-                response["suggestions"] = _build_smart_suggestions(action_data)
-
-            # Save assistant message
-            assistant_msg_id = uuid.uuid4().hex[:8]
-            action_json_str = ""
-            action_status_str = ""
-            if response.get("action"):
-                action_json_str = json.dumps(response["action"])
-                action_status_str = "pending"
-            db.insert_chat_message({
-                "id": assistant_msg_id, "user_id": user_id,
-                "session_id": session_id, "role": "assistant",
-                "content": response["reply"],
-                "action_json": action_json_str,
-                "action_status": action_status_str,
-                "created_at": datetime.now().isoformat(),
-            })
-            response["message_id"] = assistant_msg_id
-
-            # Background: extract memories from this conversation turn
-            if user_role == "recruiter":
-                threading.Thread(
-                    target=_extract_and_store_memories,
-                    args=(cfg, user_id, req.message, reply_text), daemon=True,
-                ).start()
-                msg_count = len(db.list_chat_messages(user_id, limit=100, session_id=session_id))
-                if msg_count > 0 and msg_count % 20 == 0:
-                    threading.Thread(
-                        target=_extract_implicit_memories,
-                        args=(cfg, user_id), daemon=True,
-                    ).start()
-
-            yield {"event": "done", "data": json.dumps(response)}
-        except Exception as exc:
-            log.error("Stream post-processing error: %s", exc, exc_info=True)
-            # Always send a done event so the frontend doesn't hang
-            fallback = {
-                "reply": reply_text or "Sorry, something went wrong processing the response.",
-                "session_id": session_id,
-                "blocks": [], "suggestions": [], "context_hint": None,
-            }
-            yield {"event": "done", "data": json.dumps(fallback)}
 
     return EventSourceResponse(event_generator())
 

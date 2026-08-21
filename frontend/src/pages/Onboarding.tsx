@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
@@ -11,22 +11,18 @@ import Stepper from "@mui/material/Stepper";
 import Step from "@mui/material/Step";
 import StepLabel from "@mui/material/StepLabel";
 import FormHelperText from "@mui/material/FormHelperText";
-import Chip from "@mui/material/Chip";
-import LinearProgress from "@mui/material/LinearProgress";
 
 import CheckCircleOutline from "@mui/icons-material/CheckCircleOutline";
 import ArrowForward from "@mui/icons-material/ArrowForward";
 import ArrowBack from "@mui/icons-material/ArrowBack";
 import ScienceOutlined from "@mui/icons-material/ScienceOutlined";
-import DownloadOutlined from "@mui/icons-material/DownloadOutlined";
-import { updateSettings, testLlm, testEmail, getOllamaStatus, pullOllamaModel, startOllama } from "../lib/api";
-import type { OllamaStatus } from "../lib/api";
+import { updateSettings, testLlm, testEmail } from "../lib/api";
 
 const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
   anthropic: [
-    { value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
-    { value: "claude-haiku-4-20250414", label: "Claude Haiku 4" },
-    { value: "claude-opus-4-20250514", label: "Claude Opus 4" },
+    { value: "claude-sonnet-5", label: "Claude Sonnet 5" },
+    { value: "claude-opus-4-8", label: "Claude Opus 4.8" },
+    { value: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
   ],
   openai: [
     { value: "gpt-5.2-pro", label: "GPT-5.2 Pro" },
@@ -34,43 +30,26 @@ const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
     { value: "gpt-4.1", label: "GPT-4.1" },
     { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
   ],
-  gemini: [
-    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-    { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
-  ],
-  ollama: [
-    { value: "qwen3.5:2b", label: "Qwen 3.5 2B (2.7 GB)" },
-    { value: "qwen3:1.7b", label: "Qwen 3 1.7B (1.4 GB)" },
-    { value: "qwen3:4b", label: "Qwen 3 4B (2.5 GB)" },
-    { value: "qwen3:8b", label: "Qwen 3 8B (5.2 GB)" },
-  ],
 };
 
 const DEFAULT_MODEL: Record<string, string> = {
-  anthropic: "claude-sonnet-4-20250514",
+  anthropic: "claude-sonnet-5",
   openai: "gpt-5.1",
-  gemini: "gemini-2.5-flash",
-  ollama: "qwen3.5:2b",
 };
 
 const PROVIDER_INFO = [
   { value: "anthropic", label: "Anthropic (Claude)", color: "#d4a574" },
   { value: "openai", label: "OpenAI (GPT)", color: "#74aa9c" },
-  { value: "gemini", label: "Google (Gemini)", color: "#4285f4" },
-  { value: "ollama", label: "Ollama (Local - Free)", color: "#7c3aed" },
 ];
 
 const API_KEY_FIELD: Record<string, string> = {
   anthropic: "anthropic_api_key",
   openai: "openai_api_key",
-  gemini: "gemini_api_key",
 };
 
 const API_KEY_PLACEHOLDER: Record<string, string> = {
   anthropic: "sk-ant-...",
   openai: "sk-...",
-  gemini: "AI...",
 };
 
 interface Props {
@@ -93,13 +72,6 @@ export default function Onboarding({ onComplete, role = "recruiter" }: Props) {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
-  // Ollama state
-  const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus | null>(null);
-  const [pulling, setPulling] = useState(false);
-  const [pullProgress, setPullProgress] = useState(0);
-  const [pullStatus, setPullStatus] = useState("");
-  const [starting, setStarting] = useState(false);
-
   // Email state
   const [emailBackend, setEmailBackend] = useState("console");
   const [smtpHost, setSmtpHost] = useState("");
@@ -113,13 +85,6 @@ export default function Onboarding({ onComplete, role = "recruiter" }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Fetch Ollama status when provider changes to ollama or on step 1
-  useEffect(() => {
-    if (provider === "ollama" && step === 1) {
-      getOllamaStatus().then(setOllamaStatus).catch(() => setOllamaStatus(null));
-    }
-  }, [provider, step]);
-
   const handleProviderChange = (newProvider: string) => {
     setProvider(newProvider);
     setModel(DEFAULT_MODEL[newProvider] ?? "");
@@ -132,15 +97,11 @@ export default function Onboarding({ onComplete, role = "recruiter" }: Props) {
     setTestResult(null);
     setError("");
     try {
-      if (provider === "ollama") {
-        await updateSettings({ llm_provider: "ollama", llm_model: model });
-      } else {
-        await updateSettings({
-          llm_provider: provider,
-          llm_model: model,
-          [API_KEY_FIELD[provider]]: apiKey,
-        });
-      }
+      await updateSettings({
+        llm_provider: provider,
+        llm_model: model,
+        [API_KEY_FIELD[provider]]: apiKey,
+      });
       const res = await testLlm();
       if (res.status === "ok") {
         setTestResult({ ok: true, message: res.response });
@@ -191,43 +152,17 @@ export default function Onboarding({ onComplete, role = "recruiter" }: Props) {
     await updateSettings(data);
   };
 
-  const handlePullModel = async () => {
-    setPulling(true);
-    setPullProgress(0);
-    setPullStatus(t("settings.downloading"));
-    try {
-      await pullOllamaModel(model, (progress) => {
-        setPullStatus(progress.status);
-        if (progress.total && progress.completed) {
-          setPullProgress(Math.round((progress.completed / progress.total) * 100));
-        }
-      });
-      setPullStatus("");
-      setPullProgress(100);
-      const status = await getOllamaStatus();
-      setOllamaStatus(status);
-    } catch {
-      setError(t("settings.modelDownloadFailed"));
-    } finally {
-      setPulling(false);
-    }
-  };
-
   const handleNext = async () => {
     setSaving(true);
     setError("");
     try {
       if (step === 1) {
         // Save LLM settings
-        if (provider === "ollama") {
-          await updateSettings({ llm_provider: "ollama", llm_model: model });
-        } else {
-          await updateSettings({
-            llm_provider: provider,
-            llm_model: model,
-            [API_KEY_FIELD[provider]]: apiKey,
-          });
-        }
+        await updateSettings({
+          llm_provider: provider,
+          llm_model: model,
+          [API_KEY_FIELD[provider]]: apiKey,
+        });
         if (isSeeker) {
           // Job seekers skip email step -> jump to done
           setStep(LAST_STEP);
@@ -248,14 +183,10 @@ export default function Onboarding({ onComplete, role = "recruiter" }: Props) {
 
   const canProceed = () => {
     if (step === 0) return true;
-    if (step === 1) return provider === "ollama" || apiKey.length > 0;
+    if (step === 1) return apiKey.length > 0;
     if (step === 2) return true; // Email is optional
     return true;
   };
-
-  const isModelInstalled = ollamaStatus?.running && ollamaStatus.installed_models.some(
-    (m) => m === model || m.startsWith(model.split(":")[0] + ":" + model.split(":")[1])
-  );
 
   const steps = isSeeker
     ? [t("onboarding.step1Title"), t("onboarding.step2Title"), t("onboarding.completedTitle")]
@@ -363,18 +294,18 @@ export default function Onboarding({ onComplete, role = "recruiter" }: Props) {
           </Box>
         )}
 
-        {/* Step 1: API Key + Model (or Ollama setup) */}
+        {/* Step 1: API Key + Model */}
         {step === 1 && (
           <Box>
             <Typography variant="h6" fontWeight={600} gutterBottom>
-              {provider === "ollama" ? t("onboarding.ollamaSetupTitle") : t("onboarding.step2Title")}
+              {t("onboarding.step2Title")}
             </Typography>
             <Typography
               variant="body2"
               color="text.secondary"
               sx={{ mb: 3 }}
             >
-              {provider === "ollama" ? t("onboarding.ollamaSetupSubtitle") : t("onboarding.step2Subtitle")}
+              {t("onboarding.step2Subtitle")}
             </Typography>
 
             <Box
@@ -394,101 +325,20 @@ export default function Onboarding({ onComplete, role = "recruiter" }: Props) {
                 ))}
               </TextField>
 
-              {provider === "ollama" ? (
-                <>
-                  {/* Ollama status */}
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                    <Chip
-                      label={ollamaStatus?.running ? t("settings.ollamaRunning") : t("settings.ollamaNotRunning")}
-                      color={ollamaStatus?.running ? "success" : "error"}
-                      size="small"
-                    />
-                  </Box>
-                  {!ollamaStatus?.running && (
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={async () => {
-                          setStarting(true);
-                          setError("");
-                          try {
-                            const res = await startOllama();
-                            if (res.started) {
-                              const status = await getOllamaStatus();
-                              setOllamaStatus(status);
-                            } else if (!res.installed) {
-                              setError(t("settings.ollamaNotInstalled"));
-                            } else {
-                              setError(t("settings.ollamaStartFailed"));
-                            }
-                          } catch {
-                            setError(t("settings.ollamaStartFailed"));
-                          } finally {
-                            setStarting(false);
-                          }
-                        }}
-                        disabled={starting}
-                      >
-                        {starting ? t("settings.ollamaStarting") : t("settings.startOllama")}
-                      </Button>
-                      <Button
-                        variant="text"
-                        size="small"
-                        onClick={() => window.open("https://ollama.com/download", "_blank")}
-                      >
-                        {t("settings.installOllama")}
-                      </Button>
-                    </Box>
-                  )}
-
-                  {/* Model download */}
-                  {ollamaStatus?.running && !isModelInstalled && (
-                    <Box>
-                      {pulling ? (
-                        <Box>
-                          <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                            {pullStatus}
-                          </Typography>
-                          <LinearProgress variant="determinate" value={pullProgress} />
-                        </Box>
-                      ) : (
-                        <Button
-                          variant="outlined"
-                          startIcon={<DownloadOutlined />}
-                          onClick={handlePullModel}
-                        >
-                          {t("settings.downloadModel")}
-                        </Button>
-                      )}
-                    </Box>
-                  )}
-
-                  {/* Model installed */}
-                  {isModelInstalled && (
-                    <Chip label={t("settings.modelReady")} color="success" size="small" />
-                  )}
-
-                  <FormHelperText>{t("settings.noApiKeyNeeded")}</FormHelperText>
-                </>
-              ) : (
-                <>
-                  <TextField
-                    label={t("onboarding.apiKeyLabel")}
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => {
-                      setApiKey(e.target.value);
-                      setTestResult(null);
-                    }}
-                    placeholder={API_KEY_PLACEHOLDER[provider]}
-                    fullWidth
-                    helperText={
-                      t(`onboarding.getKeyHint.${provider}` as const)
-                    }
-                  />
-                </>
-              )}
+              <TextField
+                label={t("onboarding.apiKeyLabel")}
+                type="password"
+                value={apiKey}
+                onChange={(e) => {
+                  setApiKey(e.target.value);
+                  setTestResult(null);
+                }}
+                placeholder={API_KEY_PLACEHOLDER[provider]}
+                fullWidth
+                helperText={
+                  t(`onboarding.getKeyHint.${provider}` as const)
+                }
+              />
 
               {testResult && (
                 <Alert severity={testResult.ok ? "success" : "error"}>
@@ -504,7 +354,7 @@ export default function Onboarding({ onComplete, role = "recruiter" }: Props) {
                 variant="outlined"
                 startIcon={<ScienceOutlined />}
                 onClick={handleTestLlm}
-                disabled={provider === "ollama" ? (!ollamaStatus?.running || testing) : (!apiKey || testing)}
+                disabled={!apiKey || testing}
               >
                 {testing
                   ? t("onboarding.testing")

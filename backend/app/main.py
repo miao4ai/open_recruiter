@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.auth import require_recruiter
 from app.database import init_db
-from app.routes import agent, auth, automations, backup, calendar, candidates, emails, jobs, ollama, profile, search, seeker, settings
+from app.routes import agent, auth, automations, backup, calendar, candidates, emails, jobs, profile, search, seeker, settings
 from app.scheduler import init_scheduler, shutdown_scheduler
 from app.slack import routes as slack_routes
 from app.slack.bot import init_slack_app
@@ -46,9 +46,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Open Recruiter API", version="0.1.0", lifespan=lifespan)
 
+# In packaged mode the React build is served from this same origin, so CORS is
+# only needed for the Vite dev server. A wildcard would let any page the user
+# visits call this API on localhost.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -67,7 +70,6 @@ app.include_router(calendar.router, prefix="/api/calendar", tags=["calendar"], d
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
 app.include_router(seeker.router, prefix="/api/seeker", tags=["seeker"])
 app.include_router(automations.router, prefix="/api/automations", tags=["automations"], dependencies=_recruiter_only)
-app.include_router(ollama.router, prefix="/api/ollama", tags=["ollama"])
 app.include_router(backup.router, prefix="/api/backup", tags=["backup"])
 app.include_router(slack_routes.router, prefix="/slack", tags=["slack"])
 

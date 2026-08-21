@@ -31,8 +31,6 @@ class Config:
     llm_model: str = ""
     anthropic_api_key: str = ""
     openai_api_key: str = ""
-    gemini_api_key: str = ""
-    ollama_base_url: str = "http://localhost:11434"
 
     # Voyage AI — cloud embeddings for semantic search (replaces local model)
     voyage_api_key: str = ""
@@ -67,8 +65,6 @@ class Config:
             self.llm_model = {
                 "anthropic": "claude-sonnet-5",
                 "openai": "gpt-5.1",
-                "gemini": "gemini-2.5-flash",
-                "ollama": "qwen3.5:2b",
             }.get(self.llm_provider, "claude-sonnet-5")
 
 
@@ -79,8 +75,6 @@ def load_config_from_env() -> Config:
         llm_model=os.getenv("LLM_MODEL", ""),
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
-        gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
-        ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         voyage_api_key=os.getenv("VOYAGE_API_KEY", ""),
         voyage_model=os.getenv("VOYAGE_MODEL", "voyage-4-lite"),
         email_backend=os.getenv("EMAIL_BACKEND", "console"),

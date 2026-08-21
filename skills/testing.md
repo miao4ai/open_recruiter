@@ -17,7 +17,7 @@ All tests are pure unit tests with mocked LLM/IMAP/Whisper calls — no network,
 | `test_transcribe.py` | 22 | Voice input: Whisper transcription, language detection, error paths (mocked) |
 | `test_memory.py` | 22 | 4-tier memory: sensory ring buffer, working state, entity rolling summary, 4-layer loader |
 
-Total: 159+ test cases.
+Total: 137 test cases.
 
 ## Run subsets
 

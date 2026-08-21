@@ -11,7 +11,7 @@ Topic-specific guides — read the relevant one before working in that area:
 - [skills/backend.md](skills/backend.md) — FastAPI structure, agents, the 6-step recipe for adding a chat action, LLM provider config
 - [skills/langgraph.md](skills/langgraph.md) — chat graph pipeline, SSE adapter, Human-in-the-Loop approval cards, multi-agent swarm pattern
 - [skills/memory.md](skills/memory.md) — 4-tier agent memory (sensory / working / long-term / entity), loader integration, event emission
-- [skills/testing.md](skills/testing.md) — pytest harness (159+ cases), how to run subsets, when a failure means a real gap vs a stale fixture
+- [skills/testing.md](skills/testing.md) — pytest harness (137 cases), how to run subsets, when a failure means a real gap vs a stale fixture
 - [skills/deployment.md](skills/deployment.md) — version bump + tag + CI release flow, artifact naming, Gatekeeper / notarization notes
 - [skills/mcp.md](skills/mcp.md) — stdio MCP server exposing recruiter matching/evaluation tools to external chat agents
 
@@ -174,6 +174,7 @@ Search feedback stored in `search_feedback` table (👍👎 from UI).
 Pytest tests at `tests/harness/`:
 - `test_intent_detection.py` — keyword fallback, action whitelist, intent disambiguation
 - `test_guardrails.py` — input/output validation, action limits, severity priority
+- `test_memory.py` — 4-tier memory layers, loader budget, event emission
 
 Run from `backend/`:
 ```bash

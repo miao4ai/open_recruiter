@@ -49,7 +49,7 @@ Open Recruiter solves this. Drop in a job description and a stack of resumes. Th
 | **AI Chat** | Erika Chan — ask anything about your pipeline, get actions | Ai Chan — job search, resume tips |
 | **Automation** | Auto-match, inbox scan, follow-up, pipeline cleanup | — |
 
-**Runs on:** Anthropic Claude · OpenAI GPT · Google Gemini · Ollama (fully local, offline)
+**Runs on:** Anthropic Claude (default) · OpenAI GPT — bring your own API key
 
 **Desktop app** for macOS, Windows, Linux — or run as a local web server.
 

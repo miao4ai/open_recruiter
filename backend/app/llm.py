@@ -21,10 +21,6 @@ def _model_name(cfg: Config) -> str:
         return f"anthropic/{model}"
     elif provider == "openai":
         return f"openai/{model}"
-    elif provider == "gemini":
-        return f"gemini/{model}"
-    elif provider == "ollama":
-        return f"ollama/{model}"
     # Fallback: pass model name directly, let litellm figure it out
     return model
 
@@ -36,10 +32,6 @@ def _api_key(cfg: Config) -> str | None:
         return cfg.anthropic_api_key or None
     elif provider == "openai":
         return cfg.openai_api_key or None
-    elif provider == "gemini":
-        return cfg.gemini_api_key or None
-    elif provider == "ollama":
-        return None
     return None
 
 
@@ -87,10 +79,6 @@ def chat(cfg: Config, system: str, messages: list[dict], json_mode: bool = False
     if json_mode:
         system, messages = _prepare_json_mode(system, messages)
 
-    if cfg.llm_provider == "ollama":
-        # Enforce English output for small local models that tend to switch to Chinese
-        system = "You MUST respond in English only. Never output Chinese characters unless directly quoting user input.\n\n" + system
-
     kwargs: dict[str, Any] = {
         "model": _model_name(cfg),
         "messages": [_system_message(system, cfg.llm_provider)] + messages,
@@ -101,12 +89,7 @@ def chat(cfg: Config, system: str, messages: list[dict], json_mode: bool = False
     if api_key:
         kwargs["api_key"] = api_key
 
-    if cfg.llm_provider == "ollama":
-        kwargs["api_base"] = cfg.ollama_base_url
-        # Disable thinking mode for Qwen 3.5 to avoid <think> tags in output
-        if "qwen3.5" in (cfg.llm_model or ""):
-            kwargs["extra_body"] = {"options": {"num_ctx": 4096}, "think": False}
-    elif json_mode:
+    if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
 
     resp = completion(**kwargs)
@@ -132,10 +115,6 @@ def chat_stream(cfg: Config, system: str, messages: list[dict], json_mode: bool 
     if json_mode:
         system, messages = _prepare_json_mode(system, messages)
 
-    if cfg.llm_provider == "ollama":
-        # Enforce English output for small local models
-        system = "You MUST respond in English only. Never output Chinese characters unless directly quoting user input.\n\n" + system
-
     kwargs: dict[str, Any] = {
         "model": _model_name(cfg),
         "messages": [_system_message(system, cfg.llm_provider)] + messages,
@@ -147,11 +126,7 @@ def chat_stream(cfg: Config, system: str, messages: list[dict], json_mode: bool 
     if api_key:
         kwargs["api_key"] = api_key
 
-    if cfg.llm_provider == "ollama":
-        kwargs["api_base"] = cfg.ollama_base_url
-        if "qwen3.5" in (cfg.llm_model or ""):
-            kwargs["extra_body"] = {"options": {"num_ctx": 4096}, "think": False}
-    elif json_mode:
+    if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
 
     resp = completion(**kwargs)
