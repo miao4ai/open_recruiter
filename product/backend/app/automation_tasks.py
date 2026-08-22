@@ -19,10 +19,11 @@ def run_auto_match(conditions: dict, actions: dict) -> dict:
     Actions:
         update_status: auto-move to screening if score >= 0.7
     """
-    from app.agents.matching import match_candidate_to_job
     from app.routes.settings import get_config
+    from app.sdk_bridge import build_recruiter
 
     cfg = get_config()
+    recruiter = build_recruiter(cfg)
     job_id = conditions.get("job_id", "")
     threshold = float(conditions.get("min_score_threshold", 0.3))
     update_status = actions.get("update_status", False)
@@ -64,7 +65,7 @@ def run_auto_match(conditions: dict, actions: dict) -> dict:
 
         for job in jobs:
             try:
-                result = match_candidate_to_job(cfg, job["id"], candidate["id"])
+                result = recruiter.match(candidate["id"], job["id"]).model_dump()
                 score = result.get("score", 0.0)
                 if score > best_score:
                     best_score = score
@@ -228,11 +229,12 @@ def run_auto_followup(conditions: dict, actions: dict) -> dict:
         auto_send: True = send immediately, False = draft only (default False)
         job_id: filter to specific job's candidates
     """
-    from app.agents.communication import draft_email
     from app.models import Email
     from app.routes.settings import get_config
+    from app.sdk_bridge import build_recruiter
 
     cfg = get_config()
+    recruiter = build_recruiter(cfg)
     days_threshold = int(conditions.get("days_since_contact", 3))
     max_followups = int(conditions.get("max_followups", 2))
     auto_send = actions.get("auto_send", False)
@@ -267,14 +269,15 @@ def run_auto_followup(conditions: dict, actions: dict) -> dict:
 
         # Draft follow-up
         try:
-            draft = draft_email(
-                cfg,
+            draft = recruiter.draft_email(
                 candidate["id"],
-                candidate.get("job_id", ""),
-                "followup",
-                f"This is follow-up #{len(followup_emails) + 1}. "
-                f"Previous email subject: {last_sent.get('subject', '')}",
-            )
+                job_id=candidate.get("job_id", ""),
+                email_type="followup",
+                instructions=(
+                    f"This is follow-up #{len(followup_emails) + 1}. "
+                    f"Previous email subject: {last_sent.get('subject', '')}"
+                ),
+            ).model_dump()
         except Exception as e:
             log.warning("Failed to draft followup for %s: %s", candidate["name"], e)
             continue

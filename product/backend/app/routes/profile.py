@@ -85,23 +85,9 @@ async def upload_resume_for_profile(
         raise HTTPException(status_code=400, detail=str(e))
 
     # LLM parsing
-    parsed: dict = {}
-    try:
-        from app.routes.settings import get_config
+    from app.sdk_bridge import parse_resume
 
-        cfg = get_config()
-        has_key = (
-            (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
-            or (cfg.llm_provider == "openai" and cfg.openai_api_key)
-        )
-        if has_key:
-            from app.agents.resume import parse_resume_text
-
-            parsed = parse_resume_text(cfg, raw_text)
-        else:
-            log.warning("No LLM API key — skipping structured parsing.")
-    except Exception as e:
-        log.error("LLM resume parsing failed: %s", e)
+    parsed = parse_resume(raw_text)
 
     # Upsert profile
     profile_data = {

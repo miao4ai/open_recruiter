@@ -85,73 +85,56 @@ async def upload_jd(
       3. LLM parses text into structured fields
       4. Store Job in SQLite + index in ChromaDB
     """
+    from app.sdk_bridge import build_recruiter
     from app.tools.resume_parser import extract_text
 
     file_bytes = await file.read()
     filename = file.filename or "jd"
 
-    # 1. Save file
     save_path = JD_UPLOAD_DIR / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}"
     save_path.write_bytes(file_bytes)
 
-    # 2. Extract text
     try:
         raw_text = extract_text(file_bytes, filename)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # 3. LLM structured parsing
-    parsed: dict = {}
+    # Parsing, storing, and indexing are one call: the SDK owns the recruiting
+    # domain, so this route and the chat agent cannot end up with two different
+    # ideas of what a job description contains.
+    recruiter = build_recruiter()
+    if not recruiter.config.api_key:
+        log.warning("No LLM API key configured — storing the JD without parsing it.")
+        job = Job(title=_guess_title(filename), raw_text=raw_text,
+                  posted_date=datetime.now().strftime("%Y-%m-%d"))
+        db.insert_job(job.model_dump())
+        return {**job.model_dump(), "candidate_count": 0}
+
     try:
-        from app.routes.settings import get_config
-
-        cfg = get_config()
-        has_key = (
-            (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
-            or (cfg.llm_provider == "openai" and cfg.openai_api_key)
-        )
-        if has_key:
-            from app.agents.jd import parse_jd_text
-
-            parsed = parse_jd_text(cfg, raw_text)
-        else:
-            log.warning("No LLM API key configured — skipping JD parsing.")
+        parsed = recruiter.add_job(raw_text)
     except Exception as e:
-        log.error("LLM JD parsing failed: %s", e)
+        log.error("JD parsing failed: %s", e)
+        raise HTTPException(status_code=502, detail=f"Could not parse the job description: {e}")
 
-    # 4. Build Job and store
-    job = Job(
-        title=parsed.get("title", "") or _guess_title(filename),
-        company=parsed.get("company", ""),
-        posted_date=datetime.now().strftime("%Y-%m-%d"),
-        required_skills=parsed.get("required_skills", []),
-        preferred_skills=parsed.get("preferred_skills", []),
-        experience_years=parsed.get("experience_years"),
-        location=parsed.get("location", ""),
-        remote=parsed.get("remote", False),
-        salary_range=parsed.get("salary_range", ""),
-        summary=parsed.get("summary", ""),
-        raw_text=raw_text,
-    )
-    db.insert_job(job.model_dump())
+    # A title is what the job is listed under, so fall back to the filename
+    # rather than leaving the card blank.
+    title = parsed.title or _guess_title(filename)
+    if title != parsed.title:
+        db.update_job(parsed.id, {"title": title})
 
-    # 5. Index in ChromaDB
+    stored = db.get_job(parsed.id) or {}
+    stored["title"] = title
+    stored["candidate_count"] = _candidate_count(recruiter, parsed)
+    return stored
+
+
+def _candidate_count(recruiter, job) -> int:
+    """How many candidates clear the match threshold for this job."""
     try:
-        vectorstore.index_job(
-            job_id=job.id,
-            text=job.raw_text,
-            metadata={"title": job.title, "company": job.company},
-        )
-    except Exception as e:
-        log.warning("Failed to index job in vector store: %s", e)
-
-    result = job.model_dump()
-    try:
-        rankings = vectorstore.search_candidates_for_job(job_id=job.id, n_results=200)
-        result["candidate_count"] = sum(1 for r in rankings if r["score"] >= MATCH_THRESHOLD)
+        hits = recruiter.index.search_candidates(job, top_k=200)
     except Exception:
-        result["candidate_count"] = 0
-    return result
+        return 0
+    return sum(1 for _, score in hits if score >= MATCH_THRESHOLD)
 
 
 def _guess_title(filename: str) -> str:

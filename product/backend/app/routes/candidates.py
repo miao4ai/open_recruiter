@@ -105,22 +105,9 @@ async def upload_resume(file: UploadFile = File(...), job_id: str = Form(""), _u
         raise HTTPException(status_code=400, detail=str(e))
 
     # ── Step 3: LLM structured parsing ─────────────────────────────────
-    parsed: dict = {}
-    try:
-        from app.routes.settings import get_config
-        cfg = get_config()
+    from app.sdk_bridge import parse_resume
 
-        has_key = (
-            (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
-            or (cfg.llm_provider == "openai" and cfg.openai_api_key)
-        )
-        if has_key:
-            from app.agents.resume import parse_resume_text
-            parsed = parse_resume_text(cfg, raw_text)
-        else:
-            log.warning("No LLM API key configured — skipping structured parsing.")
-    except Exception as e:
-        log.error("LLM resume parsing failed: %s", e)
+    parsed = parse_resume(raw_text)
 
     # ── Step 4: Find-or-create candidate ───────────────────────────────
     parsed_name = parsed.get("name") or _guess_name(filename)
@@ -271,8 +258,9 @@ async def reparse_candidate_route(candidate_id: str, _user: dict = Depends(get_c
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    from app.agents.resume import parse_resume_text
-    parsed = parse_resume_text(cfg, raw_text)
+    from app.sdk_bridge import parse_resume
+
+    parsed = parse_resume(raw_text)
 
     updates = {
         "name": parsed.get("name") or c.get("name", ""),
@@ -375,26 +363,26 @@ async def unlink_candidate_job(candidate_id: str, job_id: str, _user: dict = Dep
 @router.post("/match")
 async def match_candidates(req: MatchRequest, _user: dict = Depends(get_current_user)):
     """Match selected candidates against a job using vector similarity + LLM."""
-    from app.agents.matching import match_candidate_to_job, rank_candidates_for_job
-    from app.routes.settings import get_config
+    from app.sdk_bridge import build_recruiter
 
     job = db.get_job(req.job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    # Stage 1: vector similarity ranking
-    rankings = rank_candidates_for_job(
-        job_id=req.job_id,
-        candidate_ids=req.candidate_ids,
-    )
-    vector_scores = {r["candidate_id"]: r["score"] for r in rankings}
+    recruiter = build_recruiter()
+    sdk_job = recruiter.store.get_job(req.job_id)
 
-    # Stage 2: LLM evaluation (optional)
-    cfg = get_config()
-    has_key = (
-        (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
-        or (cfg.llm_provider == "openai" and cfg.openai_api_key)
-    )
+    # Retrieval first, so a run without an LLM key still produces an order.
+    vector_scores = {}
+    if sdk_job is not None:
+        wanted = set(req.candidate_ids)
+        vector_scores = {
+            cid: score
+            for cid, score in recruiter.index.search_candidates(sdk_job, top_k=200)
+            if cid in wanted
+        }
+
+    has_key = bool(recruiter.config.api_key)
 
     results = []
     for cid in req.candidate_ids:
@@ -405,7 +393,9 @@ async def match_candidates(req: MatchRequest, _user: dict = Depends(get_current_
         vscore = vector_scores.get(cid, 0.0)
 
         if has_key:
-            match_data = match_candidate_to_job(cfg, req.job_id, cid)
+            # One implementation of "how well does this person fit" — the same
+            # one the chat agent calls, so the two cannot disagree.
+            match_data = recruiter.match(cid, req.job_id).model_dump()
         else:
             match_data = {
                 "score": vscore,

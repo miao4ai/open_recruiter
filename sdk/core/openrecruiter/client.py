@@ -92,10 +92,14 @@ class Recruiter:
 
     # ── ingest ───────────────────────────────────────────────────────────
 
-    def add_job(self, raw_text: str) -> Job:
-        """Parse a job description into a `Job`, store it, and index it."""
+    def parse_job(self, raw_text: str) -> Job:
+        """Structure a job description without storing it.
+
+        Separate from `add_job` because plenty of callers want the fields and
+        not the record — a preview, a different table, a one-off comparison.
+        """
         parsed = self._parse(PARSE_JD, raw_text)
-        job = Job(
+        return Job(
             title=str(parsed.get("title") or ""),
             company=str(parsed.get("company") or ""),
             required_skills=list(parsed.get("required_skills") or []),
@@ -107,14 +111,18 @@ class Recruiter:
             summary=str(parsed.get("summary") or ""),
             raw_text=raw_text,
         )
+
+    def add_job(self, raw_text: str) -> Job:
+        """Parse a job description, store it, and index it."""
+        job = self.parse_job(raw_text)
         self.store.add_job(job)
         self.index.index_job(job)
         return job
 
-    def add_candidate(self, raw_text: str) -> Candidate:
-        """Parse resume text into a `Candidate`, store it, and index it."""
+    def parse_resume(self, raw_text: str) -> Candidate:
+        """Structure resume text without storing it."""
         parsed = self._parse(PARSE_RESUME, raw_text)
-        candidate = Candidate(
+        return Candidate(
             name=str(parsed.get("name") or ""),
             email=str(parsed.get("email") or ""),
             phone=str(parsed.get("phone") or ""),
@@ -126,6 +134,10 @@ class Recruiter:
             resume_summary=str(parsed.get("resume_summary") or ""),
             raw_resume_text=raw_text,
         )
+
+    def add_candidate(self, raw_text: str) -> Candidate:
+        """Parse resume text, store it, and index it."""
+        candidate = self.parse_resume(raw_text)
         self.store.add_candidate(candidate)
         self.index.index_candidate(candidate)
         return candidate

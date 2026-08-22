@@ -184,45 +184,109 @@ def _to_candidate(row: dict) -> Candidate:
 # ── construction ─────────────────────────────────────────────────────────
 
 
+#: One config object for the whole process, refreshed in place rather than
+#: rebuilt. Everything downstream — the LLM client, the ranker, the vector index
+#: — holds a reference to it, so a key pasted into Settings takes effect on the
+#: next request instead of the next restart. 3.0.1 was a bug of exactly this
+#: shape: the Voyage key was captured at launch and never re-read.
+_CONFIG = SDKConfig()
+
+#: The vector index is shared because it owns a ChromaDB client. Rebuilding one
+#: per request would reopen the database on every upload and every search.
+_INDEX: ChromaVectorIndex | None = None
+
+
 def to_sdk_config(cfg: Config) -> SDKConfig:
-    """Translate the app's settings into the SDK's."""
-    return SDKConfig(
-        llm_provider=cfg.llm_provider,
-        llm_model=cfg.llm_model,
-        anthropic_api_key=cfg.anthropic_api_key,
-        openai_api_key=cfg.openai_api_key,
-        voyage_api_key=cfg.voyage_api_key,
-        voyage_model=cfg.voyage_model,
-    )
+    """Refresh the shared SDK config from the app's settings and return it."""
+    _CONFIG.llm_provider = cfg.llm_provider
+    _CONFIG.llm_model = cfg.llm_model or ""
+    _CONFIG.anthropic_api_key = cfg.anthropic_api_key
+    _CONFIG.openai_api_key = cfg.openai_api_key
+    _CONFIG.voyage_api_key = cfg.voyage_api_key
+    _CONFIG.voyage_model = cfg.voyage_model
+    if not _CONFIG.llm_model:
+        _CONFIG.__post_init__()
+    return _CONFIG
 
 
-def build_recruiter(cfg: Config, extra_tools: list | None = None) -> Recruiter:
-    """A `Recruiter` sharing this installation's database and vector index.
+def vector_index(cfg: Config):
+    """The shared index, or the null one when embeddings are not configured.
 
-    The config is resolved through a callable rather than captured, because a
-    user can paste an API key into Settings after the process has started.
+    Built on first use and kept: `ChromaVectorIndex` opens its client lazily, so
+    holding the instance is what makes repeated searches cheap.
     """
-    from app.vectorstore import CHROMA_DIR
+    global _INDEX
 
-    sdk_config = to_sdk_config(cfg)
+    if not cfg.voyage_api_key:
+        return NullVectorIndex()
+    if _INDEX is None:
+        from app.vectorstore import CHROMA_DIR
 
-    if sdk_config.voyage_api_key:
-        index = ChromaVectorIndex(lambda: to_sdk_config(_live_config()), CHROMA_DIR)
-    else:
-        index = NullVectorIndex()
+        _INDEX = ChromaVectorIndex(lambda: _CONFIG, CHROMA_DIR)
+    return _INDEX
+
+
+def build_recruiter(cfg: Config | None = None, extra_tools: list | None = None) -> Recruiter:
+    """A `Recruiter` over this installation's database and vector index.
+
+    Cheap enough to call per request: the store is stateless, the index is
+    shared, and the config is the same object every time.
+    """
+    if cfg is None:
+        from app.routes.settings import get_config
+
+        cfg = get_config()
 
     return Recruiter(
-        sdk_config,
+        to_sdk_config(cfg),
         store=ProductStore(),
-        index=index,
+        index=vector_index(cfg),
         extra_tools=extra_tools or [],
     )
 
 
-def _live_config() -> Config:
-    from app.routes.settings import get_config
+# ── one-line entry points for routes that only need the fields ───────────
+# Every caller used to repeat the same three steps: check for an API key, import
+# an agent module, and swallow whatever it raised. That is how `agents/jd.py`
+# managed to be a syntax error through five releases — the failure was caught
+# and logged, and the route carried on with an empty dict.
 
-    return get_config()
+
+def parse_resume(raw_text: str) -> dict:
+    """Structured fields from resume text. Empty when parsing is unavailable."""
+    return _parse(lambda r: r.parse_resume(raw_text), "resume")
 
 
-__all__ = ["ProductStore", "build_recruiter", "to_sdk_config"]
+def parse_job(raw_text: str) -> dict:
+    """Structured fields from a job description. Empty when unavailable."""
+    return _parse(lambda r: r.parse_job(raw_text), "job description")
+
+
+def _parse(call, what: str) -> dict:
+    recruiter = build_recruiter()
+    if not recruiter.config.api_key:
+        log.warning("No LLM API key configured — skipping %s parsing.", what)
+        return {}
+    try:
+        return call(recruiter).model_dump()
+    except Exception as exc:  # noqa: BLE001 - a provider can fail many ways
+        log.error("Could not parse the %s: %s", what, exc)
+        return {}
+
+
+def reset_shared_state() -> None:
+    """Drop the cached index. For tests, and for a settings change that moves
+    the data directory."""
+    global _INDEX
+    _INDEX = None
+
+
+__all__ = [
+    "ProductStore",
+    "build_recruiter",
+    "parse_job",
+    "parse_resume",
+    "reset_shared_state",
+    "to_sdk_config",
+    "vector_index",
+]

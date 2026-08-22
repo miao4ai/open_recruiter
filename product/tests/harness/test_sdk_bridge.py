@@ -149,3 +149,65 @@ def test_a_job_seeker_cannot_reach_the_recruiters_pipeline(store):
 def test_a_recruiter_keeps_the_full_registry(store):
     r = build_recruiter(Config(anthropic_api_key="test"), extra_tools=product_tools(Config()))
     assert tools_for_role(r, "recruiter") is r.tools
+
+
+# ── one client, one config ───────────────────────────────────────────────
+
+
+def test_the_app_and_the_sdk_share_one_vector_client(tmp_path, monkeypatch):
+    """Two ChromaDB clients over one directory contend for the same file.
+
+    It used to work only because both happened to register their embedding
+    function under the same name. `vectorstore` keeps its API — two dozen call
+    sites use it — but it no longer owns a client.
+    """
+    from app import vectorstore
+    from app.config import Config
+    from app.routes import settings as settings_route
+    from app import sdk_bridge
+
+    sdk_bridge.reset_shared_state()
+    cfg = Config(voyage_api_key="pa-test", anthropic_api_key="k")
+    monkeypatch.setattr(settings_route, "get_config", lambda: cfg)
+
+    asked = []
+    real = sdk_bridge.vector_index
+    monkeypatch.setattr(
+        sdk_bridge, "vector_index", lambda c: (asked.append(c), real(c))[1]
+    )
+
+    vectorstore._get_collection("jobs")
+    vectorstore._get_collection("candidates")
+
+    assert len(asked) == 2, "every collection is fetched through the SDK's index"
+    assert not hasattr(vectorstore, "_client"), "the module owns no client of its own"
+    # ...and the index it went through is the shared one, built once.
+    assert real(cfg) is real(cfg)
+
+
+def test_without_an_embedding_key_the_legacy_helpers_say_so(tmp_path, monkeypatch):
+    from app import vectorstore
+    from app.config import Config
+    from app.routes import settings as settings_route
+    from app import sdk_bridge
+
+    sdk_bridge.reset_shared_state()
+    monkeypatch.setattr(settings_route, "get_config", lambda: Config())
+
+    with pytest.raises(RuntimeError, match="Voyage API key"):
+        vectorstore._get_collection("jobs")
+
+
+def test_a_key_added_after_startup_takes_effect(tmp_path, monkeypatch):
+    """3.0.1 was exactly this bug: the key was captured at launch."""
+    from app.config import Config
+    from app import sdk_bridge
+
+    sdk_bridge.reset_shared_state()
+    cfg = Config(anthropic_api_key="")
+    sdk_cfg = sdk_bridge.to_sdk_config(cfg)
+    assert sdk_cfg.api_key == ""
+
+    cfg.anthropic_api_key = "sk-ant-added-later"
+    assert sdk_bridge.to_sdk_config(cfg) is sdk_cfg, "the same object, refreshed"
+    assert sdk_cfg.api_key == "sk-ant-added-later"

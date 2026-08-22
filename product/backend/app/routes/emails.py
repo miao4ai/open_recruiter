@@ -29,12 +29,33 @@ async def draft_email(req: EmailDraftRequest, _user: dict = Depends(get_current_
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
+    # This used to return a fixed template — the same three sentences for every
+    # candidate, from an endpoint called "draft". It writes a real one now.
+    from app.sdk_bridge import build_recruiter
+
+    recruiter = build_recruiter()
+    if recruiter.config.api_key:
+        draft = recruiter.draft_email(
+            req.candidate_id, job_id=req.job_id or "", email_type=req.email_type
+        )
+        subject, body = draft.subject, draft.body
+    else:
+        subject, body = "", ""
+
+    if not body:
+        subject = subject or f"Exciting opportunity for {candidate['name']}"
+        body = (
+            f"Hi {candidate['name']},\n\n"
+            "I came across your profile and thought you'd be a great fit for a role "
+            "we're hiring for.\n\nWould you be open to a quick chat?\n\nBest regards"
+        )
+
     email = Email(
         candidate_id=req.candidate_id,
         candidate_name=candidate["name"],
         to_email=candidate.get("email", ""),
-        subject=f"Exciting opportunity for {candidate['name']}",
-        body=f"Hi {candidate['name']},\n\nI came across your profile and thought you'd be a great fit for a role we're hiring for.\n\nWould you be open to a quick chat?\n\nBest regards",
+        subject=subject,
+        body=body,
         email_type=req.email_type,
     )
     db.insert_email(email.model_dump())

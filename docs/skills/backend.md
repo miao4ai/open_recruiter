@@ -1,5 +1,43 @@
 # Backend — FastAPI + Agents
 
+## Using the SDK from a route
+
+Every domain capability — parsing, matching, drafting, retrieval — lives in
+`openrecruiter`. Routes reach it through `app/sdk_bridge.py`, never by
+reimplementing it:
+
+```python
+from app.sdk_bridge import build_recruiter, parse_job, parse_resume
+
+parsed = parse_resume(raw_text)          # fields only; {} if unavailable
+parsed = parse_job(raw_text)
+
+recruiter = build_recruiter()            # cheap: shared index, live config
+job = recruiter.add_job(raw_text)        # parse + store + index
+match = recruiter.match(candidate_id, job_id)
+draft = recruiter.draft_email(candidate_id, job_id=job_id)
+```
+
+`build_recruiter()` is safe to call per request. The store is stateless, the
+ChromaDB client is shared, and the config is one object refreshed in place — so
+a key pasted into Settings applies on the next request rather than the next
+restart. That last part is not decoration: 3.0.1 was a bug of exactly that
+shape.
+
+`ProductStore` implements the SDK's `Store` over `database.py`, so the agent and
+the REST endpoints read the same rows. Nothing was migrated.
+
+**Do not add a second implementation of a domain capability.** `agents/jd.py`
+was a syntax error through five releases and only the REST path used it, so JD
+uploads silently produced a job with no title, no company, and no skills — which
+also degraded every match run against it. One implementation is how that stops
+being possible.
+
+`app/vectorstore.py` keeps its own API because two dozen call sites use it, but
+it no longer owns a ChromaDB client; `_get_collection` goes through the SDK's
+index.
+
+
 ## Structure
 
 ```

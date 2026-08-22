@@ -101,19 +101,9 @@ def _run_stages(
         raise ValueError("No resume content provided (file_bytes or raw_text required)")
 
     # LLM structured parsing (non-fatal if key missing or LLM fails)
-    parsed: dict = {}
-    has_key = (
-        (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
-        or (cfg.llm_provider == "openai" and cfg.openai_api_key)
-    )
-    if has_key:
-        try:
-            from app.agents.resume import parse_resume_text
-            parsed = parse_resume_text(cfg, text)
-        except Exception as e:
-            log.error("LLM resume parsing failed: %s", e)
-    else:
-        log.warning("No LLM API key configured — skipping structured parsing.")
+    from app.sdk_bridge import parse_resume
+
+    parsed = parse_resume(text)
 
     # ── Stage 2: Profile Normalizer ───────────────────────────────────────
     try:

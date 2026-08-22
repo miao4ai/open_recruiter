@@ -235,3 +235,36 @@ def test_rank_candidates_tool_carries_names_not_just_ids(tmp_path):
     assert rows[0]["name"] == "Ada"
     assert rows[0]["skills"] == ["CUDA"]
     assert rows[0]["score"] == 0.9
+
+
+def test_parse_job_structures_without_storing(tmp_path):
+    """Callers that want the fields and not the record — a preview, another table."""
+    llm = FakeLLM(json_response={"title": "CUDA Engineer", "required_skills": ["CUDA"]})
+    r = _client(tmp_path, llm=llm, index=FakeIndex())
+
+    job = r.parse_job("we need a cuda engineer")
+
+    assert job.title == "CUDA Engineer"
+    assert job.raw_text == "we need a cuda engineer"
+    assert r.store.get_job(job.id) is None, "nothing was written"
+    assert r.index.indexed_jobs == []
+
+
+def test_parse_resume_structures_without_storing(tmp_path):
+    r = _client(tmp_path, llm=FakeLLM(json_response={"name": "Ada"}), index=FakeIndex())
+
+    candidate = r.parse_resume("Ada, ML systems")
+
+    assert candidate.name == "Ada"
+    assert r.store.get_candidate(candidate.id) is None
+    assert r.index.indexed_candidates == []
+
+
+def test_add_is_parse_plus_store(tmp_path):
+    """The two paths must not diverge — add is defined in terms of parse."""
+    r = _client(tmp_path, llm=FakeLLM(json_response={"name": "Ada", "skills": ["CUDA"]}), index=FakeIndex())
+
+    added = r.add_candidate("Ada, ML systems")
+
+    assert r.store.get_candidate(added.id).skills == ["CUDA"]
+    assert r.index.indexed_candidates == [added]

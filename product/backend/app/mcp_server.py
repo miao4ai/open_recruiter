@@ -81,22 +81,26 @@ def list_candidates(job_id: str = "", status: str = "") -> list[dict]:
 def rank_candidates_for_job(job_id: str, top_k: int = 10) -> list[dict]:
     """Rank candidates for a job by semantic similarity (vector search, no LLM —
     fast). Returns candidates sorted best-first with a 0–1 ``score``."""
-    from app.agents.matching import rank_candidates_for_job as _rank
+    from app.sdk_bridge import build_recruiter
 
-    ranked = _rank(job_id, top_k=top_k)
+    recruiter = build_recruiter(_cfg())
+    job = recruiter.store.get_job(job_id)
+    if job is None:
+        return []
+
     out = []
-    for r in ranked:
-        cand = db.get_candidate(r["candidate_id"])
-        if not cand:
+    for cid, score in recruiter.index.search_candidates(job, top_k=top_k):
+        cand = recruiter.store.get_candidate(cid)
+        if cand is None:
             continue
         out.append({
-            "candidate_id": r["candidate_id"],
-            "name": cand.get("name", "Unknown"),
-            "current_title": cand.get("current_title", ""),
-            "current_company": cand.get("current_company", ""),
-            "experience_years": cand.get("experience_years"),
-            "skills": (cand.get("skills") or [])[:8],
-            "score": round(r.get("score", 0), 4),
+            "candidate_id": cid,
+            "name": cand.name or "Unknown",
+            "current_title": cand.current_title,
+            "current_company": cand.current_company,
+            "experience_years": cand.experience_years,
+            "skills": cand.skills[:8],
+            "score": round(score, 4),
         })
     return out
 
@@ -105,9 +109,9 @@ def rank_candidates_for_job(job_id: str, top_k: int = 10) -> list[dict]:
 def match_candidate_to_job(job_id: str, candidate_id: str) -> dict:
     """Detailed LLM matching of one candidate against one job. Returns
     ``score`` (0–1), ``strengths``, ``gaps``, ``reasoning``."""
-    from app.agents.matching import match_candidate_to_job as _match
+    from app.sdk_bridge import build_recruiter
 
-    return _match(_cfg(), job_id=job_id, candidate_id=candidate_id)
+    return build_recruiter(_cfg()).match(candidate_id, job_id).model_dump()
 
 
 @mcp.tool()
@@ -137,14 +141,9 @@ def main() -> None:
     """Entry point — init local stores, then serve over stdio."""
     logging.basicConfig(level=logging.WARNING)
     from app.database import init_db
-    from app.vectorstore import init_vectorstore
-
     init_db()
-    try:
-        init_vectorstore()
-    except Exception:
-        log.exception("Vector store init failed — rank_candidates_for_job will be unavailable")
-
+    # The vector index opens lazily on first search, so there is nothing to
+    # initialise here — and nothing to fail before the server is listening.
     mcp.run()  # stdio transport
 
 

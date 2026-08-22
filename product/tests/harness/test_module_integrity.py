@@ -50,12 +50,15 @@ def test_module_imports(name: str) -> None:
     importlib.import_module(name)
 
 
-def test_jd_agent_parses_and_exposes_parse_jd_text() -> None:
+def test_job_description_parsing_is_reachable() -> None:
     """Regression guard for the corruption itself.
 
-    The JD agent is reached only through a lazy import inside a broad
-    ``except Exception``, so it needs an explicit test of its own.
+    `app/agents/jd.py` was a syntax error through five releases because it was
+    only ever imported lazily inside a broad ``except Exception``. Parsing lives
+    in the SDK now and the app reaches it through one entry point, so that is
+    what has to stay callable.
     """
-    from app.agents.jd import parse_jd_text
+    from app.sdk_bridge import parse_job, parse_resume
 
-    assert callable(parse_jd_text)
+    assert callable(parse_job)
+    assert callable(parse_resume)

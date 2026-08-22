@@ -144,19 +144,9 @@ async def upload_jd_for_seeker(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    parsed: dict = {}
-    try:
-        from app.routes.settings import get_config
-        cfg = get_config()
-        has_key = (
-            (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
-            or (cfg.llm_provider == "openai" and cfg.openai_api_key)
-        )
-        if has_key:
-            from app.agents.jd import parse_jd_text
-            parsed = parse_jd_text(cfg, raw_text)
-    except Exception as e:
-        log.error("LLM JD parsing failed: %s", e)
+    from app.sdk_bridge import parse_job
+
+    parsed = parse_job(raw_text)
 
     job = {
         "id": uuid.uuid4().hex[:8],

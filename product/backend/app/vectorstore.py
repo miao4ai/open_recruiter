@@ -13,9 +13,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-import chromadb
-from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
-from chromadb.config import Settings as ChromaSettings
 
 log = logging.getLogger(__name__)
 
@@ -27,131 +24,34 @@ else:
     CHROMA_DIR = Path(__file__).resolve().parent.parent / "chroma_data"
 
 # Module-level singletons (populated by init_vectorstore)
-_client: chromadb.ClientAPI | None = None
-_embedding_fn: Any = None
-
-JOBS_COLLECTION = "jobs"
-CANDIDATES_COLLECTION = "candidates"
-CHAT_SUMMARIES_COLLECTION = "chat_summaries"
-
-VOYAGE_API_URL = "https://api.voyageai.com/v1/embeddings"
-VOYAGE_MODEL = "voyage-4-lite"
-
-
-# ── Voyage Embedding Function ───────────────────────────────────────────
-
-
-class _VoyageEmbeddingFunction(EmbeddingFunction):
-    """ChromaDB embedding function backed by the Voyage AI API.
-
-    Replaces the local ONNX/BGE model — no PyTorch, no onnxruntime, no bundled
-    weights (~170 MB saved).  Requires a Voyage API key and network access.
-    """
-
-    def __init__(self, api_key: str, model: str = VOYAGE_MODEL) -> None:
-        self._api_key = api_key
-        self._model = model or VOYAGE_MODEL
-
-    def _resolve(self) -> tuple[str, str]:
-        """Resolve the current Voyage key/model at call time.
-
-        Read from live config so a key added in Settings *after* startup takes
-        effect immediately — without this, the empty key captured at launch
-        would make every embed fail until the app is restarted.
-        """
-        try:
-            from app.routes.settings import get_config
-
-            cfg = get_config()
-            return (cfg.voyage_api_key or self._api_key, cfg.voyage_model or self._model)
-        except Exception:
-            return (self._api_key, self._model)
-
-    def __call__(self, input: Documents) -> Embeddings:
-        if not input:
-            return []
-        api_key, model = self._resolve()
-        if not api_key:
-            raise RuntimeError(
-                "Voyage API key not configured — add it in Settings → Semantic Search."
-            )
-
-        import httpx
-
-        resp = httpx.post(
-            VOYAGE_API_URL,
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={"input": list(input), "model": model},
-            timeout=30.0,
-        )
-        resp.raise_for_status()
-        data = resp.json()["data"]
-        # Voyage tags each item with its `index`; sort to preserve input order.
-        data.sort(key=lambda d: d["index"])
-        return [d["embedding"] for d in data]
-
-    @staticmethod
-    def name() -> str:
-        return "voyage"
-
-    def get_config(self) -> dict:
-        return {"model": self._model}
-
-    @staticmethod
-    def build_from_config(config: dict) -> "_VoyageEmbeddingFunction":
-        # The API key is injected at init from app config, never persisted.
-        return _VoyageEmbeddingFunction(api_key="", model=config.get("model", VOYAGE_MODEL))
-
-    def default_space(self) -> str:
-        return "cosine"
-
-
-# ── Initialisation ────────────────────────────────────────────────────────
-
-
 def init_vectorstore() -> None:
-    """Load embedding model and create ChromaDB persistent client.
+    """Make sure the store directory exists.
 
-    Called once during FastAPI lifespan startup.
+    Nothing is opened here. The SDK's index creates its ChromaDB client on first
+    use, which means a missing or misconfigured embedding key degrades a search
+    rather than failing application startup.
     """
-    global _client, _embedding_fn
-
     CHROMA_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Lazy import avoids a circular import at module load time.
+
+def _get_collection(name: str):
+    """A collection from the SDK's client — the only one in the process.
+
+    This module keeps its own API because two dozen call sites use it, but it no
+    longer owns a client. Two ChromaDB clients over one directory worked only
+    because both happened to register their embedding function under the same
+    name, and they would have contended for the same SQLite file.
+    """
+    from app.sdk_bridge import vector_index
     from app.routes.settings import get_config
 
-    cfg = get_config()
-    _embedding_fn = _VoyageEmbeddingFunction(cfg.voyage_api_key, cfg.voyage_model)
-    log.info("Voyage embedding model: %s", cfg.voyage_model or VOYAGE_MODEL)
-
-    _client = chromadb.PersistentClient(
-        path=str(CHROMA_DIR),
-        settings=ChromaSettings(anonymized_telemetry=False),
-    )
-
-    _client.get_or_create_collection(
-        name=JOBS_COLLECTION,
-        embedding_function=_embedding_fn,
-        metadata={"hnsw:space": "cosine"},
-    )
-    _client.get_or_create_collection(
-        name=CANDIDATES_COLLECTION,
-        embedding_function=_embedding_fn,
-        metadata={"hnsw:space": "cosine"},
-    )
-    _client.get_or_create_collection(
-        name=CHAT_SUMMARIES_COLLECTION,
-        embedding_function=_embedding_fn,
-        metadata={"hnsw:space": "cosine"},
-    )
-    log.info("ChromaDB initialized at %s", CHROMA_DIR)
-
-
-def _get_collection(name: str) -> chromadb.Collection:
-    if _client is None or _embedding_fn is None:
-        raise RuntimeError("Vectorstore not initialised — call init_vectorstore() first")
-    return _client.get_collection(name=name, embedding_function=_embedding_fn)
+    index = vector_index(get_config())
+    collection = getattr(index, "_collection", None)
+    if collection is None:
+        raise RuntimeError(
+            "Semantic search is unavailable — add a Voyage API key in Settings."
+        )
+    return collection(name)
 
 
 # ── Index / Remove ────────────────────────────────────────────────────────
