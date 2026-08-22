@@ -429,45 +429,74 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
     messages.append({"role": "user", "content": req.message})
 
     async def event_generator():
-        # ── EARLY CHECK: is there a paused workflow awaiting approval? ──
+        # A workflow paused for approval owns the next message: the user is
+        # answering the question it asked, not starting a new request.
         active_wf = db.get_active_workflow(session_id)
         if active_wf and active_wf["status"] == "paused":
-            # Save user message (already saved above), then resume workflow
             from app.graphs.sse_adapter import stream_supervisor_graph
-            graph_state = {
-                "user_message": req.message,
-                "session_id": session_id,
-                "user_id": user_id,
-                "cfg": cfg,
-                "plan_status": "resuming",
-                "plan": {"_paused_workflow": dict(active_wf)},
-                "workflow_id": active_wf["id"],
-            }
-            async for ev in stream_supervisor_graph(graph_state, session_id=session_id, user_id=user_id):
-                yield ev
-            return  # skip normal LLM path
 
-        # ── LANGGRAPH CHAT PATH ──
-        from app.graphs.sse_adapter import stream_chat_graph
-        graph_state = {
-            "user_message": req.message,
-            "session_id": session_id,
-            "user_id": user_id,
-            "cfg": cfg,
-            "conversation_history": messages,
-            "user_role": user_role,
-            "encouragement_mode": getattr(req, "encouragement_mode", False),
-        }
-        async for ev in stream_chat_graph(
-            graph_state,
+            async for ev in stream_supervisor_graph(
+                {
+                    "user_message": req.message,
+                    "session_id": session_id,
+                    "user_id": user_id,
+                    "cfg": cfg,
+                    "plan_status": "resuming",
+                    "plan": {"_paused_workflow": dict(active_wf)},
+                    "workflow_id": active_wf["id"],
+                },
+                session_id=session_id,
+                user_id=user_id,
+            ):
+                yield ev
+            return
+
+        # ── Agent loop, over the SDK ──────────────────────────────────────
+        # The model is handed real tools and decides what to call and when to
+        # stop, so one request can rank a job, read the result, and draft the
+        # emails. Text streams as it is generated.
+        from app.agent_tools import product_tools, tools_for_role
+        from app.sdk_bridge import build_recruiter
+        from app.sse_agent import stream_agent
+
+        recruiter = build_recruiter(cfg, extra_tools=product_tools(cfg, user_id))
+        recruiter.system = _agent_system_prompt(user_id, user_role, req)
+
+        agent = recruiter.agent(max_steps=8)
+        agent.tools = tools_for_role(recruiter, user_role)
+
+        async for ev in stream_agent(
+            agent,
+            req.message,
             session_id=session_id,
             user_id=user_id,
-            user_role=user_role,
+            history=messages[:-1],
         ):
             yield ev
-        return
 
     return EventSourceResponse(event_generator())
+
+
+def _agent_system_prompt(user_id: str, user_role: str, req) -> str:
+    """The persona and today's context. Capabilities come from the tools.
+
+    The old prompt also enumerated twenty action names and their JSON shapes.
+    That is now the tool schemas' job, which is both shorter and impossible to
+    drift out of sync with the code.
+    """
+    from app.prompts import CHAT_SYSTEM_JOB_SEEKER, CHAT_SYSTEM_WITH_ACTIONS, ENCOURAGEMENT_ADDENDUM
+
+    if user_role == "job_seeker":
+        prompt = CHAT_SYSTEM_JOB_SEEKER.format(
+            context=_build_job_seeker_context(user_id)
+        )
+        if getattr(req, "encouragement_mode", False):
+            prompt += ENCOURAGEMENT_ADDENDUM
+        return prompt
+
+    return CHAT_SYSTEM_WITH_ACTIONS.format(
+        context=_build_chat_context(user_id, current_message=req.message)
+    )
 
 
 # ── Notifications ────────────────────────────────────────────────────────

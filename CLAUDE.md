@@ -101,7 +101,7 @@ product/               ← the desktop app — builds the 3 installers
       lib/api.ts       ← All fetch calls to FastAPI backend
       types/index.ts   ← Shared TypeScript interfaces
       i18n/            ← 6 locales
-  backend/             ← FastAPI + Python
+  backend/             ← FastAPI + Python — a consumer of sdk/core
     app/
       routes/          ← HTTP endpoints (agent.py is the main chat endpoint)
       agents/          ← Domain agents (resume, jd, matching, communication, …)
@@ -119,7 +119,7 @@ product/               ← the desktop app — builds the 3 installers
   electron/electron-builder.json  ← Produces: macOS DMG, Windows EXE, Linux AppImage
 
 sdk/                   ← published Python packages, each `pip install`-able on its own
-  core/                ← openrecruiter — the agent toolkit the product runs on
+  core/                ← openrecruiter — the engine: types, stores, ranking, tools, agent
   fairness/            ← openrecruiter-fairness — fairness-aware ranking backend
   recruitgpt/          ← recruitgpt — distilled ranking model backend
 
@@ -155,7 +155,12 @@ an `sdk/ranking` and a `research/ranking` meaning different things.
 | File | Purpose |
 |------|---------|
 | `product/backend/app/routes/agent.py` | Main chat SSE endpoint, action dispatch, intent routing |
-| `product/backend/app/graphs/chat_graph.py` | LangGraph graph: build_context → input_guard → call_llm → parse_response → output_guard → process_action → finalize |
+| `product/backend/app/sdk_bridge.py` | `ProductStore` — the SDK's `Store` over `database.py`; builds the `Recruiter` |
+| `product/backend/app/agent_tools.py` | App-specific tools (upload cards, inbox, web job search) + the role filter |
+| `product/backend/app/sse_agent.py` | Agent events → SSE frames the chat UI understands |
+| `sdk/core/openrecruiter/agent.py` | The agent loop: tool calls, approval gates, streaming |
+| `sdk/core/openrecruiter/ranking/` | `Ranker` and its backends — the main extension point |
+| `product/backend/app/graphs/chat_graph.py` | Legacy LangGraph path, still serving `/api/agent/chat` |
 | `product/backend/app/prompts.py` | All system prompts — edit here to change AI behavior |
 | `product/backend/app/config.py` | LLM + Voyage config (slim build: Anthropic/OpenAI only) |
 | `product/frontend/src/components/MessageBlocks.tsx` | Renders all chat message card types |
@@ -176,18 +181,37 @@ Override via Settings UI or `.env` (`LLM_PROVIDER`, `LLM_MODEL`, `VOYAGE_API_KEY
 
 ## Chat System
 
-### Intent Detection (3-layer fallback)
-1. LLM returns structured JSON `{"action": "...", "params": {...}}`
-2. Keyword regex fallback (in `agent.py`)
-3. Role-based whitelist (`_RECRUITER_ALLOWED_ACTIONS`, `_SEEKER_ALLOWED_ACTIONS`)
+`POST /api/agent/chat/stream` runs the SDK agent. The model is given real tool schemas and
+decides what to call, in what order, and when it is finished — so one request can rank a job,
+read the result, and draft the emails. Text streams as it is generated.
 
-### Adding a New Action
-1. Add action name to allowed list in `agent.py`
-2. Add handler function `_handle_<action>()` in `agent.py`
-3. Add trigger phrases to the relevant system prompt in `prompts.py`
-4. Add new `MessageBlock` type in `product/frontend/src/types/index.ts`
-5. Add render card in `product/frontend/src/components/MessageBlocks.tsx`
-6. Add intent test cases in `product/tests/harness/test_intent_detection.py`
+```
+routes/agent.py  →  sdk_bridge.build_recruiter()  →  openrecruiter.Agent
+                    agent_tools.product_tools()       │
+                                                      ▼
+                    sse_agent.stream_agent()  ──▶  token · tool_call · tool_result
+                                                   approval_required · done
+```
+
+`ProductStore` in `sdk_bridge.py` implements the SDK's `Store` protocol over `database.py`,
+so both the agent and the REST endpoints read the same tables. Nothing was migrated.
+
+### Adding a New Tool
+1. Add a `Tool` to `agent_tools.py` (app-specific) or `sdk/core/openrecruiter/tools/` (domain)
+2. If a job seeker may call it, add the name to `SEEKER_TOOLS` — the role filter runs before
+   the model sees a schema
+3. To render its result as a card: map it in `sse_agent._as_block()`
+4. Add the `MessageBlock` type in `product/frontend/src/types/index.ts`
+5. Add the render card in `product/frontend/src/components/MessageBlocks.tsx`
+6. Add tests — `sdk/core/tests/` for a domain tool, `product/tests/harness/` for an app one
+
+Set `requires_approval=True` on anything that reaches outside the system. The agent stops and
+emits `ApprovalRequired`; calls queued behind it are held too.
+
+> **Legacy path still live.** `POST /api/agent/chat` (non-streaming) and `JobSeekerHome.tsx`
+> still use `_process_actions()` in `agent.py` — a 1030-line if/elif over 20 actions — and the
+> LangGraph `chat_graph`. It renders ~20 block types the SDK path maps only four of, so
+> migrating it means porting those cards first. Do not delete it before then.
 
 ### Human-in-the-Loop
 Uses LangGraph `interrupt()`. Frontend shows approval cards:

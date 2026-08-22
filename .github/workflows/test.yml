@@ -80,6 +80,23 @@ jobs:
         working-directory: product/frontend
         run: npm run build
 
+  sdk:
+    needs: changes
+    if: needs.changes.outputs.sdk == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v4
+      - name: Install SDK dependencies
+        working-directory: sdk/core
+        run: uv sync
+      - name: Run the SDK test suite
+        working-directory: sdk/core
+        run: uv run python -m pytest tests/ -v
+
   # Every SDK and research package must build and import on its own — that is the
   # whole promise of `pip install openrecruiter` without the rest of the repo.
   packages:

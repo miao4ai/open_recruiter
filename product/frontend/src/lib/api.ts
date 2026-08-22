@@ -283,6 +283,8 @@ function _streamSSE(
   encouragement_mode?: boolean,
 ): Promise<ChatResponse> {
   return new Promise((resolve, reject) => {
+    // Tool call ids -> step slots, so a result updates the row its call created.
+    const toolSteps = new Map<string, number>();
     const token = getToken();
     fetch("/api/agent/chat/stream", {
       method: "POST",
@@ -335,6 +337,30 @@ function _streamSSE(
                     try {
                       onWorkflowStep?.(JSON.parse(data) as WorkflowStepEvent);
                     } catch { /* ignore */ }
+                  } else if (eventType === "tool_call" || eventType === "tool_result") {
+                    // The agent may call several tools before it answers. Render
+                    // that on the existing step tracker, so the user sees work
+                    // happening instead of an idle cursor.
+                    try {
+                      const parsed = JSON.parse(data) as { id: string; name: string; ok?: boolean };
+                      let index = toolSteps.get(parsed.id);
+                      if (index === undefined) {
+                        index = toolSteps.size;
+                        toolSteps.set(parsed.id, index);
+                      }
+                      onWorkflowStep?.({
+                        workflow_id: "agent",
+                        step_index: index,
+                        total_steps: toolSteps.size,
+                        label: humanizeToolName(parsed.name),
+                        status:
+                          eventType === "tool_call"
+                            ? "running"
+                            : parsed.ok === false
+                              ? "error"
+                              : "done",
+                      });
+                    } catch { /* ignore */ }
                   } else if (eventType === "done") {
                     try {
                       resolved = true;
@@ -358,6 +384,12 @@ function _streamSSE(
       })
       .catch(reject);
   });
+}
+
+/** "rank_candidates" -> "Rank candidates" — tool names are snake_case by contract. */
+function humanizeToolName(name: string): string {
+  const words = name.replace(/_/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 export const getChatHistory = (session_id?: string) =>

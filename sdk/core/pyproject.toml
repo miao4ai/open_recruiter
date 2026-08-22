@@ -1,11 +1,19 @@
 [project]
 name = "openrecruiter"
-version = "0.0.0"
-description = "Agent toolkit behind Open Recruiter — tools, agent loop, and stores for recruiting workflows."
+version = "0.1.0"
+description = "The recruiting engine behind Open Recruiter — parse, retrieve, rank, and an agent over tools."
+keywords = ["recruiting", "ats", "llm", "agent", "ranking", "candidate-search"]
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-dependencies = []
+# Ranking backends that need a local model live in their own distributions
+# (recruitgpt, openrecruiter-fairness), so nothing heavy reaches this install.
+dependencies = [
+    "pydantic>=2.10",
+    "litellm>=1.60",
+    "httpx>=0.27",
+    "chromadb>=0.5",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -13,3 +21,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["openrecruiter"]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
