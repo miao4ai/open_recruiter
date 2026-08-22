@@ -14,13 +14,19 @@ See ``skills/mcp.md`` for client wiring.
 
 import logging
 
-from mcp.server.fastmcp import FastMCP
+# The MCP Python SDK renamed FastMCP to MCPServer in 2.0. The three APIs we use
+# — construction, @tool(), and run() over stdio — are identical across both, so
+# support whichever is installed rather than pinning to an old major.
+try:
+    from mcp.server.mcpserver import MCPServer as _Server  # mcp >= 2.0
+except ImportError:  # pragma: no cover - depends on the installed SDK
+    from mcp.server.fastmcp import FastMCP as _Server  # mcp 1.x
 
 from app import database as db
 
 log = logging.getLogger(__name__)
 
-mcp = FastMCP("open-recruiter")
+mcp = _Server("open-recruiter")
 
 
 def _cfg():
