@@ -460,7 +460,7 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
         from app.sse_agent import stream_agent
 
         recruiter = build_recruiter(cfg, extra_tools=product_tools(cfg, user_id))
-        recruiter.system = _agent_system_prompt(user_id, user_role, req)
+        recruiter.system = _agent_system_prompt(recruiter, user_id, user_role, req)
 
         agent = recruiter.agent(max_steps=8)
         agent.tools = tools_for_role(recruiter, user_role)
@@ -477,26 +477,24 @@ async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(ge
     return EventSourceResponse(event_generator())
 
 
-def _agent_system_prompt(user_id: str, user_role: str, req) -> str:
-    """The persona and today's context. Capabilities come from the tools.
+def _agent_system_prompt(recruiter, user_id: str, user_role: str, req) -> str:
+    """The persona, the boundaries, and a short briefing on the pipeline.
 
-    The old prompt also enumerated twenty action names and their JSON shapes.
-    That is now the tool schemas' job, which is both shorter and impossible to
-    drift out of sync with the code.
+    Two things changed from the legacy prompt. Capabilities are gone — the tool
+    schemas describe them, so they cannot drift out of sync with the code. And
+    the pipeline is summarised rather than pasted: the briefing is bounded and
+    retrieval-backed, so a recruiter with five hundred candidates gets the eight
+    relevant ones instead of whichever fifteen the database returned first.
     """
-    from app.prompts import CHAT_SYSTEM_JOB_SEEKER, CHAT_SYSTEM_WITH_ACTIONS, ENCOURAGEMENT_ADDENDUM
+    from app.prompts import AGENT_RECRUITER, AGENT_SEEKER, ENCOURAGEMENT_ADDENDUM
 
     if user_role == "job_seeker":
-        prompt = CHAT_SYSTEM_JOB_SEEKER.format(
-            context=_build_job_seeker_context(user_id)
-        )
+        prompt = AGENT_SEEKER.format(context=_build_job_seeker_context(user_id))
         if getattr(req, "encouragement_mode", False):
             prompt += ENCOURAGEMENT_ADDENDUM
         return prompt
 
-    return CHAT_SYSTEM_WITH_ACTIONS.format(
-        context=_build_chat_context(user_id, current_message=req.message)
-    )
+    return AGENT_RECRUITER.format(context=recruiter.pipeline_context(req.message))
 
 
 # ── Notifications ────────────────────────────────────────────────────────

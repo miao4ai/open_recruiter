@@ -24,6 +24,7 @@ from pathlib import Path
 
 from openrecruiter.agent import Agent, PendingApproval
 from openrecruiter.config import Config
+from openrecruiter.context import build_pipeline_context
 from openrecruiter.events import Event
 from openrecruiter.prompts import AGENT_SYSTEM, DRAFT_EMAIL, PARSE_JD, PARSE_RESUME
 from openrecruiter.providers.llm import LLM
@@ -219,6 +220,16 @@ class Recruiter:
             subject=str(data.get("subject") or ""),
             body=str(data.get("body") or ""),
         )
+
+    # ── context ──────────────────────────────────────────────────────────
+
+    def pipeline_context(self, message: str = "") -> str:
+        """A briefing to splice into a system prompt.
+
+        Small on purpose: the tools handle retrieval, so the prompt does not
+        have to carry the pipeline and does not grow with it.
+        """
+        return build_pipeline_context(self.store, self.index, message)
 
     # ── agent ────────────────────────────────────────────────────────────
 

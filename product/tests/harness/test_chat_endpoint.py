@@ -174,3 +174,80 @@ def test_without_an_api_key_the_user_is_told_rather_than_left_waiting(client, mo
 
     assert frames[-1]["event"] == "done"
     assert "API key" in frames[-1]["data"]["reply"]
+
+
+# ── the system prompt ────────────────────────────────────────────────────
+
+
+def test_the_agent_prompt_does_not_demand_json_output(client, monkeypatch):
+    """The legacy prompt ended with "you MUST respond with valid JSON only".
+
+    Handed to a model that also has tool schemas, that instruction wins: it
+    describes the action as text instead of calling the tool, and the agent loop
+    never runs. This is the regression guard for that conflict.
+    """
+    captured = {}
+
+    class Capturing:
+        def __init__(self, config):
+            self.config = config
+
+        def stream(self, system, messages, tools=None):
+            captured["system"] = system
+            captured["tools"] = tools
+            yield TextDelta(text="ok")
+
+        def complete_json(self, system, messages):
+            return {}
+
+    import openrecruiter.client as sdk_client
+
+    monkeypatch.setattr(sdk_client, "LLM", Capturing)
+    client.post("/api/agent/chat/stream", json={"message": "hi"})
+
+    system = captured["system"]
+    assert "Erika Chan" in system, "the persona is kept"
+    assert "respond with valid JSON" not in system
+    assert '"action": null' not in system
+    assert captured["tools"], "capabilities come from the schemas instead"
+
+
+def test_the_prompt_stays_small_as_the_pipeline_grows(client, monkeypatch):
+    """It used to paste the pipeline in, so it grew with the database."""
+    from app import database as db
+
+    for i in range(300):
+        db.insert_candidate(
+            {
+                "id": f"c{i}",
+                "name": f"Person {i}",
+                "email": f"p{i}@example.com",
+                "skills": ["Python"],
+                "status": "new",
+                "created_at": "2026-01-01",
+                "updated_at": "2026-01-01",
+            }
+        )
+
+    captured = {}
+
+    class Capturing:
+        def __init__(self, config):
+            self.config = config
+
+        def stream(self, system, messages, tools=None):
+            captured["system"] = system
+            yield TextDelta(text="ok")
+
+        def complete_json(self, system, messages):
+            return {}
+
+    import openrecruiter.client as sdk_client
+
+    monkeypatch.setattr(sdk_client, "LLM", Capturing)
+    client.post("/api/agent/chat/stream", json={"message": "who should I call?"})
+
+    system = captured["system"]
+    assert system.count("\n- [c") <= 8, "a bounded briefing, not 300 rows"
+    assert "300 candidates" in system, "but the model is told the real size"
+    assert "search_candidates" in system, "and how to reach the rest"

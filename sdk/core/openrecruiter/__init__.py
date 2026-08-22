@@ -17,6 +17,7 @@ a container without a GPU.
 from openrecruiter.agent import Agent, PendingApproval
 from openrecruiter.client import Recruiter
 from openrecruiter.config import Config
+from openrecruiter.context import build_pipeline_context
 from openrecruiter.events import (
     ApprovalRequired,
     Event,
@@ -42,6 +43,7 @@ __all__ = [
     "APIRanker",
     "Agent",
     "ApprovalRequired",
+    "build_pipeline_context",
     "Candidate",
     "CandidateStatus",
     "ChromaVectorIndex",
