@@ -219,3 +219,19 @@ def test_chat_drives_the_tools_the_client_owns(tmp_path):
 def test_ask_returns_just_the_text(tmp_path):
     r = _client(tmp_path, llm=FakeLLM(["the answer"]))
     assert r.ask("question").strip() == "the answer"
+
+
+def test_rank_candidates_tool_carries_names_not_just_ids(tmp_path):
+    """Bare ids would cost a follow-up call per candidate just to say a name."""
+    r = _client(tmp_path, llm=FakeLLM(json_response={"name": "Ada", "skills": ["CUDA"]}), index=FakeIndex())
+    candidate = r.add_candidate("Ada")
+    r.llm = FakeLLM(json_response={"title": "CUDA Eng"})
+    job = r.add_job("jd")
+    r.ranker = APIRanker(FakeLLM(json_response={"score": 0.9}))
+
+    rows = r.tools.call("rank_candidates", {"job_id": job.id})
+
+    assert rows[0]["candidate_id"] == candidate.id
+    assert rows[0]["name"] == "Ada"
+    assert rows[0]["skills"] == ["CUDA"]
+    assert rows[0]["score"] == 0.9

@@ -23,8 +23,6 @@ dependencies = [
     "APScheduler>=3.10,<4",
     "ddgs>=9.0",
     "pyinstaller>=6.0",
-    "langgraph>=0.2",
-    "langgraph-checkpoint-sqlite>=1.0",
     "mcp>=1.2",
     # The recruiting engine. The app is a consumer of the SDK, not a fork of it.
     "openrecruiter",

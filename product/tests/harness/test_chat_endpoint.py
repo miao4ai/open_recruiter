@@ -251,3 +251,84 @@ def test_the_prompt_stays_small_as_the_pipeline_grows(client, monkeypatch):
     assert system.count("\n- [c") <= 8, "a bounded briefing, not 300 rows"
     assert "300 candidates" in system, "but the model is told the real size"
     assert "search_candidates" in system, "and how to reach the rest"
+
+
+# ── approval round trip ──────────────────────────────────────────────────
+
+
+def _gated_tool(monkeypatch):
+    """Make draft_email require approval, so a normal turn hits the gate."""
+    import app.agent_tools as agent_tools
+    from openrecruiter import Tool
+
+    sent = []
+    original = agent_tools.product_tools
+
+    def with_gate(cfg, user_id=""):
+        return original(cfg, user_id) + [
+            Tool(
+                name="send_email",
+                description="Send an email to a candidate",
+                parameters={"type": "object", "properties": {"to": {"type": "string"}}},
+                fn=lambda to="": sent.append(to) or {"sent": True, "to": to},
+                requires_approval=True,
+            )
+        ]
+
+    monkeypatch.setattr(agent_tools, "product_tools", with_gate)
+    return sent
+
+
+def test_a_gated_tool_pauses_the_turn_and_is_resumable(client, monkeypatch):
+    """The whole point of the gate: nothing happens until a person says so."""
+    sent = _gated_tool(monkeypatch)
+    _script(monkeypatch, [[("send_email", {"to": "ada@example.com"})], "Sent."])
+
+    frames = _frames(client.post("/api/agent/chat/stream", json={"message": "email Ada"}))
+    approval = next(f for f in frames if f["event"] == "approval_required")["data"]
+
+    assert sent == [], "the email must not go out before approval"
+    assert approval["name"] == "send_email"
+    assert approval["workflow_id"], "the client needs an id to answer on"
+
+    resumed = client.post(
+        f"/api/agent/workflow/{approval['workflow_id']}/resume", json={"approved": True}
+    ).json()
+
+    assert sent == ["ada@example.com"]
+    assert resumed["status"] == "completed"
+    assert resumed["reply"] == "Sent."
+
+
+def test_declining_leaves_the_action_undone(client, monkeypatch):
+    sent = _gated_tool(monkeypatch)
+    _script(monkeypatch, [[("send_email", {"to": "ada@example.com"})], "Understood."])
+
+    frames = _frames(client.post("/api/agent/chat/stream", json={"message": "email Ada"}))
+    workflow_id = next(f for f in frames if f["event"] == "approval_required")["data"]["workflow_id"]
+
+    result = client.post(f"/api/agent/workflow/{workflow_id}/cancel").json()
+
+    assert sent == []
+    assert result["status"] == "cancelled"
+
+
+def test_an_approval_cannot_be_spent_twice(client, monkeypatch):
+    """Otherwise a double-click sends the email twice."""
+    sent = _gated_tool(monkeypatch)
+    _script(monkeypatch, [[("send_email", {"to": "ada@example.com"})], "Sent.", "Sent."])
+
+    frames = _frames(client.post("/api/agent/chat/stream", json={"message": "email Ada"}))
+    workflow_id = next(f for f in frames if f["event"] == "approval_required")["data"]["workflow_id"]
+
+    client.post(f"/api/agent/workflow/{workflow_id}/resume", json={"approved": True})
+    second = client.post(f"/api/agent/workflow/{workflow_id}/resume", json={"approved": True}).json()
+
+    assert sent == ["ada@example.com"], "exactly once"
+    assert second["error"] == "Workflow is not paused"
+
+
+def test_an_unknown_approval_is_rejected(client):
+    assert client.post("/api/agent/workflow/nope/resume", json={}).json()["error"] == (
+        "Workflow not found"
+    )

@@ -54,7 +54,8 @@ Empty layers are silently skipped. Total budget ~1600 tokens with per-layer char
 
 ## Integration points
 
-- **Loader call site**: `chat_graph._build_pipeline_context()` — runs in the `build_context` node before LLM call
+- **Loader call site**: `_agent_system_prompt()` in `routes/agent.py`, alongside the SDK's
+  `pipeline_context()` — both are spliced into the system prompt before the agent runs
 - **Event emission**: `agent._update_memory_for_action()` — single hook at the top of `_process_actions`, dispatches to sensory + entity updates for every action type. No need to touch individual handlers.
 - **Failures are silent**: memory bookkeeping must never break a chat turn (`try/except` around every loader and writer call site)
 

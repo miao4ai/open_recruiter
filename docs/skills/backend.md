@@ -15,7 +15,10 @@ product/backend/app/
     market.py          ← Salary/market analysis
     employer.py        ← Hiring-manager outreach
     workflow.py, planning.py, jd.py, resume.py, job_search.py, scheduling.py
-  graphs/         ← LangGraph state machine (see langgraph.md)
+  sdk_bridge.py   ← the SDK's Store over database.py (see agent.md)
+  agent_tools.py  ← app-specific tools
+  sse_agent.py    ← agent events → SSE
+  blocks.py       ← tool results → UI cards
   guardrails/     ← Input/output guard + action limits (see testing.md)
   tools/          ← imap_checker, email_sender, etc.
   prompts.py      ← ALL LLM system prompts (single source of truth)

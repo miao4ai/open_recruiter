@@ -11,7 +11,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the per-layer setup paths.
 Topic-specific guides — read the relevant one before working in that area:
 
 - [docs/skills/backend.md](docs/skills/backend.md) — FastAPI structure, agents, the 6-step recipe for adding a chat action, LLM provider config
-- [docs/skills/langgraph.md](docs/skills/langgraph.md) — chat graph pipeline, SSE adapter, Human-in-the-Loop approval cards, multi-agent swarm pattern
+- [docs/skills/agent.md](docs/skills/agent.md) — the agent loop, adding tools, approval gates, block mapping
 - [docs/skills/memory.md](docs/skills/memory.md) — 4-tier agent memory (sensory / working / long-term / entity), loader integration, event emission
 - [docs/skills/testing.md](docs/skills/testing.md) — pytest harness (137 cases), how to run subsets, when a failure means a real gap vs a stale fixture
 - [docs/skills/deployment.md](docs/skills/deployment.md) — version bump + tag + CI release flow, artifact naming, Gatekeeper / notarization notes
@@ -105,7 +105,10 @@ product/               ← the desktop app — builds the 3 installers
     app/
       routes/          ← HTTP endpoints (agent.py is the main chat endpoint)
       agents/          ← Domain agents (resume, jd, matching, communication, …)
-      graphs/          ← LangGraph state machine (chat_graph.py, sse_adapter.py)
+      sdk_bridge.py    ← ProductStore: the SDK's Store over database.py
+      agent_tools.py   ← app-specific tools + the per-role filter
+      sse_agent.py     ← agent events → SSE frames
+      blocks.py        ← tool results → the cards the UI renders
       guardrails/      ← Input/output guard (policy.py)
       memory/          ← 4-tier agent memory
       prompts.py       ← All LLM system prompts
@@ -160,7 +163,6 @@ an `sdk/ranking` and a `research/ranking` meaning different things.
 | `product/backend/app/sse_agent.py` | Agent events → SSE frames the chat UI understands |
 | `sdk/core/openrecruiter/agent.py` | The agent loop: tool calls, approval gates, streaming |
 | `sdk/core/openrecruiter/ranking/` | `Ranker` and its backends — the main extension point |
-| `product/backend/app/graphs/chat_graph.py` | Legacy LangGraph path, still serving `/api/agent/chat` |
 | `product/backend/app/prompts.py` | All system prompts — edit here to change AI behavior |
 | `product/backend/app/config.py` | LLM + Voyage config (slim build: Anthropic/OpenAI only) |
 | `product/frontend/src/components/MessageBlocks.tsx` | Renders all chat message card types |
@@ -208,10 +210,9 @@ so both the agent and the REST endpoints read the same tables. Nothing was migra
 Set `requires_approval=True` on anything that reaches outside the system. The agent stops and
 emits `ApprovalRequired`; calls queued behind it are held too.
 
-> **Legacy path still live.** `POST /api/agent/chat` (non-streaming) and `JobSeekerHome.tsx`
-> still use `_process_actions()` in `agent.py` — a 1030-line if/elif over 20 actions — and the
-> LangGraph `chat_graph`. It renders ~20 block types the SDK path maps only four of, so
-> migrating it means porting those cards first. Do not delete it before then.
+Both chat endpoints share `_prepare_turn()`. `/chat/stream` forwards the frames;
+`/chat` drains the same generator and returns the `done` payload — they ran separate
+implementations before, and one of them quietly rotted.
 
 ### Human-in-the-Loop
 Uses LangGraph `interrupt()`. Frontend shows approval cards:

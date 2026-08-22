@@ -72,7 +72,25 @@ def build_recruiting_tools(client: "Recruiter") -> list[Tool]:
         return client.add_candidate(raw_text).model_dump()
 
     def rank_candidates(job_id: str, top_k: int = 10) -> list[dict]:
-        return [m.model_dump() for m in client.rank(job_id, top_k=top_k)]
+        """Ranked matches, carrying enough of each candidate to talk about them.
+
+        Returning bare ids would force a follow-up call per candidate just to
+        say a name, which is a slow way to answer "who should I look at".
+        """
+        results = []
+        for match in client.rank(job_id, top_k=top_k):
+            candidate = client.store.get_candidate(match.candidate_id)
+            results.append(
+                {
+                    **match.model_dump(),
+                    "name": candidate.name if candidate else "",
+                    "current_title": candidate.current_title if candidate else "",
+                    "current_company": candidate.current_company if candidate else "",
+                    "experience_years": candidate.experience_years if candidate else None,
+                    "skills": candidate.skills[:5] if candidate else [],
+                }
+            )
+        return results
 
     def match_candidate(candidate_id: str, job_id: str) -> dict:
         return client.match(candidate_id, job_id).model_dump()

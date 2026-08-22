@@ -18,42 +18,6 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Regex to strip trailing ```json {...} ``` blocks the LLM sometimes embeds inside the message
-import re
-_TRAILING_JSON_BLOCK_RE = re.compile(
-    r'\s*```(?:json)?\s*\{[^`]*"message"\s*:[^`]*\}\s*```\s*$',
-    re.DOTALL,
-)
-
-
-def _strip_embedded_json(text: str) -> str:
-    """Remove trailing markdown JSON code blocks that echo the response structure."""
-    if "```" in text and '"message"' in text:
-        return _TRAILING_JSON_BLOCK_RE.sub("", text).rstrip()
-    return text
-
-
-def _detect_action_from_keywords(message: str) -> dict | None:
-    """Fallback: detect common user intents via keywords when the LLM fails to
-    return a structured action.  This ensures upload cards etc. always appear
-    even with weak local models."""
-    msg = message.lower().strip()
-    # Resume upload
-    if re.search(r"upload.*(resume|cv|简历)|上传.*(简历|cv)|添加候选人|add.*candidate", msg):
-        return {"type": "upload_resume", "job_id": "", "job_title": ""}
-    # JD upload
-    if re.search(r"upload.*(jd|job\s*desc|file)|上传.*(jd|职位|岗位|文件)", msg):
-        return {"type": "upload_jd"}
-    # Match job: "find candidates for job:JOB_ID" (embedded by suggestion chip)
-    m = re.search(r"job:([a-f0-9]{8,})", msg)
-    if m and re.search(r"find.*candidate|match.*candidate|候选人", msg):
-        return {"type": "match_job", "job_id": m.group(1)}
-    # Inbox check
-    if re.search(r"check.*(inbox|email|邮箱)|查看.*(收件箱|邮箱)|有没有.*邮件|fetch.*email", msg):
-        return {"type": "check_inbox", "limit": 10}
-    return None
-
-
 @router.post("/run")
 async def run_agent(req: AgentRequest, _user: dict = Depends(require_recruiter)):
     """Execute a natural language instruction via the orchestrator.
@@ -109,177 +73,136 @@ async def run_agent(req: AgentRequest, _user: dict = Depends(require_recruiter))
 # ── Chat ──────────────────────────────────────────────────────────────────
 
 
-@router.post("/chat")
-async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_current_user)):
-    """Synchronous chat with the AI recruiting assistant.
+# ── Shared setup ──────────────────────────────────────────────────────────
+# Both chat endpoints run the same agent over the same tools. Keeping the setup
+# in one place is the only thing stopping them drifting apart again — the
+# streaming and non-streaming paths were separately maintained before, and one
+# of them quietly rotted.
 
-    Returns ``{reply, action?, session_id}`` where *action* is present when
-    the AI detects an actionable intent (e.g. drafting an email).
-    """
-    from app.routes.settings import get_config
-    from app.llm import chat_json, chat
-    from app.prompts import CHAT_SYSTEM_WITH_ACTIONS
 
-    user_id = current_user["id"]
-    cfg = get_config()
-
-    has_key = (
+def _has_llm_key(cfg) -> bool:
+    return bool(
         (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
         or (cfg.llm_provider == "openai" and cfg.openai_api_key)
     )
-    if not has_key:
-        return {"reply": "Please configure an LLM API key in Settings before using the chat assistant."}
 
-    # Ensure a session exists
-    session_id = req.session_id
-    if not session_id:
-        # Create a new session automatically
-        session_id = uuid.uuid4().hex[:8]
-        now = datetime.now().isoformat()
-        db.insert_chat_session({
+
+def _open_session(user_id: str, message: str, session_id: str | None) -> str:
+    """Reuse the session, or start one named after the opening message."""
+    now = datetime.now().isoformat()
+    if session_id:
+        db.update_chat_session(session_id, {"updated_at": now})
+        return session_id
+
+    session_id = uuid.uuid4().hex[:8]
+    db.insert_chat_session(
+        {
             "id": session_id,
             "user_id": user_id,
-            "title": req.message[:50] or "New Chat",
+            "title": message[:50] or "New Chat",
             "created_at": now,
             "updated_at": now,
-        })
-    else:
-        # Update session timestamp
-        db.update_chat_session(session_id, {"updated_at": datetime.now().isoformat()})
+        }
+    )
+    return session_id
 
-    # Build context and system prompt based on user role
+
+def _prepare_turn(req, current_user: dict):
+    """Session, history, agent — everything both endpoints need.
+
+    Returns ``None`` if no API key is configured, so the caller can answer with
+    something the user can act on instead of a failure.
+    """
+    from app.agent_tools import product_tools, tools_for_role
+    from app.routes.settings import get_config
+    from app.sdk_bridge import build_recruiter
+
+    cfg = get_config()
+    if not _has_llm_key(cfg):
+        return None
+
+    user_id = current_user["id"]
     user_role = current_user.get("role", "recruiter")
-    log.info("Chat request from user %s with role '%s'", user_id, user_role)
-    if user_role == "job_seeker":
-        from app.prompts import CHAT_SYSTEM_JOB_SEEKER, ENCOURAGEMENT_ADDENDUM
-        context = _build_job_seeker_context(user_id, session_id=session_id)
-        system_prompt = CHAT_SYSTEM_JOB_SEEKER.format(context=context)
-        if req.encouragement_mode:
-            system_prompt += ENCOURAGEMENT_ADDENDUM
-    else:
-        context = _build_chat_context(user_id, current_message=req.message)
-        system_prompt = CHAT_SYSTEM_WITH_ACTIONS.format(context=context)
+    session_id = _open_session(user_id, req.message, req.session_id)
 
-    # Background: summarize previous session if needed
     _maybe_summarize_previous_session(cfg, user_id, session_id)
 
-    # Load conversation history for this session
-    history = db.list_chat_messages(user_id, limit=20, session_id=session_id)
+    history = [
+        {"role": m["role"], "content": m["content"]}
+        for m in db.list_chat_messages(user_id, limit=20, session_id=session_id)
+    ]
+    db.insert_chat_message(
+        {
+            "id": uuid.uuid4().hex[:8],
+            "user_id": user_id,
+            "session_id": session_id,
+            "role": "user",
+            "content": req.message,
+            "created_at": datetime.now().isoformat(),
+        }
+    )
 
-    # Save user message
-    db.insert_chat_message({
-        "id": uuid.uuid4().hex[:8],
-        "user_id": user_id,
+    recruiter = build_recruiter(cfg, extra_tools=product_tools(cfg, user_id))
+    recruiter.system = _agent_system_prompt(recruiter, user_id, user_role, req)
+    agent = recruiter.agent(max_steps=8)
+    agent.tools = tools_for_role(recruiter, user_role)
+
+    return {
+        "cfg": cfg,
+        "agent": agent,
+        "history": history,
         "session_id": session_id,
-        "role": "user",
-        "content": req.message,
-        "created_at": datetime.now().isoformat(),
-    })
-
-    # Build messages array for LLM
-    messages = [{"role": m["role"], "content": m["content"]} for m in history]
-    messages.append({"role": "user", "content": req.message})
-
-    # Call LLM with structured JSON output
-    reply_text = ""
-    action_data = None
-    context_hint_data = None
-    try:
-        result = chat_json(cfg, system=system_prompt, messages=messages)
-        reply_text = result.get("message", "") if isinstance(result, dict) else str(result)
-        action_data = result.get("action") if isinstance(result, dict) else None
-        context_hint_data = result.get("context_hint") if isinstance(result, dict) else None
-    except Exception:
-        # Fallback to plain text chat if JSON parsing fails
-        log.warning("chat_json failed, falling back to plain text chat")
-        try:
-            reply_text = chat(cfg, system=system_prompt, messages=messages)
-        except Exception as e:
-            log.error("Chat LLM call failed: %s", e)
-            reply_text = f"I encountered an error: {e!s}. Please check your LLM configuration in Settings."
-
-    # Safety net: if reply_text is still raw JSON, extract message
-    if reply_text and reply_text.strip().startswith("{") and '"message"' in reply_text:
-        try:
-            _parsed = json.loads(reply_text)
-            if isinstance(_parsed, dict) and "message" in _parsed:
-                reply_text = _parsed["message"]
-                if not action_data:
-                    action_data = _parsed.get("action")
-                if not context_hint_data:
-                    context_hint_data = _parsed.get("context_hint")
-        except Exception:
-            pass
-
-    # Strip trailing JSON code blocks the LLM sometimes embeds inside the message
-    reply_text = _strip_embedded_json(reply_text)
-
-    # Keyword detection for upload intents.
-    # 1) If LLM returned no action, use keyword fallback.
-    # 2) If LLM returned create_job/create_candidate but the user explicitly
-    #    said "upload", override with the upload card (the LLM misclassified).
-    keyword_action = _detect_action_from_keywords(req.message)
-    if keyword_action:
-        if not action_data:
-            action_data = keyword_action
-        elif action_data.get("type") in ("create_job", "create_candidate"):
-            action_data = keyword_action
-
-    # Process actions using shared helper
-    response: dict = {"reply": reply_text, "session_id": session_id, "blocks": [], "suggestions": [], "context_hint": context_hint_data}
-
-    # GUARD: job seekers may only trigger seeker-specific actions
-    _SEEKER_ALLOWED_ACTIONS = {"search_jobs", "analyze_job_match", "save_job", "improve_resume", "generate_cover_letter"}
-    if user_role == "job_seeker" and action_data:
-        if action_data.get("type") not in _SEEKER_ALLOWED_ACTIONS:
-            action_data = None
-
-    response = _process_actions(response, action_data, cfg, user_id, session_id)
-
-    # Save assistant reply with action data for persistence
-    assistant_msg_id = uuid.uuid4().hex[:8]
-    action_json_str = ""
-    action_status_str = ""
-    if response.get("action"):
-        action_json_str = json.dumps(response["action"])
-        action_status_str = "pending"
-    db.insert_chat_message({
-        "id": assistant_msg_id,
         "user_id": user_id,
-        "session_id": session_id,
-        "role": "assistant",
-        "content": response["reply"],
-        "action_json": action_json_str,
-        "action_status": action_status_str,
-        "created_at": datetime.now().isoformat(),
-    })
-    response["message_id"] = assistant_msg_id
+        "user_role": user_role,
+    }
 
-    # Auto-title: update session title from first user message
-    session = db.get_chat_session(session_id)
-    if session and session["title"] == req.message[:50]:
-        # Keep it — it's already set from the first message
-        pass
 
-    # Build smart suggestions if not already set by action handlers
-    if not response.get("suggestions") and user_role == "recruiter":
-        response["suggestions"] = _build_smart_suggestions(action_data)
+_NO_KEY_REPLY = "Please configure an LLM API key in Settings before using the chat assistant."
 
-    # Background: extract memories from this conversation turn
-    if user_role == "recruiter":
+
+def _remember_turn(turn: dict, message: str, reply: str) -> None:
+    """Memory extraction runs off the request path — it must never block a reply."""
+    if turn["user_role"] != "recruiter":
+        return
+    threading.Thread(
+        target=_extract_and_store_memories,
+        args=(turn["cfg"], turn["user_id"], message, reply),
+        daemon=True,
+    ).start()
+    count = len(db.list_chat_messages(turn["user_id"], limit=100, session_id=turn["session_id"]))
+    if count and count % 20 == 0:
         threading.Thread(
-            target=_extract_and_store_memories,
-            args=(cfg, user_id, req.message, reply_text), daemon=True,
+            target=_extract_implicit_memories, args=(turn["cfg"], turn["user_id"]), daemon=True
         ).start()
-        # Periodic implicit memory extraction (~every 20 messages)
-        msg_count = len(db.list_chat_messages(user_id, limit=100, session_id=session_id))
-        if msg_count > 0 and msg_count % 20 == 0:
-            threading.Thread(
-                target=_extract_implicit_memories,
-                args=(cfg, user_id), daemon=True,
-            ).start()
 
-    return response
+
+@router.post("/chat")
+async def chat_endpoint(req: ChatRequest, current_user: dict = Depends(get_current_user)):
+    """Chat without streaming.
+
+    The same agent as ``/chat/stream``, collected instead of forwarded. It backs
+    the client's fallback when the stream fails, and the job-seeker home page —
+    so running a second implementation here is how the two get to disagree.
+    """
+    from app.sse_agent import stream_agent
+
+    turn = _prepare_turn(req, current_user)
+    if turn is None:
+        return {"reply": _NO_KEY_REPLY, "session_id": "", "blocks": [], "suggestions": []}
+
+    final: dict = {}
+    async for frame in stream_agent(
+        turn["agent"],
+        req.message,
+        session_id=turn["session_id"],
+        user_id=turn["user_id"],
+        history=turn["history"],
+    ):
+        if frame["event"] == "done":
+            final = json.loads(frame["data"])
+
+    _remember_turn(turn, req.message, final.get("reply", ""))
+    return final
 
 
 # ── Chat Sessions ─────────────────────────────────────────────────────────
@@ -381,98 +304,40 @@ async def clear_chat_history(current_user: dict = Depends(get_current_user)):
 
 @router.post("/chat/stream")
 async def chat_stream_endpoint(req: ChatRequest, current_user: dict = Depends(get_current_user)):
-    """SSE streaming chat. Streams text tokens, then sends a final 'done' event
-    with the complete structured response (blocks, actions, suggestions).
+    """Streaming chat.
+
+    Text arrives as ``token`` frames while it is generated, tool activity as
+    ``tool_call`` / ``tool_result``, and the turn closes with ``done`` carrying
+    the assembled reply, blocks, and action.
     """
-    from app.routes.settings import get_config
+    from app.sse_agent import stream_agent
 
-    user_id = current_user["id"]
-    user_role = current_user.get("role", "recruiter")
-    cfg = get_config()
+    turn = _prepare_turn(req, current_user)
 
-    has_key = (
-        (cfg.llm_provider == "anthropic" and cfg.anthropic_api_key)
-        or (cfg.llm_provider == "openai" and cfg.openai_api_key)
-    )
-    if not has_key:
-        async def err_gen():
-            yield {"event": "done", "data": json.dumps({
-                "reply": "Please configure an LLM API key in Settings.",
-                "session_id": "", "blocks": [], "suggestions": [],
-            })}
-        return EventSourceResponse(err_gen())
+    if turn is None:
+        async def no_key():
+            yield {
+                "event": "done",
+                "data": json.dumps(
+                    {"reply": _NO_KEY_REPLY, "session_id": "", "blocks": [], "suggestions": []}
+                ),
+            }
 
-    # Ensure session
-    session_id = req.session_id
-    if not session_id:
-        session_id = uuid.uuid4().hex[:8]
-        now = datetime.now().isoformat()
-        db.insert_chat_session({
-            "id": session_id, "user_id": user_id,
-            "title": req.message[:50] or "New Chat",
-            "created_at": now, "updated_at": now,
-        })
-    else:
-        db.update_chat_session(session_id, {"updated_at": datetime.now().isoformat()})
-
-    # Background: summarize previous session if needed
-    _maybe_summarize_previous_session(cfg, user_id, session_id)
-
-    history = db.list_chat_messages(user_id, limit=20, session_id=session_id)
-    db.insert_chat_message({
-        "id": uuid.uuid4().hex[:8], "user_id": user_id,
-        "session_id": session_id, "role": "user",
-        "content": req.message, "created_at": datetime.now().isoformat(),
-    })
-
-    messages = [{"role": m["role"], "content": m["content"]} for m in history]
-    messages.append({"role": "user", "content": req.message})
+        return EventSourceResponse(no_key())
 
     async def event_generator():
-        # A workflow paused for approval owns the next message: the user is
-        # answering the question it asked, not starting a new request.
-        active_wf = db.get_active_workflow(session_id)
-        if active_wf and active_wf["status"] == "paused":
-            from app.graphs.sse_adapter import stream_supervisor_graph
-
-            async for ev in stream_supervisor_graph(
-                {
-                    "user_message": req.message,
-                    "session_id": session_id,
-                    "user_id": user_id,
-                    "cfg": cfg,
-                    "plan_status": "resuming",
-                    "plan": {"_paused_workflow": dict(active_wf)},
-                    "workflow_id": active_wf["id"],
-                },
-                session_id=session_id,
-                user_id=user_id,
-            ):
-                yield ev
-            return
-
-        # ── Agent loop, over the SDK ──────────────────────────────────────
-        # The model is handed real tools and decides what to call and when to
-        # stop, so one request can rank a job, read the result, and draft the
-        # emails. Text streams as it is generated.
-        from app.agent_tools import product_tools, tools_for_role
-        from app.sdk_bridge import build_recruiter
-        from app.sse_agent import stream_agent
-
-        recruiter = build_recruiter(cfg, extra_tools=product_tools(cfg, user_id))
-        recruiter.system = _agent_system_prompt(recruiter, user_id, user_role, req)
-
-        agent = recruiter.agent(max_steps=8)
-        agent.tools = tools_for_role(recruiter, user_role)
-
-        async for ev in stream_agent(
-            agent,
+        reply = ""
+        async for frame in stream_agent(
+            turn["agent"],
             req.message,
-            session_id=session_id,
-            user_id=user_id,
-            history=messages[:-1],
+            session_id=turn["session_id"],
+            user_id=turn["user_id"],
+            history=turn["history"],
         ):
-            yield ev
+            if frame["event"] == "done":
+                reply = json.loads(frame["data"]).get("reply", "")
+            yield frame
+        _remember_turn(turn, req.message, reply)
 
     return EventSourceResponse(event_generator())
 
@@ -606,1270 +471,6 @@ async def get_notifications(current_user: dict = Depends(get_current_user)):
 
 
 # ── Action Processing (shared by chat + streaming) ───────────────────────
-
-
-def _update_memory_for_action(user_id: str, session_id: str, action_type: str, action_data: dict) -> None:
-    """Emit a sensory event + bump entity-memory interaction for the action.
-
-    Centralised here so individual action handlers don't have to know about memory.
-    Safe to fail silently — never let memory bookkeeping break a chat turn.
-    """
-    if not action_type or not user_id:
-        return
-    try:
-        from app.memory import emit_event, update_entity_after_action
-        from app.memory.working import add_focused_entity
-
-        candidate_id = action_data.get("candidate_id", "")
-        candidate_name = action_data.get("candidate_name", "")
-        job_id = action_data.get("job_id", "")
-        job_title = action_data.get("job_title", "")
-
-        # Sensory: one-line summary of what just happened
-        summaries = {
-            "compose_email":        f"drafted email to {candidate_name or 'candidate'}",
-            "match_candidate":      f"matched {candidate_name or 'candidate'} to jobs",
-            "evaluate_candidate":   f"swarm-evaluated {candidate_name or 'candidate'}",
-            "match_job":            f"ranked candidates for {job_title or 'job'}",
-            "update_candidate_status": f"moved {candidate_name or 'candidate'} pipeline",
-            "create_job":           f"created job {job_title or ''}",
-            "create_candidate":     f"created candidate {action_data.get('name', '')}",
-            "market_analysis":      f"pulled market data for {action_data.get('role', '')}",
-            "recommend_to_employer": f"recommended {candidate_name or 'candidate'} to employer",
-            "check_inbox":          "checked inbox",
-            "upload_resume":        "started resume upload",
-            "upload_jd":            "started JD upload",
-            "search_jobs":          f"searched jobs: {action_data.get('query', '')}",
-        }
-        summary = summaries.get(action_type, action_type)
-        emit_event(user_id, action_type, summary)
-
-        # Entity memory: bump interaction count for candidates / jobs touched by this action
-        if candidate_id:
-            update_entity_after_action(
-                user_id, "candidate", candidate_id, action_type,
-                summary_hint=summary,
-            )
-            if session_id and candidate_name:
-                add_focused_entity(session_id, user_id, "candidate", candidate_id, candidate_name)
-        if job_id:
-            update_entity_after_action(
-                user_id, "job", job_id, action_type,
-                summary_hint=summary,
-            )
-    except Exception as e:
-        log.warning("Memory update failed (non-fatal): %s", e)
-
-
-def _process_actions(response: dict, action_data, cfg, user_id: str, session_id: str = "") -> dict:
-    """Process action intents from the LLM and enrich the response."""
-    from app.models import Email
-
-    if not action_data or not isinstance(action_data, dict):
-        return response
-
-    action_type = action_data.get("type")
-
-    # Update sensory + entity memory based on the action (single hook for all actions).
-    _update_memory_for_action(user_id, session_id, action_type, action_data)
-
-    if action_type == "compose_email":
-        try:
-            from app.agents.communication import draft_email as agent_draft
-
-            candidate_id = action_data.get("candidate_id", "")
-            candidate_name = action_data.get("candidate_name", "")
-            to_email = action_data.get("to_email", "")
-            email_type = action_data.get("email_type", "outreach")
-            job_id = action_data.get("job_id", "")
-            instructions = action_data.get("instructions", "")
-
-            draft = agent_draft(cfg, candidate_id=candidate_id, job_id=job_id,
-                                email_type=email_type, instructions=instructions)
-            if draft.get("error"):
-                log.warning("Communication agent error: %s", draft["error"])
-
-            email = Email(
-                candidate_id=candidate_id, candidate_name=candidate_name,
-                to_email=to_email, subject=draft.get("subject", ""),
-                body=draft.get("body", ""), email_type=email_type,
-            )
-            db.insert_email(email.model_dump())
-
-            db.insert_activity({
-                "id": uuid.uuid4().hex[:8], "user_id": user_id,
-                "activity_type": "email_drafted",
-                "description": f"Drafted {email_type} email to {candidate_name}",
-                "metadata_json": json.dumps({
-                    "email_id": email.id, "candidate_id": candidate_id,
-                    "candidate_name": candidate_name, "email_type": email_type,
-                }),
-                "created_at": datetime.now().isoformat(),
-            })
-
-            response["reply"] = f"I've drafted a personalized {email_type} email for {candidate_name}. Review it below and send when ready!"
-            response["action"] = {"type": "compose_email", "email": email.model_dump()}
-            if not response.get("context_hint"):
-                response["context_hint"] = {"type": "candidate", "id": candidate_id}
-        except Exception as e:
-            log.error("Failed to create email draft: %s", e)
-
-    elif action_type == "match_candidate":
-        try:
-            from app.agents.planning import match_candidate_to_jobs
-
-            candidate_id = action_data.get("candidate_id", "")
-            candidate_name = action_data.get("candidate_name", "")
-            result = match_candidate_to_jobs(cfg, candidate_id)
-
-            if result.get("error") and not result.get("rankings"):
-                response["reply"] = f"Sorry, I couldn't run the matching: {result['error']}"
-            else:
-                rankings = result.get("rankings", [])
-                summary = result.get("summary", "")
-                top_count = min(len(rankings), 5)
-
-                if rankings:
-                    top = rankings[0]
-                    response["reply"] = (
-                        f"I found **{top_count} matching jobs** for **{candidate_name}**. "
-                        f"Best match: **{top.get('title', '')}** at {top.get('company', '')} "
-                        f"({int(top.get('score', 0) * 100)}%)."
-                    )
-                    if summary:
-                        response["reply"] += f"\n\n{summary}"
-                    response["reply"] += "\n\nWould you like me to draft an outreach email for the top match?"
-                else:
-                    response["reply"] = f"No matching jobs found for {candidate_name}."
-
-                candidate_data = db.get_candidate(candidate_id)
-                response["blocks"].append({
-                    "type": "match_report",
-                    "candidate": {
-                        "id": candidate_id, "name": candidate_name,
-                        "current_title": candidate_data.get("current_title", "") if candidate_data else "",
-                        "skills": candidate_data.get("skills", []) if candidate_data else [],
-                    },
-                    "rankings": [
-                        {"job_id": r.get("job_id", ""), "title": r.get("title", ""),
-                         "company": r.get("company", ""), "score": r.get("score", 0),
-                         "strengths": r.get("strengths", []), "gaps": r.get("gaps", []),
-                         "one_liner": r.get("one_liner", "")}
-                        for r in rankings[:5]
-                    ],
-                    "summary": summary,
-                })
-                if not response.get("context_hint"):
-                    response["context_hint"] = {"type": "candidate", "id": candidate_id}
-                response["suggestions"] = [
-                    {"label": f"Draft email to {candidate_name}", "prompt": f"Draft an outreach email to {candidate_name}"},
-                    {"label": "Compare candidates", "prompt": f"Compare top candidates for {rankings[0].get('title', 'this role')}" if rankings else "Show pipeline status"},
-                ]
-
-                db.insert_activity({
-                    "id": uuid.uuid4().hex[:8], "user_id": user_id,
-                    "activity_type": "candidate_matched",
-                    "description": f"Matched {candidate_name} against {len(rankings)} jobs",
-                    "metadata_json": json.dumps({
-                        "candidate_id": candidate_id, "candidate_name": candidate_name,
-                        "top_job": rankings[0].get("title", "") if rankings else "",
-                        "top_score": rankings[0].get("score", 0) if rankings else 0,
-                    }),
-                    "created_at": datetime.now().isoformat(),
-                })
-        except Exception as e:
-            log.error("Failed to run candidate matching: %s", e)
-            response["reply"] = f"Sorry, I encountered an error while matching: {e}"
-
-    elif action_type == "evaluate_candidate":
-        try:
-            from app.agents.evaluation_swarm import evaluate_candidate_swarm
-
-            candidate_id = action_data.get("candidate_id", "")
-            candidate_name = action_data.get("candidate_name", "")
-            job_id = action_data.get("job_id", "")
-            job_title = action_data.get("job_title", "")
-
-            result = evaluate_candidate_swarm(cfg, candidate_id, job_id=job_id)
-
-            if result.get("error"):
-                response["reply"] = f"Sorry, I couldn't evaluate {candidate_name}: {result['error']}"
-            else:
-                rec = result.get("hire_recommendation", "maybe")
-                score = result.get("overall_score", 0)
-                rec_labels = {
-                    "strong_yes": "Strong Yes",
-                    "yes": "Recommend",
-                    "maybe": "On the Fence",
-                    "no": "Not Recommended",
-                }
-                response["reply"] = (
-                    f"Multi-agent evaluation complete for **{candidate_name}**. "
-                    f"Overall score: **{score}/100** — **{rec_labels.get(rec, rec)}**.\n\n"
-                    f"{result.get('synthesis', '')}"
-                )
-
-                candidate_data = db.get_candidate(candidate_id)
-                job_data = db.get_job(job_id) if job_id else None
-                response["blocks"].append({
-                    "type": "candidate_eval",
-                    "candidate": {
-                        "id": candidate_id,
-                        "name": candidate_name,
-                        "current_title": candidate_data.get("current_title", "") if candidate_data else "",
-                    },
-                    "job_title": job_title or (job_data.get("title", "") if job_data else ""),
-                    "job_company": job_data.get("company", "") if job_data else "",
-                    "dimensions": result["dimensions"],
-                    "overall_score": result["overall_score"],
-                    "hire_recommendation": result["hire_recommendation"],
-                    "synthesis": result["synthesis"],
-                })
-
-                if not response.get("context_hint"):
-                    response["context_hint"] = {"type": "candidate", "id": candidate_id}
-
-                response["suggestions"] = [
-                    {"label": f"Draft email to {candidate_name}", "prompt": f"Draft an outreach email to {candidate_name}"},
-                    {"label": f"Match {candidate_name} to jobs", "prompt": f"What jobs match {candidate_name}?"},
-                ]
-
-                db.insert_activity({
-                    "id": uuid.uuid4().hex[:8], "user_id": user_id,
-                    "activity_type": "candidate_evaluated",
-                    "description": f"Swarm evaluation of {candidate_name}: {score}/100 ({rec})",
-                    "metadata_json": json.dumps({
-                        "candidate_id": candidate_id,
-                        "candidate_name": candidate_name,
-                        "overall_score": score,
-                        "hire_recommendation": rec,
-                    }),
-                    "created_at": datetime.now().isoformat(),
-                })
-        except Exception as e:
-            log.error("Failed to run candidate evaluation swarm: %s", e)
-            response["reply"] = f"Sorry, I encountered an error during evaluation: {e}"
-
-    elif action_type == "match_job":
-        try:
-            from app.agents.matching import rank_candidates_for_job, match_candidate_to_job
-
-            job_id = action_data.get("job_id", "")
-            job_title = action_data.get("job_title", "")
-            job = db.get_job(job_id) if job_id else None
-            if not job:
-                response["reply"] = "I couldn't find that job. Please try again."
-            else:
-                job_title = job_title or job.get("title", "this role")
-                ranked = rank_candidates_for_job(job_id, top_k=10)
-                if not ranked:
-                    response["reply"] = f"No candidates found in the system yet. Upload some resumes first!"
-                else:
-                    top = ranked[:5]
-                    # Enrich with candidate names from DB
-                    enriched = []
-                    for r in top:
-                        cand = db.get_candidate(r["candidate_id"])
-                        if cand:
-                            current = cand.get("current_title", "")
-                            company = cand.get("current_company", "")
-                            label = f"{current} @ {company}" if current and company else current or company or ""
-                            enriched.append({
-                                "job_id": r["candidate_id"],  # reuse job_id field as nav target
-                                "title": cand.get("name", "Unknown"),
-                                "company": label,
-                                "score": r.get("score", 0),
-                                "candidate_id": r["candidate_id"],
-                                "candidate_name": cand.get("name", "Unknown"),
-                                "strengths": [],
-                                "gaps": [],
-                                "one_liner": f"{cand.get('experience_years', '?')} yrs · {', '.join((cand.get('skills') or [])[:3])}",
-                            })
-                    best = enriched[0] if enriched else None
-                    response["reply"] = (
-                        f"Found **{len(enriched)} top candidates** for **{job_title}**. "
-                        + (f"Best match: **{best['candidate_name']}** ({int(best['score']*100)}%)." if best else "")
-                    )
-                    response["blocks"].append({
-                        "type": "match_report",
-                        "candidate": {"id": "", "name": job_title, "current_title": "Job", "skills": []},
-                        "rankings": enriched,
-                        "summary": f"Top {len(enriched)} candidates ranked by profile similarity.",
-                    })
-                    response["context_hint"] = {"type": "job", "id": job_id}
-                    if enriched:
-                        top_name = enriched[0]["candidate_name"]
-                        top_id = enriched[0]["candidate_id"]
-                        response["suggestions"] = [
-                            {"label": f"Email {top_name}", "prompt": f"Draft an outreach email to {top_name}"},
-                            {"label": "Start bulk outreach", "prompt": f"Send outreach to top candidates for {job_title}"},
-                        ]
-        except Exception as e:
-            log.error("Failed to run job matching: %s", e)
-            response["reply"] = f"Sorry, I encountered an error while matching: {e}"
-
-    elif action_type == "mark_candidates_replied":
-        try:
-            candidates_to_update = action_data.get("candidates", [])
-            updated_names = []
-            now_str = datetime.now().isoformat()
-
-            for c in candidates_to_update:
-                cid = c.get("candidate_id", "")
-                cname = c.get("candidate_name", "")
-                if cid:
-                    db.update_candidate(cid, {"status": "replied", "updated_at": now_str})
-                    updated_names.append(cname)
-
-            if updated_names:
-                names_str = "、".join(updated_names)
-                response["reply"] = f"Done! I've updated **{names_str}** to the **replied** stage in the pipeline."
-                response["action"] = {"type": "mark_candidates_replied", "updated": updated_names}
-                db.insert_activity({
-                    "id": uuid.uuid4().hex[:8], "user_id": user_id,
-                    "activity_type": "candidates_marked_replied",
-                    "description": f"Marked {names_str} as replied",
-                    "metadata_json": json.dumps({"candidates": candidates_to_update}),
-                    "created_at": now_str,
-                })
-            else:
-                response["reply"] = "I couldn't find the candidates to update."
-        except Exception as e:
-            log.error("Failed to mark candidates as replied: %s", e)
-            response["reply"] = f"Sorry, I encountered an error while updating: {e}"
-
-    elif action_type == "upload_resume":
-        response["action"] = {
-            "type": "upload_resume",
-            "job_id": action_data.get("job_id", ""),
-            "job_title": action_data.get("job_title", ""),
-        }
-
-    elif action_type == "upload_jd":
-        response["action"] = {"type": "upload_jd"}
-
-    elif action_type == "open_job_form":
-        response["action"] = {"type": "open_job_form"}
-
-    elif action_type == "start_workflow":
-        try:
-            from app.agents.workflow import create_workflow
-            wf = create_workflow(
-                session_id, user_id,
-                action_data.get("workflow_type", ""),
-                action_data.get("params", {}),
-            )
-            response["workflow_id"] = wf["id"]
-            response["_start_workflow"] = True
-        except Exception as e:
-            log.error("Failed to create workflow: %s", e)
-            response["reply"] = f"Sorry, I couldn't start the workflow: {e}"
-
-    elif action_type == "update_candidate_status":
-        try:
-            candidate_id = action_data.get("candidate_id", "")
-            candidate_name = action_data.get("candidate_name", "")
-            new_status = action_data.get("new_status", "")
-            now_str = datetime.now().isoformat()
-
-            if candidate_id and new_status:
-                db.update_candidate(candidate_id, {"status": new_status, "updated_at": now_str})
-                response["reply"] = f"Done! I've moved **{candidate_name}** to the **{new_status.replace('_', ' ')}** stage."
-                if not response.get("context_hint"):
-                    response["context_hint"] = {"type": "candidate", "id": candidate_id}
-                db.insert_activity({
-                    "id": uuid.uuid4().hex[:8], "user_id": user_id,
-                    "activity_type": "candidate_status_changed",
-                    "description": f"Moved {candidate_name} to {new_status}",
-                    "metadata_json": json.dumps({
-                        "candidate_id": candidate_id, "new_status": new_status,
-                    }),
-                    "created_at": now_str,
-                })
-        except Exception as e:
-            log.error("Failed to update candidate status: %s", e)
-            response["reply"] = f"Sorry, I encountered an error: {e}"
-
-    elif action_type == "create_job":
-        try:
-            from app.models import Job
-            from app import vectorstore
-
-            title = action_data.get("title", "").strip() or "Untitled Position"
-            company = action_data.get("company", "")
-            required_skills = action_data.get("required_skills", [])
-            preferred_skills = action_data.get("preferred_skills", [])
-            experience_years = action_data.get("experience_years")
-            location = action_data.get("location", "")
-            remote = bool(action_data.get("remote", False))
-            salary_range = action_data.get("salary_range", "")
-            summary = action_data.get("summary", "")
-            raw_text = action_data.get("raw_text", "")
-
-            # Build raw_text from fields if not provided
-            if not raw_text.strip():
-                parts = [f"Job Title: {title}"]
-                if company:
-                    parts.append(f"Company: {company}")
-                if required_skills:
-                    parts.append(f"Required Skills: {', '.join(required_skills)}")
-                if preferred_skills:
-                    parts.append(f"Preferred Skills: {', '.join(preferred_skills)}")
-                if experience_years:
-                    parts.append(f"Experience: {experience_years} years")
-                if location:
-                    parts.append(f"Location: {location}")
-                if remote:
-                    parts.append("Remote: Yes")
-                if salary_range:
-                    parts.append(f"Salary Range: {salary_range}")
-                if summary:
-                    parts.append(f"\n{summary}")
-                raw_text = "\n".join(parts)
-
-            job = Job(
-                title=title, company=company,
-                posted_date=datetime.now().strftime("%Y-%m-%d"),
-                required_skills=required_skills, preferred_skills=preferred_skills,
-                experience_years=experience_years, location=location,
-                remote=remote, salary_range=salary_range,
-                summary=summary, raw_text=raw_text,
-            )
-            db.insert_job(job.model_dump())
-
-            try:
-                vectorstore.index_job(
-                    job_id=job.id, text=raw_text,
-                    metadata={"title": title, "company": company},
-                )
-            except Exception as ve:
-                log.warning("Failed to index job in vector store: %s", ve)
-
-            db.insert_activity({
-                "id": uuid.uuid4().hex[:8], "user_id": user_id,
-                "activity_type": "job_created_via_chat",
-                "description": f"Created job: {title} at {company}",
-                "metadata_json": json.dumps({"job_id": job.id, "title": title, "company": company}),
-                "created_at": datetime.now().isoformat(),
-            })
-
-            job_data = job.model_dump()
-            try:
-                rankings = vectorstore.search_candidates_for_job(job_id=job.id, n_results=200)
-                job_data["candidate_count"] = sum(1 for r in rankings if r["score"] >= 0.30)
-            except Exception:
-                job_data["candidate_count"] = 0
-            response["action"] = {"type": "create_job", "job": job_data}
-            response["context_hint"] = {"type": "job", "id": job.id}
-            response["suggestions"] = [
-                {"label": "Find candidates", "prompt": f"Find matching candidates for job:{job.id}"},
-                {"label": "Upload full JD", "prompt": f"Upload a detailed JD for {title}"},
-            ]
-        except Exception as e:
-            log.error("Failed to create job via chat: %s", e)
-            response["reply"] = f"Sorry, I encountered an error creating the job: {e}"
-
-    elif action_type == "market_analysis":
-        try:
-            from app.agents.market import analyze_market
-
-            role = action_data.get("role", "")
-            location = action_data.get("location", "")
-            industry = action_data.get("industry", "")
-            job_id = action_data.get("job_id", "")
-
-            # Enrich with job data if available
-            context_parts = []
-            if job_id:
-                job = db.get_job(job_id)
-                if job:
-                    if not role:
-                        role = job["title"]
-                    if not location:
-                        location = job.get("location", "")
-                    context_parts.append(f"Job: {job['title']} at {job['company']}")
-                    if job.get("salary_range"):
-                        context_parts.append(f"Listed salary: {job['salary_range']}")
-                    if job.get("required_skills"):
-                        context_parts.append(f"Required skills: {', '.join(job['required_skills'])}")
-
-            report = analyze_market(
-                cfg, role=role, location=location, industry=industry,
-                context="\n".join(context_parts),
-            )
-
-            if report.get("error"):
-                response["reply"] = f"Sorry, I couldn't generate the market analysis: {report['error']}"
-            else:
-                response["action"] = {"type": "market_analysis", "report": report}
-                if job_id:
-                    response["context_hint"] = {"type": "job", "id": job_id}
-                response["suggestions"] = [
-                    {"label": "Find candidates", "prompt": f"Find candidates for {role}"},
-                    {"label": "Compare roles", "prompt": f"What about similar roles to {role}?"},
-                ]
-        except Exception as e:
-            log.error("Failed to run market analysis: %s", e)
-            response["reply"] = f"Sorry, I encountered an error: {e}"
-
-    elif action_type == "check_inbox":
-        try:
-            from app.tools.imap_checker import fetch_recent_inbox
-            from app.routes.settings import get_config
-
-            inbox_cfg = get_config()
-            limit = int(action_data.get("limit", 10))
-            emails = fetch_recent_inbox(inbox_cfg, limit=limit)
-
-            if not emails:
-                response["reply"] = "Your inbox is empty, or IMAP is not configured. Check your email settings."
-            else:
-                unread = sum(1 for e in emails if not e["is_read"])
-                response["reply"] = (
-                    f"Here are your **{len(emails)} most recent emails** "
-                    f"({unread} unread)."
-                )
-                response["blocks"].append({
-                    "type": "inbox_preview",
-                    "emails": emails,
-                    "total": len(emails),
-                    "unread": unread,
-                })
-                response["suggestions"] = [
-                    {"label": "Check replies", "prompt": "Check for candidate replies"},
-                    {"label": "Draft email", "prompt": "Draft an outreach email"},
-                ]
-        except Exception as e:
-            log.error("Failed to fetch inbox: %s", e)
-            response["reply"] = f"Sorry, I couldn't check your inbox: {e}. Make sure IMAP is configured in Settings."
-
-    elif action_type == "recommend_to_employer":
-        try:
-            from app.agents.employer import draft_recommendation
-            from app.models import Email
-
-            candidate_id = action_data.get("candidate_id", "")
-            candidate_name = action_data.get("candidate_name", "")
-            job_id = action_data.get("job_id", "")
-            job_title = action_data.get("job_title", "")
-            to_email = action_data.get("to_email", "")
-            to_name = action_data.get("to_name", "")
-            instructions = action_data.get("instructions", "")
-
-            draft = draft_recommendation(cfg, candidate_id, job_id, instructions)
-            if draft.get("error"):
-                log.warning("Employer agent error: %s", draft["error"])
-
-            # Get candidate resume path for attachment
-            candidate = db.get_candidate(candidate_id)
-            attachment_path = ""
-            if candidate and candidate.get("resume_path"):
-                attachment_path = candidate["resume_path"]
-
-            email = Email(
-                candidate_id=candidate_id,
-                candidate_name=candidate_name,
-                to_email=to_email,
-                subject=draft.get("subject", ""),
-                body=draft.get("body", ""),
-                email_type="recommendation",
-                attachment_path=attachment_path,
-            )
-            db.insert_email(email.model_dump())
-
-            db.insert_activity({
-                "id": uuid.uuid4().hex[:8], "user_id": user_id,
-                "activity_type": "recommendation_drafted",
-                "description": f"Drafted recommendation of {candidate_name} to {to_name or to_email} for {job_title}",
-                "metadata_json": json.dumps({
-                    "email_id": email.id, "candidate_id": candidate_id,
-                    "candidate_name": candidate_name, "job_id": job_id,
-                    "to_email": to_email, "to_name": to_name,
-                }),
-                "created_at": datetime.now().isoformat(),
-            })
-
-            attach_note = " (resume attached)" if attachment_path else ""
-            response["reply"] = (
-                f"I've drafted a recommendation email for **{candidate_name}** to "
-                f"**{to_name or to_email}**{attach_note}. Review it below and send when ready!"
-            )
-            response["action"] = {"type": "compose_email", "email": email.model_dump()}
-            if not response.get("context_hint"):
-                response["context_hint"] = {"type": "candidate", "id": candidate_id}
-            response["suggestions"] = [
-                {"label": "Market data", "prompt": f"What's the market salary for {job_title}?"},
-                {"label": "View pipeline", "prompt": "Show pipeline status"},
-            ]
-        except Exception as e:
-            log.error("Failed to draft recommendation: %s", e)
-            response["reply"] = f"Sorry, I encountered an error: {e}"
-
-    elif action_type == "create_candidate":
-        try:
-            from app.models import Candidate
-            from app import vectorstore
-
-            name = action_data.get("name", "").strip()
-            if not name:
-                response["reply"] = "I need at least a name to create a candidate profile. What's their name?"
-                return response
-
-            email = action_data.get("email", "")
-            phone = action_data.get("phone", "")
-            current_title = action_data.get("current_title", "")
-            current_company = action_data.get("current_company", "")
-            skills = action_data.get("skills", [])
-            experience_years = action_data.get("experience_years")
-            location = action_data.get("location", "")
-            notes = action_data.get("notes", "")
-            job_id = action_data.get("job_id", "")
-
-            # Duplicate check
-            if email:
-                existing = db.find_candidate_by_name_email(name, email)
-                if existing:
-                    response["reply"] = f"A candidate named **{name}** with email {email} already exists in the system."
-                    response["context_hint"] = {"type": "candidate", "id": existing["id"]}
-                    return response
-
-            # Build resume summary from available info
-            summary_parts = []
-            if current_title:
-                summary_parts.append(current_title)
-            if current_company:
-                summary_parts.append(f"at {current_company}")
-            if experience_years:
-                summary_parts.append(f"with {experience_years} years of experience")
-            if skills:
-                summary_parts.append(f"skilled in {', '.join(skills[:5])}")
-            resume_summary = " ".join(summary_parts) if summary_parts else ""
-
-            candidate = Candidate(
-                name=name, email=email, phone=phone,
-                current_title=current_title, current_company=current_company,
-                skills=skills if isinstance(skills, list) else [],
-                experience_years=experience_years, location=location,
-                resume_summary=resume_summary, notes=notes, job_id=job_id,
-            )
-            db.insert_candidate(candidate.model_dump())
-
-            # Vector index
-            embed_text = vectorstore.build_candidate_embed_text(candidate.model_dump())
-            if embed_text.strip():
-                try:
-                    vectorstore.index_candidate(
-                        candidate_id=candidate.id, text=embed_text,
-                        metadata={"name": name, "job_id": job_id, "current_title": current_title},
-                    )
-                except Exception as ve:
-                    log.warning("Failed to index candidate in vector store: %s", ve)
-
-                # Auto-match against all jobs
-                try:
-                    top_jobs = vectorstore.search_jobs_for_candidate(
-                        candidate.id, n_results=5, candidate_text=embed_text,
-                    )
-                    if top_jobs:
-                        best = top_jobs[0]
-                        best_job = db.get_job(best["job_id"])
-                        if best_job and best["score"] >= 0.3:
-                            db.update_candidate(candidate.id, {
-                                "job_id": best["job_id"],
-                                "match_score": best["score"],
-                                "match_reasoning": f"Best match: {best_job['title']} at {best_job['company']} ({round(best['score'] * 100)}%)",
-                                "updated_at": datetime.now().isoformat(),
-                            })
-                            # Update the candidate dict with match info
-                            candidate_dict = candidate.model_dump()
-                            candidate_dict["job_id"] = best["job_id"]
-                            candidate_dict["match_score"] = best["score"]
-                            candidate_dict["match_reasoning"] = f"Best match: {best_job['title']} at {best_job['company']} ({round(best['score'] * 100)}%)"
-                            response["action"] = {"type": "create_candidate", "candidate": candidate_dict}
-                except Exception as me:
-                    log.warning("Auto-match failed (non-fatal): %s", me)
-
-            if "action" not in response or response.get("action", {}).get("type") != "create_candidate":
-                response["action"] = {"type": "create_candidate", "candidate": candidate.model_dump()}
-
-            db.insert_activity({
-                "id": uuid.uuid4().hex[:8], "user_id": user_id,
-                "activity_type": "candidate_created_via_chat",
-                "description": f"Created candidate: {name} — {current_title}",
-                "metadata_json": json.dumps({"candidate_id": candidate.id, "name": name}),
-                "created_at": datetime.now().isoformat(),
-            })
-
-            response["context_hint"] = {"type": "candidate", "id": candidate.id}
-            response["suggestions"] = [
-                {"label": "Match to jobs", "prompt": f"What jobs match {name}?"},
-                {"label": "Draft email", "prompt": f"Draft an outreach email to {name}"},
-            ]
-        except Exception as e:
-            log.error("Failed to create candidate via chat: %s", e)
-            response["reply"] = f"Sorry, I encountered an error creating the candidate: {e}"
-
-    # ── Job Seeker Actions ────────────────────────────────────────────────
-
-    elif action_type == "search_jobs":
-        try:
-            from app.agents.job_search import search_jobs_enriched
-
-            query = action_data.get("query", "").strip()
-            profile = db.get_job_seeker_profile_by_user(user_id)
-
-            # Build search query from user request + profile context
-            if not query and profile:
-                parts = []
-                if profile.get("current_title"):
-                    parts.append(profile["current_title"])
-                if profile.get("skills"):
-                    parts.append(" ".join(profile["skills"][:5]))
-                query = " ".join(parts) if parts else "software engineer"
-
-            location = ""
-            if profile and profile.get("location"):
-                location = profile["location"]
-
-            results = search_jobs_enriched(cfg, query, profile, location, n_results=10)
-
-            if results:
-                # Assign indices for reference
-                for idx, r in enumerate(results):
-                    r["index"] = idx + 1
-
-                response["blocks"] = [{"type": "job_search_results", "jobs": results}]
-                # Store results so context builder can find them for follow-up
-                response["action"] = {"type": "job_search_results", "jobs": results}
-                response["reply"] = f"I found {len(results)} job postings from the web. Take a look below!"
-                top3 = results[:3]
-                response["suggestions"] = [
-                    {"label": f"Analyze #{r['index']}", "prompt": f"帮我分析一下第{r['index']}个职位: {r.get('title', '')}"}
-                    for r in top3
-                ]
-            else:
-                response["reply"] = "I couldn't find any matching job postings. Try different keywords!"
-
-        except Exception as e:
-            log.error("Job search failed: %s", e)
-            response["reply"] = f"Sorry, I encountered an error while searching: {e}"
-
-    elif action_type == "analyze_job_match":
-        try:
-            from app.llm import chat_json
-            from app.prompts import MATCHING
-
-            # Get the job info from recent search results in session history
-            job_index = action_data.get("job_index")  # 1-based
-            job_title = action_data.get("job_title", "")
-            job_url = action_data.get("job_url", "")
-            job_snippet = action_data.get("job_snippet", "")
-            job_company = action_data.get("job_company", "")
-            job_location = action_data.get("job_location", "")
-
-            # If we don't have job details, try to find from session history
-            if not job_snippet and session_id:
-                recent_msgs = db.list_chat_messages(user_id, limit=10, session_id=session_id)
-                for msg in reversed(recent_msgs):
-                    if msg.get("action_json"):
-                        try:
-                            action = json.loads(msg["action_json"]) if isinstance(msg["action_json"], str) else msg["action_json"]
-                            if isinstance(action, dict) and action.get("type") == "job_search_results":
-                                jobs = action.get("jobs", [])
-                                # Find by index or title match
-                                target = None
-                                if job_index and 1 <= job_index <= len(jobs):
-                                    target = jobs[job_index - 1]
-                                else:
-                                    for j in jobs:
-                                        if job_title and job_title.lower() in j.get("title", "").lower():
-                                            target = j
-                                            break
-                                if target:
-                                    job_title = target.get("title", job_title)
-                                    job_company = target.get("company", job_company)
-                                    job_snippet = target.get("snippet", job_snippet)
-                                    job_url = target.get("url", job_url)
-                                    job_location = target.get("location", job_location)
-                                break
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-
-            if not job_title and not job_snippet:
-                response["reply"] = "I couldn't find the job details. Please search for jobs first!"
-                return response
-
-            profile = db.get_job_seeker_profile_by_user(user_id)
-            if not profile or not profile.get("name"):
-                response["reply"] = "Please upload your resume first so I can analyze how well you match this position!"
-                return response
-
-            skills = profile.get("skills", [])
-            skills_str = ", ".join(skills) if isinstance(skills, list) else str(skills)
-
-            job_desc = f"Title: {job_title}\n"
-            if job_company:
-                job_desc += f"Company: {job_company}\n"
-            if job_location:
-                job_desc += f"Location: {job_location}\n"
-            job_desc += f"Description: {job_snippet}\n"
-
-            user_msg = (
-                f"## Job Description\n{job_desc}\n\n"
-                f"## Candidate Profile\n"
-                f"Name: {profile['name']}\n"
-                f"Title: {profile.get('current_title', '')}\n"
-                f"Skills: {skills_str}\n"
-                f"Experience: {profile.get('experience_years', 'N/A')} years\n"
-                f"Summary: {profile.get('resume_summary', '')}\n"
-            )
-
-            match_data = chat_json(cfg, system=MATCHING, messages=[{"role": "user", "content": user_msg}])
-            if isinstance(match_data, list):
-                match_data = match_data[0] if match_data else {}
-
-            match_result = {
-                "score": float(match_data.get("score", 0.0)),
-                "strengths": match_data.get("strengths", []),
-                "gaps": match_data.get("gaps", []),
-                "reasoning": match_data.get("reasoning", ""),
-            }
-
-            match_block = {
-                "type": "job_match_result",
-                "job": {
-                    "title": job_title,
-                    "company": job_company,
-                    "location": job_location,
-                    "url": job_url,
-                    "snippet": job_snippet,
-                },
-                "match": match_result,
-            }
-            response["blocks"] = [match_block]
-            # Persist blocks in action so save_job can find job details from history
-            response["action"] = {"type": "job_match_result", "blocks": [match_block]}
-            score_pct = round(match_result["score"] * 100)
-            response["reply"] = f"Here's my analysis of your fit for **{job_title}**" + (f" at **{job_company}**" if job_company else "") + f" — match score: **{score_pct}%**."
-            response["suggestions"] = [
-                {"label": "Save this job", "prompt": f"Save this job: {job_title}"},
-                {"label": "Improve my resume", "prompt": f"How can I improve my resume for {job_title}"},
-                {"label": "Write cover letter", "prompt": f"Write a cover letter for {job_title}" + (f" at {job_company}" if job_company else "")},
-                {"label": "Search more", "prompt": "Search for more matching jobs"},
-            ]
-
-        except Exception as e:
-            log.error("Job match analysis failed: %s", e)
-            response["reply"] = f"Sorry, I encountered an error during analysis: {e}"
-
-    elif action_type == "save_job":
-        try:
-            # Get job details from action data or conversation context
-            job_title = action_data.get("job_title", "")
-            job_company = action_data.get("job_company", "")
-            job_url = action_data.get("job_url", "")
-            job_snippet = action_data.get("job_snippet", "")
-            job_location = action_data.get("job_location", "")
-
-            # Try to find job details from recent match result in session history
-            if not job_title and session_id:
-                recent_msgs = db.list_chat_messages(user_id, limit=10, session_id=session_id)
-                for msg in reversed(recent_msgs):
-                    if msg.get("action_json"):
-                        try:
-                            action = json.loads(msg["action_json"]) if isinstance(msg["action_json"], str) else msg["action_json"]
-                            if isinstance(action, dict):
-                                blocks = action.get("blocks", [])
-                                if isinstance(blocks, list):
-                                    for blk in blocks:
-                                        if isinstance(blk, dict) and blk.get("type") == "job_match_result":
-                                            job_info = blk.get("job", {})
-                                            job_title = job_info.get("title", "")
-                                            job_company = job_info.get("company", "")
-                                            job_url = job_info.get("url", "")
-                                            job_snippet = job_info.get("snippet", "")
-                                            job_location = job_info.get("location", "")
-                                            break
-                                    if job_title:
-                                        break
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-
-            if not job_title:
-                response["reply"] = "I'm not sure which job to save. Could you tell me the job title?"
-                return response
-
-            # Check if already saved
-            existing = db.list_seeker_jobs(user_id)
-            already_saved = any(
-                sj.get("title") == job_title and sj.get("company") == job_company
-                for sj in existing
-            )
-            if already_saved:
-                response["reply"] = f"You've already saved **{job_title}**" + (f" at **{job_company}**" if job_company else "") + " to your list!"
-                return response
-
-            seeker_job = {
-                "id": uuid.uuid4().hex[:8],
-                "user_id": user_id,
-                "title": job_title,
-                "company": job_company,
-                "posted_date": datetime.now().strftime("%Y-%m-%d"),
-                "required_skills": [],
-                "preferred_skills": [],
-                "experience_years": None,
-                "location": job_location,
-                "remote": False,
-                "salary_range": "",
-                "summary": job_snippet,
-                "raw_text": job_snippet,
-                "source_url": job_url,
-                "status": "interested",
-                "created_at": datetime.now().isoformat(),
-            }
-            db.insert_seeker_job(seeker_job)
-
-            response["reply"] = f"I've saved **{job_title}**" + (f" at **{job_company}**" if job_company else "") + " to your job list! You can view it in the My Jobs page."
-            response["suggestions"] = [
-                {"label": "Search more", "prompt": "继续搜索其他职位"},
-                {"label": "View my jobs", "prompt": "我保存了哪些职位？"},
-            ]
-
-        except Exception as e:
-            log.error("Save job failed: %s", e)
-            response["reply"] = f"Sorry, I encountered an error saving the job: {e}"
-
-    elif action_type == "improve_resume":
-        try:
-            from app.llm import chat_json
-            from app.prompts import RESUME_IMPROVEMENT
-
-            job_title = action_data.get("job_title", "")
-            job_company = action_data.get("job_company", "")
-
-            profile = db.get_job_seeker_profile_by_user(user_id)
-            if not profile or not profile.get("name"):
-                response["reply"] = "Please upload your resume first!"
-                return response
-
-            # Find gaps from the most recent match analysis in session history
-            gaps: list[str] = []
-            match_score: float = 0.0
-            if session_id:
-                recent_msgs = db.list_chat_messages(user_id, limit=15, session_id=session_id)
-                for msg in reversed(recent_msgs):
-                    if msg.get("action_json"):
-                        try:
-                            act = json.loads(msg["action_json"]) if isinstance(msg["action_json"], str) else msg["action_json"]
-                            if isinstance(act, dict) and act.get("type") == "job_match_result":
-                                blocks = act.get("blocks", [])
-                                for b in blocks:
-                                    if b.get("type") == "job_match_result":
-                                        gaps = b.get("match", {}).get("gaps", [])
-                                        match_score = b.get("match", {}).get("score", 0.0)
-                                        if not job_title:
-                                            job_title = b.get("job", {}).get("title", "")
-                                        if not job_company:
-                                            job_company = b.get("job", {}).get("company", "")
-                                        break
-                                break
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-
-            skills = profile.get("skills", [])
-            skills_str = ", ".join(skills) if isinstance(skills, list) else str(skills)
-            user_msg = (
-                f"## Candidate Profile\n"
-                f"Name: {profile['name']}\n"
-                f"Title: {profile.get('current_title', '')}\n"
-                f"Skills: {skills_str}\n"
-                f"Experience: {profile.get('experience_years', 'N/A')} years\n"
-                f"Summary: {profile.get('resume_summary', '')}\n\n"
-                f"## Target Job\n"
-                f"Title: {job_title}\nCompany: {job_company}\n\n"
-                f"## Identified Gaps\n"
-                + ("\n".join(f"- {g}" for g in gaps) if gaps else "No specific gaps identified — provide general improvement advice.")
-            )
-
-            result = chat_json(cfg, system=RESUME_IMPROVEMENT, messages=[{"role": "user", "content": user_msg}])
-            if isinstance(result, list):
-                result = result[0] if result else {}
-
-            suggestions_data = result.get("suggestions", [])
-            summary = result.get("summary", "")
-
-            response["reply"] = f"Here are my suggestions to improve your resume" + (f" for **{job_title}**" if job_title else "") + "."
-            response["blocks"].append({
-                "type": "resume_improvement",
-                "summary": summary,
-                "job_title": job_title,
-                "job_company": job_company,
-                "suggestions": suggestions_data,
-                "match_score": match_score,
-            })
-            response["suggestions"] = [
-                {"label": "Write cover letter", "prompt": f"Write a cover letter for {job_title}" + (f" at {job_company}" if job_company else "")},
-                {"label": "Search more jobs", "prompt": "Search for more matching jobs"},
-            ]
-
-        except Exception as e:
-            log.error("Resume improvement failed: %s", e)
-            response["reply"] = f"Sorry, I encountered an error: {e}"
-
-    elif action_type == "generate_cover_letter":
-        try:
-            from app.llm import chat_json
-            from app.prompts import COVER_LETTER
-
-            job_title = action_data.get("job_title", "")
-            job_company = action_data.get("job_company", "")
-            job_snippet = action_data.get("job_snippet", "")
-
-            # Try to enrich job details from session history if not provided
-            if not job_snippet and session_id:
-                recent_msgs = db.list_chat_messages(user_id, limit=15, session_id=session_id)
-                for msg in reversed(recent_msgs):
-                    if msg.get("action_json"):
-                        try:
-                            act = json.loads(msg["action_json"]) if isinstance(msg["action_json"], str) else msg["action_json"]
-                            if isinstance(act, dict) and act.get("type") == "job_match_result":
-                                blocks = act.get("blocks", [])
-                                for b in blocks:
-                                    if b.get("type") == "job_match_result":
-                                        job_info = b.get("job", {})
-                                        if not job_title:
-                                            job_title = job_info.get("title", "")
-                                        if not job_company:
-                                            job_company = job_info.get("company", "")
-                                        if not job_snippet:
-                                            job_snippet = job_info.get("snippet", "")
-                                        break
-                                break
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-
-            profile = db.get_job_seeker_profile_by_user(user_id)
-            if not profile or not profile.get("name"):
-                response["reply"] = "Please upload your resume first so I can write a personalized cover letter!"
-                return response
-
-            skills = profile.get("skills", [])
-            skills_str = ", ".join(skills) if isinstance(skills, list) else str(skills)
-            user_msg = (
-                f"## Candidate Profile\n"
-                f"Name: {profile['name']}\n"
-                f"Title: {profile.get('current_title', '')}\n"
-                f"Skills: {skills_str}\n"
-                f"Experience: {profile.get('experience_years', 'N/A')} years\n"
-                f"Location: {profile.get('location', '')}\n"
-                f"Summary: {profile.get('resume_summary', '')}\n\n"
-                f"## Target Job\n"
-                f"Title: {job_title}\nCompany: {job_company}\n"
-                + (f"Description: {job_snippet}\n" if job_snippet else "")
-            )
-
-            result = chat_json(cfg, system=COVER_LETTER, messages=[{"role": "user", "content": user_msg}])
-            if isinstance(result, list):
-                result = result[0] if result else {}
-
-            subject = result.get("subject", f"Application for {job_title}")
-            body = result.get("body", "")
-
-            response["reply"] = f"Here's your cover letter for **{job_title}**" + (f" at **{job_company}**" if job_company else "") + ". Feel free to edit it before sending!"
-            response["blocks"].append({
-                "type": "cover_letter",
-                "job_title": job_title,
-                "job_company": job_company,
-                "subject": subject,
-                "body": body,
-            })
-            response["suggestions"] = [
-                {"label": "Improve my resume", "prompt": f"How can I improve my resume for {job_title}"},
-                {"label": "Save this job", "prompt": f"Save {job_title}" + (f" at {job_company}" if job_company else "")},
-            ]
-
-        except Exception as e:
-            log.error("Cover letter generation failed: %s", e)
-            response["reply"] = f"Sorry, I encountered an error: {e}"
-
-    return response
-
-
-def _build_smart_suggestions(action_data) -> list[dict]:
-    """Build contextual suggestions based on pipeline state and last action."""
-    suggestions = []
-    candidates = db.list_candidates() or []
-
-    contacted = [c for c in candidates if c.get("status") == "contacted"]
-    new_ones = [c for c in candidates if c.get("status") == "new"]
-
-    if action_data and isinstance(action_data, dict):
-        atype = action_data.get("type", "")
-        if atype == "compose_email":
-            name = action_data.get("candidate_name", "")
-            suggestions.append({"label": "Check pipeline", "prompt": "What's the pipeline status?"})
-            if len(contacted) > 1:
-                suggestions.append({"label": "More follow-ups", "prompt": "Who else needs a follow-up?"})
-            return suggestions[:4]
-        if atype == "upload_resume":
-            suggestions.append({"label": "Match to jobs", "prompt": "Match the latest candidate to jobs"})
-            suggestions.append({"label": "Upload another", "prompt": "Upload another resume"})
-            return suggestions[:4]
-        if atype == "upload_jd":
-            suggestions.append({"label": "Find candidates", "prompt": "Find candidates for the latest job"})
-            suggestions.append({"label": "Upload resume", "prompt": "Upload a resume"})
-            return suggestions[:4]
-        if atype == "create_job":
-            suggestions.append({"label": "Find candidates", "prompt": "Find matching candidates for the new job"})
-            suggestions.append({"label": "Create another", "prompt": "Create another job posting"})
-            return suggestions[:4]
-        if atype == "create_candidate":
-            name = action_data.get("name", "the new candidate")
-            suggestions.append({"label": "Match to jobs", "prompt": f"What jobs match {name}?"})
-            suggestions.append({"label": "Draft email", "prompt": f"Draft an outreach email to {name}"})
-            return suggestions[:4]
-        if atype == "market_analysis":
-            role = action_data.get("role", "this role")
-            suggestions.append({"label": "Find candidates", "prompt": f"Find candidates for {role}"})
-            suggestions.append({"label": "Compare roles", "prompt": f"What about similar roles to {role}?"})
-            return suggestions[:4]
-        if atype == "recommend_to_employer":
-            name = action_data.get("candidate_name", "the candidate")
-            suggestions.append({"label": "Check pipeline", "prompt": "What's the pipeline status?"})
-            suggestions.append({"label": "Check for replies", "prompt": "Have any employers replied?"})
-            return suggestions[:4]
-
-    if contacted:
-        suggestions.append({"label": "Check for replies", "prompt": "Have any contacted candidates replied?"})
-    if new_ones:
-        suggestions.append({"label": f"Review {new_ones[0]['name']}", "prompt": f"What jobs match {new_ones[0]['name']}?"})
-    if not suggestions:
-        suggestions.append({"label": "Pipeline status", "prompt": "What's the pipeline status today?"})
-    suggestions.append({"label": "Upload resume", "prompt": "Upload a resume"})
-
-    return suggestions[:4]
-
-
-def _build_chat_context(user_id: str = "", current_message: str = "") -> str:
-    """Build a context string from the database for the chat system prompt."""
-    from app import vectorstore
-
-    parts = []
-
-    # Relevant Past Conversations (RAG)
-    if user_id and current_message:
-        try:
-            past = vectorstore.search_session_summaries(current_message, user_id, n_results=3)
-            relevant = [p for p in past if p["score"] > 0.3]
-            if relevant:
-                parts.append("## Relevant Past Conversations")
-                total = 0
-                for p in relevant:
-                    meta = p.get("metadata", {})
-                    date = meta.get("created_at", "")[:10]
-                    text = f"- [{date}] {p['document']}" if date else f"- {p['document']}"
-                    if total + len(text) > 600:
-                        break
-                    parts.append(text)
-                    total += len(text)
-                parts.append("")
-        except Exception as e:
-            log.warning("Past conversation retrieval failed (non-fatal): %s", e)
-
-    # Recruiter Preferences & Memory
-    if user_id:
-        memories = db.list_memories(user_id, limit=10)
-        if memories:
-            mem_lines = ["## Your Preferences & Memory"]
-            for m in memories:
-                tag = "preference" if m["memory_type"] == "explicit" else "observed"
-                mem_lines.append(f"- [{tag}] {m['content']}")
-                db.update_memory(m["id"], {"access_count": m.get("access_count", 0) + 1})
-            # Cap memory section at ~800 chars to preserve context budget
-            mem_text = "\n".join(mem_lines)
-            if len(mem_text) > 800:
-                trimmed = [mem_lines[0]]
-                total = len(trimmed[0])
-                for line in mem_lines[1:]:
-                    if total + len(line) + 1 > 750:
-                        break
-                    trimmed.append(line)
-                    total += len(line) + 1
-                mem_lines = trimmed
-            parts.extend(mem_lines)
-            parts.append("")
-
-    # Jobs summary
-    jobs = db.list_jobs()
-    if jobs:
-        parts.append(f"## Active Jobs ({len(jobs)})")
-        for j in jobs[:10]:
-            contact = ""
-            if j.get("contact_name") or j.get("contact_email"):
-                contact = f", contact: {j.get('contact_name', '')} <{j.get('contact_email', '')}>"
-            parts.append(
-                f"- {j['title']} at {j['company']} "
-                f"(ID: {j['id']}, candidates: {j.get('candidate_count', 0)}{contact})"
-            )
-    else:
-        parts.append("## Jobs: None")
-
-    # Pipeline summary (per-job status)
-    pipeline = db.list_pipeline_entries()
-    if pipeline:
-        from collections import defaultdict
-        stage_counts: dict[str, int] = defaultdict(int)
-        job_stage: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
-        for entry in pipeline:
-            stage = entry.get("pipeline_status", "new")
-            stage_counts[stage] += 1
-            if entry.get("candidate_name"):
-                jid = entry["job_id"]
-                jlabel = f"{entry.get('job_title', '')} at {entry.get('job_company', '')}"
-                job_stage[jlabel][stage].append(entry["candidate_name"])
-        parts.append(f"\n## Pipeline Summary")
-        parts.append("Stages: " + ", ".join(f"{s}: {c}" for s, c in stage_counts.items()))
-        for jlabel, stages in list(job_stage.items())[:5]:
-            stage_info = ", ".join(f"{s}: {len(names)}" for s, names in stages.items())
-            parts.append(f"- {jlabel} — {stage_info}")
-
-    # Candidates summary
-    candidates = db.list_candidates()
-    if candidates:
-        parts.append(f"\n## Candidates ({len(candidates)})")
-        for c in candidates[:20]:
-            parts.append(
-                f"- {c['name']} — {c.get('current_title', 'N/A')} "
-                f"(ID: {c['id']}, status: {c['status']}, score: {c.get('match_score', 0):.0%}, "
-                f"email: {c.get('email') or 'N/A'}, skills: {', '.join(c.get('skills', [])[:5])})"
-            )
-    else:
-        parts.append("\n## Candidates: None")
-
-    # Contacted candidates (awaiting reply)
-    contacted = [c for c in (candidates or []) if c.get("status") == "contacted"]
-    if contacted:
-        parts.append(f"\n## Contacted Candidates Awaiting Reply ({len(contacted)})")
-        for c in contacted:
-            parts.append(
-                f"- {c['name']} (ID: {c['id']}, email: {c.get('email') or 'N/A'})"
-            )
-
-    # Recent emails
-    emails = db.list_emails()
-    if emails:
-        recent = emails[:10]
-        parts.append(f"\n## Recent Emails ({len(emails)} total)")
-        for e in recent:
-            status = "sent" if e["sent"] else ("approved" if e["approved"] else "draft")
-            parts.append(
-                f"- [{status}] \"{e['subject']}\" to {e['to_email']} "
-                f"({e['email_type']}, candidate: {e.get('candidate_name', 'N/A')})"
-            )
-    else:
-        parts.append("\n## Emails: None")
-
-    return "\n".join(parts)
 
 
 def _build_job_seeker_context(user_id: str, session_id: str | None = None) -> str:
@@ -2134,49 +735,79 @@ def _summarize_session(cfg, session_id: str, user_id: str) -> None:
         log.warning("Session summarization failed (non-fatal): %s", e)
 
 
-@router.post("/workflow/{workflow_id}/resume")
-async def resume_workflow(workflow_id: str, body: dict, user=Depends(get_current_user)):
-    """Resume a paused workflow with user's approval response.
+def _rebuild_agent(user_id: str, user_role: str):
+    """The same agent and tool set the paused run had.
 
-    The body contains the resume payload, e.g.:
-      - scheduling: {"selected_slot": {...}}
-      - pipeline_cleanup: {"approved": true, "actions": [...]}
-      - bulk_outreach: {"approved": true, "drafts": [...]}
+    Rebuilt rather than held in memory: the process that asked for approval is
+    usually not the one that receives the answer.
     """
-    from app.graphs.supervisor import supervisor_graph
-    from langgraph.types import Command
+    from app.agent_tools import product_tools, tools_for_role
+    from app.routes.settings import get_config
+    from app.sdk_bridge import build_recruiter
+
+    cfg = get_config()
+    recruiter = build_recruiter(cfg, extra_tools=product_tools(cfg, user_id))
+    agent = recruiter.agent(max_steps=8)
+    agent.tools = tools_for_role(recruiter, user_role)
+    return agent
+
+
+async def _answer_approval(workflow_id: str, user: dict, approved: bool) -> dict:
+    """Carry on a run that stopped at an approval gate."""
+    from openrecruiter import PendingApproval
+
+    from app.sse_agent import stream_agent
 
     wf = db.get_workflow(workflow_id)
     if not wf:
         return {"error": "Workflow not found"}
     if wf.get("status") != "paused":
         return {"error": "Workflow is not paused"}
+    if wf.get("user_id") != user["id"]:
+        return {"error": "Workflow not found"}
 
     try:
-        result = supervisor_graph.invoke(
-            Command(resume=body),
-            config={"configurable": {"thread_id": workflow_id}},
-        )
-        # Update workflow status
-        db.update_workflow(workflow_id, {"status": "completed", "updated_at": datetime.now().isoformat()})
-        return {
-            "status": "completed",
-            "response_text": result.get("response_text", "Done"),
-            "agent_results": result.get("agent_results", {}),
-        }
-    except Exception as e:
-        log.error("Workflow resume failed: %s", e, exc_info=True)
-        return {"error": str(e)}
+        pending = PendingApproval.model_validate_json(wf.get("checkpoint_data_json") or "{}")
+    except Exception as exc:
+        log.error("Could not read the parked approval for %s: %s", workflow_id, exc)
+        return {"error": "This approval can no longer be resumed."}
+
+    # Mark it spent before running, so a double-click cannot send twice.
+    db.update_workflow(
+        workflow_id,
+        {"status": "approved" if approved else "cancelled", "updated_at": datetime.now().isoformat()},
+    )
+
+    agent = _rebuild_agent(user["id"], user.get("role", "recruiter"))
+    final: dict = {}
+    async for frame in stream_agent(
+        agent,
+        "",
+        session_id=wf["session_id"],
+        user_id=user["id"],
+        resume=(pending, approved),
+    ):
+        if frame["event"] == "done":
+            final = json.loads(frame["data"])
+
+    return {"status": "completed" if approved else "cancelled", **final}
+
+
+@router.post("/workflow/{workflow_id}/resume")
+async def resume_workflow(workflow_id: str, body: dict, user=Depends(get_current_user)):
+    """Approve the action an agent stopped on, and let it finish.
+
+    ``body`` may carry ``{"approved": false}`` to decline without cancelling —
+    the agent is told and gets to respond, which is more useful than an
+    abandoned turn.
+    """
+    return await _answer_approval(workflow_id, user, approved=bool(body.get("approved", True)))
 
 
 @router.post("/workflow/{workflow_id}/cancel")
 async def cancel_workflow(workflow_id: str, user=Depends(get_current_user)):
-    """Cancel a paused workflow."""
-    wf = db.get_workflow(workflow_id)
-    if not wf:
-        return {"error": "Workflow not found"}
-    db.update_workflow(workflow_id, {"status": "cancelled", "updated_at": datetime.now().isoformat()})
-    return {"status": "cancelled"}
+    """Decline the action. Nothing is performed and the agent is told why."""
+    return await _answer_approval(workflow_id, user, approved=False)
 
 
 def _maybe_summarize_previous_session(cfg, user_id: str, current_session_id: str) -> None:

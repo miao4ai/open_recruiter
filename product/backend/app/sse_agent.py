@@ -25,15 +25,40 @@ from openrecruiter import (
 )
 
 from app import database as db
+from app.blocks import as_action, as_block, as_context_hint
 
 log = logging.getLogger(__name__)
-
-#: Tool results carrying this key are UI instructions, not data to summarise.
-_UI_CARD_KEY = "ui_card"
 
 
 def _sse(event: str, payload: dict) -> dict:
     return {"event": event, "data": json.dumps(payload, default=str)}
+
+
+def _park_for_approval(agent: Agent, session_id: str, user_id: str) -> str:
+    """Persist the paused run so a later request can pick it up.
+
+    The decision almost always arrives on a different request — often after the
+    user has read the draft — so the agent's state has to outlive this one.
+    """
+    workflow_id = uuid.uuid4().hex[:8]
+    now = datetime.now().isoformat()
+    db.insert_workflow(
+        {
+            "id": workflow_id,
+            "session_id": session_id,
+            "user_id": user_id,
+            "workflow_type": "tool_approval",
+            "status": "paused",
+            "current_step": 0,
+            "total_steps": 1,
+            "steps_json": "[]",
+            "context_json": "{}",
+            "checkpoint_data_json": agent.pending.model_dump_json() if agent.pending else "{}",
+            "created_at": now,
+            "updated_at": now,
+        }
+    )
+    return workflow_id
 
 
 async def stream_agent(
@@ -43,21 +68,33 @@ async def stream_agent(
     session_id: str,
     user_id: str,
     history: list[dict] | None = None,
+    resume: tuple[object, bool] | None = None,
 ) -> AsyncGenerator[dict, None]:
     """Run the agent and translate its events into SSE frames."""
     text_parts: list[str] = []
     blocks: list[dict] = []
     action: dict | None = None
+    context_hint: dict | None = None
     tools_used: list[str] = []
+    #: Arguments by call id, so a result can be mapped with what it was asked.
+    call_arguments: dict[str, dict] = {}
 
     try:
-        for event in agent.run(message, history=history):
+        events = (
+            agent.resume(resume[0], resume[1])
+            if resume is not None
+            else agent.run(message, history=history)
+        )
+        for event in events:
             if isinstance(event, TextDelta):
                 text_parts.append(event.text)
                 yield _sse("token", {"t": event.text})
 
             elif isinstance(event, ToolCall):
                 tools_used.append(event.name)
+                call_arguments[event.id] = event.arguments
+                if context_hint is None:
+                    context_hint = as_context_hint(event.name, event.arguments)
                 yield _sse("tool_call", {"id": event.id, "name": event.name, "arguments": event.arguments})
 
             elif isinstance(event, ToolResult):
@@ -65,12 +102,13 @@ async def stream_agent(
                     "tool_result",
                     {"id": event.id, "name": event.name, "ok": event.ok, "error": event.error},
                 )
-                card = _as_ui_action(event)
-                if card is not None:
-                    action = card
-                block = _as_block(event)
-                if block is not None:
-                    blocks.append(block)
+                if event.ok:
+                    card = as_action(event.name, event.result)
+                    if card is not None:
+                        action = card
+                    block = as_block(event.name, event.result)
+                    if block is not None:
+                        blocks.append(block)
 
             elif isinstance(event, ApprovalRequired):
                 yield _sse(
@@ -81,6 +119,8 @@ async def stream_agent(
                         "arguments": event.arguments,
                         "description": event.description,
                         "session_id": session_id,
+                        # The client answers on this id — see /agent/workflow/{id}.
+                        "workflow_id": _park_for_approval(agent, session_id, user_id),
                     },
                 )
 
@@ -94,6 +134,13 @@ async def stream_agent(
         log.exception("Agent stream failed")
         text_parts.append(f"\n\nSorry, something went wrong: {exc}")
 
+    # Job-seeker follow-ups ("analyse the third one") read the list back off the
+    # stored action, so it has to survive in the message record.
+    if action is None:
+        search = next((b for b in blocks if b["type"] == "job_search_results"), None)
+        if search is not None:
+            action = search
+
     reply = "".join(text_parts).strip()
     message_id = _persist(user_id, session_id, reply, action)
 
@@ -106,40 +153,10 @@ async def stream_agent(
             "blocks": blocks,
             "suggestions": [],
             "action": action,
+            "context_hint": context_hint,
             "tools_used": tools_used,
         },
     )
-
-
-def _as_ui_action(result: ToolResult) -> dict | None:
-    """A tool asking the app to open a panel, rather than returning data."""
-    value = result.result
-    if isinstance(value, dict) and _UI_CARD_KEY in value:
-        card = {k: v for k, v in value.items() if k != "note"}
-        card["type"] = card.pop(_UI_CARD_KEY)
-        return card
-    return None
-
-
-def _as_block(result: ToolResult) -> dict | None:
-    """Turn a tool result the UI has a card for into a renderable block."""
-    if not result.ok:
-        return None
-    value = result.result
-
-    if result.name == "check_inbox" and isinstance(value, dict) and value.get("messages"):
-        return {"type": "inbox_preview", "emails": value["messages"]}
-
-    if result.name == "search_web_jobs" and isinstance(value, list) and value:
-        return {"type": "job_search_results", "jobs": value}
-
-    if result.name == "rank_candidates" and isinstance(value, list) and value:
-        return {"type": "match_results", "matches": value}
-
-    if result.name == "draft_email" and isinstance(value, dict) and value.get("subject"):
-        return {"type": "email_draft", "draft": value}
-
-    return None
 
 
 def _persist(user_id: str, session_id: str, reply: str, action: dict | None) -> str:
