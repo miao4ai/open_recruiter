@@ -128,7 +128,7 @@ Each part builds and ships on its own.
 | Path | What it is | Produces |
 |------|-----------|----------|
 | [`product/`](product/) | The desktop app — Electron + React + FastAPI | `.dmg` · `.exe` · `.AppImage` |
-| [`sdk/core/`](sdk/core/) | `openrecruiter` — the agent toolkit the app runs on | PyPI package |
+| [`sdk/core/`](sdk/core/) | `openrecruiter` — the recruiting engine the app runs on | Python package |
 | [`sdk/fairness/`](sdk/fairness/) | `openrecruiter-fairness` — fairness-aware ranking | PyPI package |
 | [`sdk/recruitgpt/`](sdk/recruitgpt/) | `recruitgpt` — recruiting-domain model training | PyPI package |
 | [`research/`](research/) | Reproducible experiments behind the SDKs | PyPI packages |
@@ -141,7 +141,10 @@ so everything shipped in the package is exercised by the app itself.
 # desktop app
 cd product && npm run dist
 
-# any Python package
+# the SDK, straight from this repository
+pip install "git+https://github.com/miao4ai/open_recruiter.git#subdirectory=sdk/core"
+
+# or build any Python package from source
 cd sdk/core && uv build --out-dir dist
 ```
 

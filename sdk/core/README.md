@@ -7,12 +7,28 @@ agent that does all of it through tools.
 The desktop app is a consumer of this package, so everything shipped here is exercised by a
 real application rather than only by its own tests.
 
+## Install
+
+Straight from the repository:
+
 ```bash
-pip install openrecruiter
+pip install "git+https://github.com/miao4ai/open_recruiter.git#subdirectory=sdk/core"
 ```
 
+Or a released wheel, from the [Releases](https://github.com/miao4ai/open_recruiter/releases)
+page:
+
+```bash
+pip install https://github.com/miao4ai/open_recruiter/releases/download/sdk-core-v0.1.0/openrecruiter-0.1.0-py3-none-any.whl
+```
+
+> Not on PyPI yet, so plain `pip install openrecruiter` will not find it. GitHub Packages has
+> no Python registry, which is why the wheel is attached to a Release rather than appearing in
+> the repository's Packages panel.
+
 No local model is downloaded, at import or at runtime. Embeddings are an API call and chat is
-a hosted provider, so it runs on CPU, on macOS, and in a container with no GPU.
+a hosted provider, so it runs on CPU, on macOS, and in a container with no GPU — 97 packages
+installed, none of them a training stack.
 
 ## Quick start
 
@@ -130,6 +146,16 @@ uv sync
 uv run pytest              # no network calls: the LLM is faked end to end
 uv build --out-dir dist
 ```
+
+Releasing: bump `version` in `pyproject.toml`, then push a matching tag.
+
+```bash
+git tag sdk-core-v0.1.1 && git push origin sdk-core-v0.1.1
+```
+
+CI checks the tag against the version, runs the tests, builds, installs the wheel in a clean
+environment and imports it, verifies no training stack came along, and attaches the artifacts
+to a Release.
 
 ## License
 
