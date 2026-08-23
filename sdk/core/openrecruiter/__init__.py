@@ -37,7 +37,7 @@ from openrecruiter.store import (
 from openrecruiter.tools import Tool, ToolRegistry, tool
 from openrecruiter.types import Candidate, CandidateStatus, EmailDraft, Job, Match
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = [
     "APIRanker",

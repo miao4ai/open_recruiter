@@ -110,32 +110,52 @@ class ChromaVectorIndex:
     # ── indexing ─────────────────────────────────────────────────────────
 
     def index_job(self, job: Job) -> None:
-        text = job.embed_text()
-        if not text or not self.available:
-            return
-        self._collection(JOBS_COLLECTION).upsert(
-            ids=[job.id],
-            documents=[text],
-            metadatas=[{"title": job.title, "company": job.company}],
+        self._upsert(
+            JOBS_COLLECTION,
+            job.id,
+            job.embed_text(),
+            {"title": job.title, "company": job.company},
         )
 
     def index_candidate(self, candidate: Candidate) -> None:
-        text = candidate.embed_text()
-        if not text or not self.available:
-            return
-        self._collection(CANDIDATES_COLLECTION).upsert(
-            ids=[candidate.id],
-            documents=[text],
-            metadatas=[{"name": candidate.name, "title": candidate.current_title}],
+        self._upsert(
+            CANDIDATES_COLLECTION,
+            candidate.id,
+            candidate.embed_text(),
+            {"name": candidate.name, "title": candidate.current_title},
         )
 
+    def _upsert(self, collection: str, record_id: str, text: str, metadata: dict) -> None:
+        """Index one record. A failure costs retrieval, not the record.
+
+        The key is only checked for presence, never for validity, so a typo or
+        an expired key reaches the API. Letting that raise would mean a wrong
+        embedding key stops the user adding a candidate at all — losing the data
+        to protect the index, which is backwards. The record is already stored
+        by the time this runs; reindexing can recover the rest.
+        """
+        if not text or not self.available:
+            return
+        try:
+            self._collection(collection).upsert(
+                ids=[record_id], documents=[text], metadatas=[metadata]
+            )
+        except Exception as exc:  # noqa: BLE001 - network, auth, quota, disk
+            log.warning("Could not index %s in %s: %s", record_id, collection, exc)
+
     def remove_job(self, job_id: str) -> None:
-        if self.available:
-            self._collection(JOBS_COLLECTION).delete(ids=[job_id])
+        self._delete(JOBS_COLLECTION, job_id)
 
     def remove_candidate(self, candidate_id: str) -> None:
-        if self.available:
-            self._collection(CANDIDATES_COLLECTION).delete(ids=[candidate_id])
+        self._delete(CANDIDATES_COLLECTION, candidate_id)
+
+    def _delete(self, collection: str, record_id: str) -> None:
+        if not self.available:
+            return
+        try:
+            self._collection(collection).delete(ids=[record_id])
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Could not remove %s from %s: %s", record_id, collection, exc)
 
     # ── search ───────────────────────────────────────────────────────────
 

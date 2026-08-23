@@ -1,6 +1,6 @@
 [project]
 name = "openrecruiter"
-version = "0.1.0"
+version = "0.1.1"
 description = "The recruiting engine behind Open Recruiter — parse, retrieve, rank, and an agent over tools."
 keywords = ["recruiting", "ats", "llm", "agent", "ranking", "candidate-search"]
 readme = "README.md"

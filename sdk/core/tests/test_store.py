@@ -103,3 +103,47 @@ def test_empty_lists_survive_the_json_column(store, job, candidates, field):
         candidates[0].skills = []
         store.add_candidate(candidates[0])
         assert store.get_candidate(candidates[0].id).skills == []
+
+
+# ── indexing must not be able to lose a record ───────────────────────────
+
+
+def _index_with(monkeypatch, raises):
+    from openrecruiter.config import Config
+    from openrecruiter.store.vector import ChromaVectorIndex
+
+    index = ChromaVectorIndex(lambda: Config(voyage_api_key="pa-wrong"), "/tmp/unused")
+    monkeypatch.setattr(
+        index, "_collection", lambda name: (_ for _ in ()).throw(raises)
+    )
+    return index
+
+
+def test_a_bad_embedding_key_does_not_break_indexing(monkeypatch, job, candidates):
+    """A wrong key must cost retrieval, not the ability to add a candidate.
+
+    `available` only checks that a key is present, so a typo or an expired key
+    reaches the API. Raising here would mean the caller loses the record to
+    protect the index, which is backwards.
+    """
+    index = _index_with(monkeypatch, RuntimeError("401 Unauthorized"))
+
+    index.index_job(job)                 # must not raise
+    index.index_candidate(candidates[0])
+    index.remove_job(job.id)
+    index.remove_candidate(candidates[0].id)
+
+
+def test_a_failed_index_is_logged(monkeypatch, caplog, job):
+    index = _index_with(monkeypatch, RuntimeError("401 Unauthorized"))
+
+    with caplog.at_level("WARNING"):
+        index.index_job(job)
+
+    assert "Could not index" in caplog.text
+    assert "401" in caplog.text
+
+
+def test_search_already_degraded_this_way(monkeypatch, job):
+    index = _index_with(monkeypatch, RuntimeError("boom"))
+    assert index.search_candidates(job) == []
