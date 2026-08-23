@@ -1,0 +1,40 @@
+# Multi-GPU with FSDP — for when a full copy no longer fits.
+#
+# Only reach for this if DDP runs out of memory: a larger base, a longer
+# sequence, or full fine-tuning instead of an adapter. FSDP and 4-bit weights
+# need three things to agree, and the failure when they do not is a shape error
+# deep in the flat-parameter code rather than anything mentioning quantisation:
+#
+#   1. bnb_4bit_quant_storage must equal bnb_4bit_compute_dtype
+#      (Config.validate refuses the run otherwise)
+#   2. fsdp_use_orig_params: true, because PEFT wraps the base model
+#   3. gradient checkpointing must be non-reentrant
+#
+#   accelerate launch --config_file accelerate/fsdp.yaml \
+#       --num_processes 4 \
+#       -m recruitgpt_research.train.sft --config configs/qwen3_8b_fsdp.yaml
+
+compute_environment: LOCAL_MACHINE
+distributed_type: FSDP
+downcast_bf16: 'no'
+machine_rank: 0
+main_training_function: main
+mixed_precision: bf16
+num_machines: 1
+num_processes: 1
+rdzv_backend: static
+same_network: true
+use_cpu: false
+
+fsdp_config:
+  fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
+  # The decoder layer class for the base model. Wrong name, no sharding, and the
+  # run quietly behaves like DDP with extra overhead.
+  fsdp_transformer_layer_cls_to_wrap: Qwen3DecoderLayer
+  fsdp_sharding_strategy: FULL_SHARD
+  fsdp_backward_prefetch: BACKWARD_PRE
+  fsdp_state_dict_type: SHARDED_STATE_DICT
+  fsdp_use_orig_params: true
+  fsdp_cpu_ram_efficient_loading: true
+  fsdp_sync_module_states: true
+  fsdp_offload_params: false

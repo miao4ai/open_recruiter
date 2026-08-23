@@ -1,0 +1,26 @@
+# Multi-GPU with DistributedDataParallel — the default for a QLoRA adapter.
+#
+# Each process holds a full 4-bit copy of the base (about 5 GB for an 8B model)
+# plus the adapter, and gradients are all-reduced. There is nothing to shard,
+# so none of FSDP's interactions with quantisation apply.
+#
+#   accelerate launch --config_file accelerate/ddp.yaml \
+#       --num_processes 4 \
+#       -m recruitgpt_research.train.sft --config configs/qwen3_8b_multi.yaml
+#
+# `num_processes` is left at 1 here on purpose: it belongs on the command line,
+# where it is visible in the shell history next to the run it produced.
+
+compute_environment: LOCAL_MACHINE
+distributed_type: MULTI_GPU
+downcast_bf16: 'no'
+machine_rank: 0
+main_training_function: main
+mixed_precision: bf16
+num_machines: 1
+num_processes: 1
+rdzv_backend: static
+same_network: true
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false

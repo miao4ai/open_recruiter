@@ -1,0 +1,30 @@
+# One GPU. Start here, and confirm the loss moves before spending on more.
+
+model:
+  base: Qwen/Qwen3-8B
+  revision: main
+  load_in_4bit: true
+
+lora:
+  r: 16
+  alpha: 32
+
+data:
+  train_path: data/train.jsonl
+  eval_path: data/validation.jsonl
+  max_candidates: 8
+  max_seq_len: 4096
+  min_quality: silver
+
+train:
+  epochs: 2
+  learning_rate: 1.0e-4
+  batch_size: 1
+  gradient_accumulation_steps: 16   # effective batch 16
+  gradient_checkpointing: true
+
+distributed:
+  strategy: single
+
+run:
+  name: recruitgpt-qwen3-8b-sft

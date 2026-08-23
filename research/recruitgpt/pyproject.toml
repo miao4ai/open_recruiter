@@ -1,11 +1,32 @@
 [project]
 name = "recruitgpt-research"
-version = "0.0.0"
-description = "Reproducible experiments behind recruitgpt."
+version = "0.1.0"
+description = "RecruitGPT — data generation, QLoRA training, and RecruitBench evaluation."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-dependencies = []
+
+# Data generation, splitting, and evaluation run without a deep-learning stack,
+# so a contributor can work on any of them from a laptop. See PLAN.md §22.
+dependencies = [
+    "pydantic>=2.10",
+    "pyyaml>=6.0",
+    # Schemas and the prompt format, shared with serving so the two cannot drift.
+    "recruitgpt",
+]
+
+[project.optional-dependencies]
+train = [
+    "torch>=2.4",
+    "transformers>=4.44",
+    "peft>=0.13",
+    "accelerate>=1.0",
+    "bitsandbytes>=0.44 ; platform_system != 'Darwin'",
+    "datasets>=3.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
 
 [build-system]
 requires = ["hatchling"]
@@ -13,3 +34,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["recruitgpt_research"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

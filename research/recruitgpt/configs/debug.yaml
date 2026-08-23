@@ -1,0 +1,48 @@
+# The whole pipeline, on a laptop, in seconds.
+#
+# A real chat model that is small enough to train on CPU, so the code paths
+# exercised here are the same ones a GPU run takes — tokenisation, masking,
+# LoRA, the trainer loop. The resulting adapter is worthless; the point is that
+# the pipeline is not.
+#
+#   python -m recruitgpt_research.data.generate --config configs/debug.yaml
+#   python -m recruitgpt_research.train.sft      --config configs/debug.yaml
+#   python -m recruitgpt_research.evaluation.run --config configs/debug.yaml
+
+model:
+  base: Qwen/Qwen3-0.6B
+  load_in_4bit: false          # bitsandbytes needs a GPU
+  bnb_4bit_compute_dtype: float32
+  bnb_4bit_quant_storage: float32
+  attn_implementation: eager
+
+lora:
+  r: 4
+  alpha: 8
+
+data:
+  train_path: data/debug/train.jsonl
+  eval_path: data/debug/validation.jsonl
+  max_candidates: 3
+  max_seq_len: 512
+
+train:
+  epochs: 1
+  # Three steps over four examples. Enough to prove the loop runs; a smoke test
+  # that takes an hour on CPU is one nobody waits for.
+  max_steps: 3
+  max_examples: 4
+  batch_size: 1
+  gradient_accumulation_steps: 1
+  gradient_checkpointing: false
+  optim: adamw_torch            # the paged optimiser is CUDA-only
+  bf16: false
+  logging_steps: 1
+  save_steps: 1000
+
+distributed:
+  strategy: single
+
+run:
+  name: recruitgpt-debug
+  notes: CPU smoke test. Not a model.

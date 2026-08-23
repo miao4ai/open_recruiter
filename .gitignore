@@ -50,3 +50,8 @@ product/release/
 
 # Python package builds
 dist/
+
+# Research runs and generated datasets. Adapters are megabytes and datasets are
+# regenerable from a config and a seed — the manifest in each run records which.
+research/*/runs/
+research/*/data/

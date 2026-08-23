@@ -1,0 +1,39 @@
+# Several GPUs, DDP.
+#
+# The accumulation steps come down as the process count goes up, so the
+# effective batch stays at 16 and the run stays comparable to the single-GPU
+# one. With four processes: 1 x 4 x 4 = 16. Change the GPU count without
+# changing this and you have changed the experiment.
+#
+#   accelerate launch --config_file accelerate/ddp.yaml --num_processes 4 \
+#       -m recruitgpt_research.train.sft --config configs/qwen3_8b_multi.yaml
+
+model:
+  base: Qwen/Qwen3-8B
+  revision: main
+  load_in_4bit: true
+
+lora:
+  r: 16
+  alpha: 32
+
+data:
+  train_path: data/train.jsonl
+  eval_path: data/validation.jsonl
+  max_candidates: 8
+  max_seq_len: 4096
+
+train:
+  epochs: 2
+  learning_rate: 1.0e-4
+  batch_size: 1
+  gradient_accumulation_steps: 4    # x 4 processes = effective batch 16
+  gradient_checkpointing: true
+  gradient_checkpointing_use_reentrant: false
+
+distributed:
+  strategy: ddp
+  ddp_find_unused_parameters: false
+
+run:
+  name: recruitgpt-qwen3-8b-ddp

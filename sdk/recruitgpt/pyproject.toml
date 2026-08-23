@@ -1,11 +1,23 @@
 [project]
 name = "recruitgpt"
-version = "0.0.0"
+version = "0.1.0"
 description = "RecruitGPT — training and inference for recruiting-domain language models."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-dependencies = []
+# The schemas and the prompt format are pure Python. Everything needed to run a
+# model lives behind the `ranker` extra and is imported lazily, so installing
+# this package downloads no weights and pulls no training stack.
+dependencies = [
+    "pydantic>=2.10",
+]
+
+[project.optional-dependencies]
+ranker = [
+    "torch>=2.4",
+    "transformers>=4.44",
+    "peft>=0.13",
+]
 
 [build-system]
 requires = ["hatchling"]

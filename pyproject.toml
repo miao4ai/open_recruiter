@@ -24,6 +24,7 @@ members = [
 [tool.uv.sources]
 open-recruiter-backend = { workspace = true }
 openrecruiter = { workspace = true }
+recruitgpt = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["product/backend/app"]
