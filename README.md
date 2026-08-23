@@ -217,7 +217,7 @@ knowledge distillation · compact SLM ranking · multi-objective ranking (skill,
 experience, seniority fit) · resume compression and cached candidate representations ·
 efficient inference.
 
-→ [`research/recruitgpt/`](research/recruitgpt/) · [`sdk/recruitgpt/`](sdk/recruitgpt/)
+→ [`research/recruitgpt/`](research/recruitgpt/) ([plan](research/recruitgpt/PLAN.md)) · [`sdk/recruitgpt/`](sdk/recruitgpt/)
 
 ### Fair Candidate Search
 
