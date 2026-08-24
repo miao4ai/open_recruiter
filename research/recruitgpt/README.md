@@ -14,6 +14,9 @@ recruitgpt_research/
 ├── config.py           run configuration, and the guards for multi-GPU QLoRA
 ├── splits.py           grouped splitting, so synthetic data cannot leak
 ├── runs.py             one directory per run: config, manifest, environment, metrics
+├── cost.py             per-call accounting, and a budget that stops the run
+├── sources/
+│   └── djinni.py       the real corpus: skill mining, section split, the adjacency gap
 ├── data/
 │   ├── synthetic.py    deterministic generator — templates, difficulty bands, hard negatives
 │   ├── chat.py         example -> chat messages
@@ -30,6 +33,37 @@ recruitgpt_research/
 The schemas and the prompt format live in the [`recruitgpt`](../../sdk/recruitgpt/) package
 instead of here, because training and serving have to build byte-identical prompts. A model
 trained against one rendering and served another fails in a way that looks like a bad model.
+
+## Where the difficulty comes from
+
+Hard negatives are the point of the benchmark, and the temptation is to write
+them by hand — "a CUDA role should be fooled by PyTorch experience". That records
+the author's assumptions, and the model then learns those.
+
+They are measured instead. Over 142k real postings, a skill is scored on how
+often it is *mentioned* versus how often it appears in a *requirements* section:
+
+```bash
+uv run python -m recruitgpt_research.sources.profile --categories C++ Python
+```
+
+```
+C++      required   oop .95   c++ .93   multithreading .90   linux .83   qt .72
+         adjacent   cloud .27   test .31   documentation .38   security .39
+
+Python   required   python .95   django .89   mysql .88   flask .84   fastapi .78
+         adjacent   planning .20   analytics .23   stakeholders .27   automation .35
+```
+
+The gap is about threefold, and the low column is exactly what pads a résumé
+without qualifying anyone: cloud, automation, documentation, stakeholders. A hard
+negative gets those in depth and the required skills shallow.
+
+This runs over the whole corpus with no model and no API key. Two properties of
+the data make that possible: skills are category-discriminative, so a lift score
+separates "Rust" from "demonstrated"; and 29% of postings mark both a
+requirements and a nice-to-have section, which gives required-versus-preferred
+for free.
 
 ## Run it on a laptop
 
@@ -140,7 +174,7 @@ revision; what stays in the repository is enough to explain a run, not to recons
 ## Testing
 
 ```bash
-uv run pytest          # 53 tests, no GPU
+uv run pytest          # 79 tests, no GPU
 ```
 
 Everything that decides whether training would be *correct* — the split, the prompt, the mask,
