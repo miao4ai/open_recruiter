@@ -126,13 +126,16 @@ instead of touching every handler. All memory reads and writes are wrapped — t
 break a chat turn.
 
 ### MCP server
-`backend/app/mcp_server.py` (FastMCP, stdio) lets external MCP clients — Claude Desktop,
-Cursor, other chat agents — call the recruiter's matching and evaluation capabilities. It
-imports the agent and db functions directly and reads the same local SQLite + ChromaDB, so
-the FastAPI backend does not need to be running.
+`backend/app/mcp_server.py` (FastMCP; stdio, or streamable HTTP via
+`RECRUITER_MCP_TRANSPORT=http` for a server-side caller such as charbit) lets external MCP
+clients — Claude Desktop, Cursor, other chat agents — call the recruiter's matching and
+evaluation capabilities. It imports the agent and db functions directly and reads the same
+local SQLite + ChromaDB, so the FastAPI backend does not need to be running.
 
 Read-only tools: `list_jobs`, `list_candidates`, `rank_candidates_for_job`,
-`match_candidate_to_job`, `match_candidate_to_jobs`, `evaluate_candidate`.
+`match_candidate_to_job`, `match_candidate_to_jobs`, `evaluate_candidate`; stateless
+job-seeker tools (resume as text, nothing stored): `search_jobs`, `recommend_jobs`,
+`match_resume_to_job`.
 
 ### Anthropic prompt caching
 `CHAT_SYSTEM_WITH_ACTIONS` is ~10K tokens and was re-processed every turn. Adding
