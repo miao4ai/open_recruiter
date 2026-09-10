@@ -85,6 +85,27 @@ def test_transient_candidate_embeds_the_resume(jobs):
     assert cand.raw_resume_text == "Senior Go engineer, Tokyo."
 
 
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.mark.anyio
+async def test_bearer_gate_refuses_strangers(jobs):
+    import httpx
+
+    async def inner(scope, receive, send):
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    gated = jobs.BearerGate(inner, "s3cret")
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=gated), base_url="http://mcp") as c:
+        assert (await c.post("/mcp")).status_code == 401
+        assert (await c.post("/mcp", headers={"authorization": "Bearer wrong"})).status_code == 401
+        r = await c.post("/mcp", headers={"authorization": "Bearer s3cret"})
+        assert r.status_code == 200 and r.text == "ok"
+
+
 def test_http_options_come_from_env(jobs, monkeypatch):
     monkeypatch.setenv("RECRUITER_MCP_HOST", "0.0.0.0")
     monkeypatch.setenv("RECRUITER_MCP_PORT", "9001")
