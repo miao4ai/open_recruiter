@@ -1,8 +1,9 @@
 # MCP Server — recruiter tools for external agents
 
 `product/backend/app/mcp_server.py` exposes the recruiter's **matching & evaluation**
-capabilities as an [MCP](https://modelcontextprotocol.io) server over **stdio**,
-so any MCP client (Claude Desktop, Cursor, another chat agent) can call them.
+capabilities as an [MCP](https://modelcontextprotocol.io) server over **stdio**
+(default) or **streamable HTTP**, so any MCP client (Claude Desktop, Cursor,
+another chat agent, a server such as charbit) can call them.
 
 It imports the existing agent/db functions directly and reads the same local
 SQLite + ChromaDB. **The FastAPI backend does NOT need to be running.**
@@ -11,9 +12,37 @@ SQLite + ChromaDB. **The FastAPI backend does NOT need to be running.**
 
 ```bash
 cd backend && uv run recruiter-mcp      # serves on stdio
+
+# Server-to-server (charbit): streamable HTTP, JSON responses, stateless.
+RECRUITER_MCP_TRANSPORT=http RECRUITER_MCP_PORT=8765 uv run recruiter-mcp
+# → POST http://127.0.0.1:8765/mcp   (RECRUITER_MCP_HOST defaults to 127.0.0.1)
 ```
 
+HTTP mode needs `mcp>=2.0` (what the lock resolves). It binds loopback by
+default — put it next to the caller, not on the internet.
+
 ## Tools
+
+### Job-seeker tools (stateless)
+
+Called by a chat app on a user's behalf. The resume arrives as text; nothing is
+stored or indexed, so one shared instance serves many users.
+
+| Tool | LLM? | Returns |
+|------|------|---------|
+| `search_jobs(query?, location?, top_k=10)` | no | job cards matching keywords / location (`"remote"` matches remote jobs) |
+| `recommend_jobs(resume_text, top_k=5)` | no | job cards best-first by vector similarity, `fields.score` 0–1; empty without a Voyage key |
+| `match_resume_to_job(resume_text, job_id)` | yes | score, strengths, gaps, reasoning |
+
+`search_jobs` / `recommend_jobs` return a **JSON string** holding an array of
+cards `{id, title, subtitle, price, detail, url, fields}` — the search-card
+shape charbit's connector reads from the first text block (string values in
+`fields`). A list return would be split into one text block per item.
+
+### Recruiter tools
+
+| Tool | LLM? | Returns |
+|------|------|---------|
 
 | Tool | LLM? | Returns |
 |------|------|---------|

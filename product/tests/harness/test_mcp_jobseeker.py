@@ -1,0 +1,93 @@
+"""The job-seeker side of the MCP server: stateless tools a chat app calls on a
+user's behalf (charbit's recruiter skill), returning search cards.
+
+The card contract is what makes this testable without a model: every tool
+returns ONE JSON text block holding an array of {id, title, subtitle, …}
+objects — the shape charbit's connector decodes — so the assertions are on
+that JSON, not on ranking quality.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import importlib
+import json
+from datetime import datetime, timezone
+
+import pytest
+
+from app import database as db
+
+
+@pytest.fixture
+def jobs(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPEN_RECRUITER_DATA_DIR", str(tmp_path))
+    importlib.reload(db)
+    db.init_db()
+    now = datetime.now(timezone.utc).isoformat()
+    db.insert_job({
+        "id": "job-go", "title": "Backend Engineer (Go)", "company": "Acme",
+        "location": "Tokyo", "required_skills": ["Go", "Postgres"],
+        "summary": "Own the Go services.", "created_at": now,
+    })
+    db.insert_job({
+        "id": "job-ios", "title": "iOS Engineer", "company": "Beta",
+        "location": "Osaka", "remote": True, "required_skills": ["Swift"],
+        "summary": "Ship the iPhone app.", "salary_range": "¥8M–¥12M",
+        "created_at": now,
+    })
+    from app import mcp_server
+    return mcp_server
+
+
+def _cards(text: str) -> list[dict]:
+    out = json.loads(text)
+    assert isinstance(out, list)
+    return out
+
+
+def test_search_jobs_filters_by_keyword_and_location(jobs):
+    assert [c["id"] for c in _cards(jobs.search_jobs(query="Go"))] == ["job-go"]
+    assert _cards(jobs.search_jobs(location="osaka"))[0]["id"] == "job-ios"
+    assert _cards(jobs.search_jobs(location="remote"))[0]["id"] == "job-ios"
+    assert _cards(jobs.search_jobs(query="cobol")) == []
+    assert len(_cards(jobs.search_jobs())) == 2
+
+
+def test_search_jobs_card_shape_is_the_connector_contract(jobs):
+    card = _cards(jobs.search_jobs(query="ios"))[0]
+    assert card["title"] == "iOS Engineer"
+    assert card["subtitle"] == "Beta · Osaka · Remote"
+    assert card["price"] == "¥8M–¥12M"
+    assert card["detail"] == "Ship the iPhone app."
+    assert card["fields"]["skills"] == "Swift"
+    # The Go side decodes fields as map[string]string.
+    assert all(isinstance(v, str) for v in card["fields"].values())
+
+
+def test_tools_call_returns_one_text_block_holding_the_array(jobs):
+    # The SDK splits a list result into one block per item; a JSON string keeps
+    # the array whole, which is what the connector reads. Its args are strings.
+    res = asyncio.run(jobs.mcp.call_tool("search_jobs", {"query": "engineer", "top_k": "1"}))
+    texts = [c.text for c in res.content if c.type == "text"]
+    assert len(texts) == 1
+    assert len(_cards(texts[0])) == 1
+
+
+def test_recommend_jobs_without_embeddings_degrades_to_empty(jobs):
+    assert _cards(jobs.recommend_jobs(resume_text="Ten years of Go and Postgres.")) == []
+    assert _cards(jobs.recommend_jobs(resume_text="   ")) == []
+
+
+def test_transient_candidate_embeds_the_resume(jobs):
+    cand = jobs._transient_candidate("Senior Go engineer, Tokyo.")
+    assert "Senior Go engineer" in cand.embed_text()
+    assert cand.raw_resume_text == "Senior Go engineer, Tokyo."
+
+
+def test_http_options_come_from_env(jobs, monkeypatch):
+    monkeypatch.setenv("RECRUITER_MCP_HOST", "0.0.0.0")
+    monkeypatch.setenv("RECRUITER_MCP_PORT", "9001")
+    o = jobs._http_options()
+    assert (o["host"], o["port"], o["streamable_http_path"]) == ("0.0.0.0", 9001, "/mcp")
+    assert o["json_response"] and o["stateless_http"]
