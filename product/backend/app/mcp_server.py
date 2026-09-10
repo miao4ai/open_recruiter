@@ -238,6 +238,33 @@ def apply_to_job(job_id: str, resume_text: str, name: str = "", email: str = "",
                       ensure_ascii=False)
 
 
+# Postings name roles in English; a seeker tapping a Chinese or Japanese role
+# button does not. Longest phrases first so 机器学习工程师 is not split into
+# 机器学习 + 工程师 before the whole phrase is tried.
+_ROLE_ALIASES = {
+    "机器学习工程师": "machine learning engineer", "機械学習エンジニア": "machine learning engineer",
+    "机器学习": "machine learning", "機械学習": "machine learning", "算法工程师": "machine learning engineer",
+    "数据科学家": "data scientist", "データサイエンティスト": "data scientist", "数据分析": "data analyst",
+    "后端工程师": "backend engineer", "后端": "backend", "バックエンド": "backend", "服务端": "backend",
+    "前端工程师": "frontend engineer", "前端": "frontend", "フロントエンド": "frontend",
+    "ios工程师": "ios engineer", "ios 工程师": "ios engineer", "iosエンジニア": "ios engineer",
+    "安卓": "android", "アンドロイド": "android",
+    "产品经理": "product manager", "プロダクトマネージャー": "product manager", "プロダクトマネジャー": "product manager",
+    "研究员": "research", "研究エンジニア": "research engineer", "运维": "sre", "语音": "speech", "音声": "speech",
+    "计算机视觉": "computer vision", "自然语言处理": "nlp", "自然言語処理": "nlp",
+    "工程师": "engineer", "エンジニア": "engineer", "开发": "developer", "実装": "developer",
+}
+_ROLE_KEYS = sorted(_ROLE_ALIASES, key=len, reverse=True)
+
+
+def _english_roles(query: str) -> str:
+    q = query.lower()
+    for k in _ROLE_KEYS:
+        if k in q:
+            q = q.replace(k, " " + _ROLE_ALIASES[k] + " ")
+    return q
+
+
 # Postings spell places in English; a job seeker chatting in Chinese or Japanese
 # does not. The common ones, so "东京" finds Tokyo without a model in the way.
 _LOCATION_ALIASES = {
@@ -256,7 +283,7 @@ def search_jobs(query: str = "", location: str = "", top_k: int = 10) -> str:
     location ("remote" matches remote jobs). No LLM. Returns a JSON array of job
     cards: id, title, subtitle (company · location), price (salary), detail,
     fields{company, location, remote, posted_date, skills}."""
-    tokens = [t for t in re.split(r"[\s,、/]+", query.lower()) if t]
+    tokens = [t for t in re.split(r"[\s,、/]+", _english_roles(query).lower()) if t]
     loc = _LOCATION_ALIASES.get(location.strip(), location.strip().lower())
     scored = []
     for row in db.list_jobs() or []:
