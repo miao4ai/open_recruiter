@@ -199,6 +199,18 @@ def _job_card(row: dict, score: float | None = None) -> dict:
     }
 
 
+# Postings spell places in English; a job seeker chatting in Chinese or Japanese
+# does not. The common ones, so "东京" finds Tokyo without a model in the way.
+_LOCATION_ALIASES = {
+    "东京": "tokyo", "東京": "tokyo", "大阪": "osaka", "京都": "kyoto", "名古屋": "nagoya",
+    "福冈": "fukuoka", "福岡": "fukuoka", "横滨": "yokohama", "横浜": "yokohama",
+    "札幌": "sapporo", "神户": "kobe", "神戸": "kobe", "日本": "japan",
+    "北京": "beijing", "上海": "shanghai", "深圳": "shenzhen", "香港": "hong kong",
+    "台北": "taipei", "新加坡": "singapore", "シンガポール": "singapore",
+    "远程": "remote", "遠程": "remote", "リモート": "remote", "在宅": "remote", "任意": "", "无所谓": "",
+}
+
+
 @mcp.tool()
 def search_jobs(query: str = "", location: str = "", top_k: int = 10) -> str:
     """Search open jobs by keywords (title, company, skills, description) and/or
@@ -206,7 +218,7 @@ def search_jobs(query: str = "", location: str = "", top_k: int = 10) -> str:
     cards: id, title, subtitle (company · location), price (salary), detail,
     fields{company, location, remote, posted_date, skills}."""
     tokens = [t for t in re.split(r"[\s,、/]+", query.lower()) if t]
-    loc = location.strip().lower()
+    loc = _LOCATION_ALIASES.get(location.strip(), location.strip().lower())
     scored = []
     for row in db.list_jobs() or []:
         if loc and loc not in (row.get("location") or "").lower() \
