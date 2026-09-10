@@ -273,6 +273,42 @@ def _http_options() -> dict:
     }
 
 
+class BearerGate:
+    """Refuses any HTTP request without `Authorization: Bearer <token>` — the
+    one header charbit's connector already sends (CHARBIT_RECRUITER_MCP_AUTH).
+    Pure ASGI, wrapped around the MCP app, so the SDK never sees a stranger."""
+
+    def __init__(self, app, token: str):
+        self.app, self.expect = app, f"Bearer {token}".encode()
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            auth = dict(scope.get("headers") or []).get(b"authorization", b"")
+            if auth != self.expect:
+                await send({"type": "http.response.start", "status": 401,
+                            "headers": [(b"content-type", b"application/json")]})
+                await send({"type": "http.response.body", "body": b'{"error":"unauthorized"}'})
+                return
+        await self.app(scope, receive, send)
+
+
+def http_app():
+    """The streamable-HTTP ASGI app, gated by RECRUITER_MCP_TOKEN when set.
+    Needs mcp>=2.0 (what the lock resolves)."""
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    opts = _http_options()
+    # DNS-rebinding protection is for servers on localhost; behind Cloud Run
+    # (or any proxy) the Host header is the public one and would be refused.
+    app = mcp.streamable_http_app(
+        streamable_http_path=opts["streamable_http_path"], json_response=opts["json_response"],
+        stateless_http=opts["stateless_http"],
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False))
+    if token := os.environ.get("RECRUITER_MCP_TOKEN", "").strip():
+        app = BearerGate(app, token)
+    return app
+
+
 def main() -> None:
     """Entry point — init local stores, then serve over stdio (default) or
     streamable HTTP (RECRUITER_MCP_TRANSPORT=http)."""
@@ -282,13 +318,13 @@ def main() -> None:
     # The vector index opens lazily on first search, so there is nothing to
     # initialise here — and nothing to fail before the server is listening.
     if os.environ.get("RECRUITER_MCP_TRANSPORT", "stdio").lower() == "http":
+        import uvicorn
+
         opts = _http_options()
-        print(f"recruiter-mcp: http://{opts['host']}:{opts['port']}{opts['streamable_http_path']}",
+        gated = "token-gated" if os.environ.get("RECRUITER_MCP_TOKEN", "").strip() else "OPEN"
+        print(f"recruiter-mcp: http://{opts['host']}:{opts['port']}{opts['streamable_http_path']} ({gated})",
               file=sys.stderr)
-        try:
-            mcp.run(transport="streamable-http", **opts)
-        except TypeError as exc:  # mcp 1.x takes these as constructor settings
-            raise SystemExit("recruiter-mcp: HTTP transport needs mcp>=2.0") from exc
+        uvicorn.run(http_app(), host=opts["host"], port=opts["port"], log_level="warning")
         return
     mcp.run()  # stdio transport
 

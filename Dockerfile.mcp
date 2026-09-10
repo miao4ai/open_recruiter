@@ -1,0 +1,28 @@
+# The recruiter MCP server as a container, for charbit's staging (and anyone
+# else who wants the job-seeker tools over HTTP). Build context is the repo
+# root: `docker build -f Dockerfile.mcp .`
+#
+# The database is the container's own and lives as long as the container: the
+# entrypoint seeds it from a JSON file on every start (deploy/seed-jobs.*.json)
+# and the job-seeker tools never write, so nothing needs to persist. Set
+# VOYAGE_API_KEY for recommend_jobs (vector search); without it search_jobs
+# still answers by keyword.
+FROM python:3.12-slim
+ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+WORKDIR /app
+COPY sdk/core ./sdk/core
+COPY product/backend/pyproject.toml ./product/backend/pyproject.toml
+# The backend is run from its directory (PYTHONPATH), not installed as a
+# wheel; its dependencies come from its pyproject, the engine from sdk/core.
+RUN pip install --no-cache-dir ./sdk/core \
+ && python -c "import tomllib; d = tomllib.load(open('product/backend/pyproject.toml', 'rb')); print('\n'.join(x for x in d['project']['dependencies'] if not x.startswith('openrecruiter')))" > /tmp/requirements.txt \
+ && pip install --no-cache-dir -r /tmp/requirements.txt
+COPY product/backend ./product/backend
+COPY deploy/seed-jobs.staging.json deploy/mcp-entrypoint.sh ./deploy/
+RUN chmod +x deploy/mcp-entrypoint.sh
+ENV PYTHONPATH=/app/product/backend \
+    RECRUITER_MCP_TRANSPORT=http \
+    RECRUITER_MCP_HOST=0.0.0.0 \
+    OPEN_RECRUITER_DATA_DIR=/tmp/open-recruiter
+EXPOSE 8080
+CMD ["./deploy/mcp-entrypoint.sh"]
