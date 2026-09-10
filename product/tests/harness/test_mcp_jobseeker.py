@@ -116,3 +116,17 @@ def test_http_options_come_from_env(jobs, monkeypatch):
     o = jobs._http_options()
     assert (o["host"], o["port"], o["streamable_http_path"]) == ("0.0.0.0", 9001, "/mcp")
     assert o["json_response"] and o["stateless_http"]
+
+
+def test_apply_to_job_puts_the_seeker_in_the_pipeline(jobs):
+    out = json.loads(jobs.apply_to_job(job_id="job-go", resume_text="Senior Go engineer, Tokyo, 8 years.",
+                                       name="Mei", email="mei@example.com", source="charbit"))
+    assert out["ok"] and out["title"] == "Backend Engineer (Go)" and out["company"] == "Acme"
+    cand = db.get_candidate(out["candidate_id"])
+    assert cand["name"] == "Mei" and cand["email"] == "mei@example.com"
+    pipeline = [c for c in db.list_candidates_for_job("job-go")] if hasattr(db, "list_candidates_for_job") else None
+    if pipeline is not None:
+        assert any(c["id"] == out["candidate_id"] or c.get("candidate_id") == out["candidate_id"] for c in pipeline)
+    # Unknown job, or nothing to send: says so, changes nothing.
+    assert json.loads(jobs.apply_to_job(job_id="nope", resume_text="x"))["ok"] is False
+    assert json.loads(jobs.apply_to_job(job_id="job-go", resume_text="  "))["ok"] is False

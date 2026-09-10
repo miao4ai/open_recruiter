@@ -199,6 +199,45 @@ def _job_card(row: dict, score: float | None = None) -> dict:
     }
 
 
+@mcp.tool()
+def apply_to_job(job_id: str, resume_text: str, name: str = "", email: str = "",
+                 source: str = "", note: str = "") -> str:
+    """Submit a resume to one open job: the seeker becomes a candidate in that
+    job's pipeline (status "new"), visible to the recruiter side at once. This
+    is the one tool here that changes the recruiter's world — callers ask the
+    person first. Returns a JSON object {ok, candidate_id, job_id, title,
+    company, message}."""
+    row = db.get_job(job_id.strip()) if job_id else None
+    if not row:
+        return json.dumps({"ok": False, "message": f"no open job with id {job_id!r}"})
+    text = (resume_text or "").strip()
+    if not text:
+        return json.dumps({"ok": False, "message": "no resume text"})
+    cand = _transient_candidate(text)
+    cand.name = name.strip() or cand.name
+    cand.email = email.strip() or cand.email
+    # Straight into the table: the SDK's add_candidate parses the resume with a
+    # model first, and an application must not depend on a model key.
+    db.insert_candidate({
+        "id": cand.id, "name": cand.name, "email": cand.email, "phone": cand.phone,
+        "current_title": cand.current_title, "current_company": cand.current_company,
+        "skills": cand.skills, "experience_years": cand.experience_years, "location": cand.location,
+        "resume_summary": cand.resume_summary, "status": "new",
+        "created_at": cand.created_at, "updated_at": cand.created_at,
+    })
+    reason = " · ".join(p for p in (f"applied via {source.strip()}" if source.strip() else "applied", note.strip()) if p)
+    db.insert_candidate_job({"candidate_id": cand.id, "job_id": row["id"], "pipeline_status": "new",
+                             "match_reasoning": reason})
+    try:
+        from app.sdk_bridge import build_recruiter
+        build_recruiter(_cfg()).index.index_candidate(cand)
+    except Exception:  # noqa: BLE001 — ranking is a bonus; the application stands without it
+        pass
+    return json.dumps({"ok": True, "candidate_id": cand.id, "job_id": row["id"], "title": row.get("title", ""),
+                       "company": row.get("company", ""), "message": "in the pipeline as a new candidate"},
+                      ensure_ascii=False)
+
+
 # Postings spell places in English; a job seeker chatting in Chinese or Japanese
 # does not. The common ones, so "东京" finds Tokyo without a model in the way.
 _LOCATION_ALIASES = {
