@@ -253,6 +253,14 @@ _ROLE_ALIASES = {
     "研究员": "research", "研究エンジニア": "research engineer", "运维": "sre", "语音": "speech", "音声": "speech",
     "计算机视觉": "computer vision", "自然语言处理": "nlp", "自然言語処理": "nlp",
     "工程师": "engineer", "エンジニア": "engineer", "开发": "developer", "実装": "developer",
+    # Not only tech.
+    "会计": "accountant", "経理": "accountant", "财务分析": "financial analyst", "财务": "finance", "財務": "finance",
+    "设计师": "designer", "デザイナー": "designer", "设计": "design", "デザイン": "design",
+    "销售": "sales", "営業": "sales", "市场": "marketing", "マーケ": "marketing", "マーケティング": "marketing",
+    "客服": "customer support", "カスタマーサポート": "customer support", "运营": "operations", "運営": "operations",
+    "人事": "hr", "人事担当": "hr", "招聘": "recruiting", "教师": "teacher", "老师": "teacher", "教師": "teacher", "英语": "english",
+    "护士": "nurse", "看護師": "nurse", "律师": "legal", "法务": "legal", "翻译": "translator", "翻訳": "translator",
+    "游戏策划": "game designer", "ゲームデザイナー": "game designer", "数据工程师": "data engineer",
 }
 _ROLE_KEYS = sorted(_ROLE_ALIASES, key=len, reverse=True)
 
@@ -273,7 +281,12 @@ _LOCATION_ALIASES = {
     "札幌": "sapporo", "神户": "kobe", "神戸": "kobe", "日本": "japan",
     "北京": "beijing", "上海": "shanghai", "深圳": "shenzhen", "香港": "hong kong",
     "台北": "taipei", "新加坡": "singapore", "シンガポール": "singapore",
-    "远程": "remote", "遠程": "remote", "リモート": "remote", "在宅": "remote", "任意": "", "无所谓": "",
+    "远程": "remote", "遠程": "remote", "リモート": "remote", "在宅": "remote", "任意": "", "无所谓": "", "哪里都行": "", "どこでも": "",
+    "成都": "chengdu", "杭州": "hangzhou", "广州": "guangzhou", "南京": "nanjing", "武汉": "wuhan",
+    "首尔": "seoul", "ソウル": "seoul", "曼谷": "bangkok", "悉尼": "sydney", "シドニー": "sydney",
+    "伦敦": "london", "ロンドン": "london", "纽约": "new york", "ニューヨーク": "new york", "旧金山": "san francisco", "湾区": "bay area",
+    "西雅图": "seattle", "柏林": "berlin", "ベルリン": "berlin", "巴黎": "paris", "パリ": "paris", "美国": "us", "アメリカ": "us",
+    "欧洲": "eu", "全球": "global", "海外": "",
 }
 
 
