@@ -58,6 +58,8 @@ def test_search_jobs_filters_by_keyword_and_location(jobs):
     # Roles too: a tapped Chinese / Japanese role button finds the English posting.
     assert _cards(jobs.search_jobs(query="后端工程师"))[0]["id"] == "job-go"  # ranked: "backend" outweighs the shared "engineer"
     assert _cards(jobs.search_jobs(query="iOSエンジニア"))[0]["id"] == "job-ios"
+    # And a city the table does not know still works as a plain substring.
+    assert _cards(jobs.search_jobs(location="Osa")) and _cards(jobs.search_jobs(location="成都")) == []
     assert len(_cards(jobs.search_jobs())) == 2
 
 
