@@ -55,6 +55,9 @@ def test_search_jobs_filters_by_keyword_and_location(jobs):
     assert _cards(jobs.search_jobs(location="東京"))[0]["id"] == "job-go"
     assert _cards(jobs.search_jobs(location="リモート"))[0]["id"] == "job-ios"
     assert len(_cards(jobs.search_jobs(location="无所谓"))) == 2
+    # Roles too: a tapped Chinese / Japanese role button finds the English posting.
+    assert _cards(jobs.search_jobs(query="后端工程师"))[0]["id"] == "job-go"  # ranked: "backend" outweighs the shared "engineer"
+    assert _cards(jobs.search_jobs(query="iOSエンジニア"))[0]["id"] == "job-ios"
     assert len(_cards(jobs.search_jobs())) == 2
 
 
