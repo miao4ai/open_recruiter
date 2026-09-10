@@ -51,6 +51,10 @@ def test_search_jobs_filters_by_keyword_and_location(jobs):
     assert _cards(jobs.search_jobs(location="osaka"))[0]["id"] == "job-ios"
     assert _cards(jobs.search_jobs(location="remote"))[0]["id"] == "job-ios"
     assert _cards(jobs.search_jobs(query="cobol")) == []
+    # Postings are in English; the seeker may not be.
+    assert _cards(jobs.search_jobs(location="東京"))[0]["id"] == "job-go"
+    assert _cards(jobs.search_jobs(location="リモート"))[0]["id"] == "job-ios"
+    assert len(_cards(jobs.search_jobs(location="无所谓"))) == 2
     assert len(_cards(jobs.search_jobs())) == 2
 
 
