@@ -179,3 +179,22 @@ def test_openai_compatible_embeddings_are_a_second_way_in(monkeypatch):
     assert out == [[0.1], [0.2]]  # back in input order
     assert seen["url"] == cfg.embedding_api_url and seen["auth"] == "Bearer k"
     assert seen["body"] == {"input": ["a", "b"], "model": "bge-m3"}
+
+
+def test_embedders_expose_the_methods_chroma_1_5_calls(monkeypatch):
+    """chromadb 1.5 calls embed_documents on add and embed_query on search;
+    both must exist and delegate to __call__ (older chroma calls the object)."""
+    from openrecruiter.store import vector
+    from openrecruiter.store.vector import OpenAIEmbeddings
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"data": [{"index": 0, "embedding": [0.5]}]}
+
+    monkeypatch.setattr(vector.httpx, "post", lambda *a, **k: Resp())
+    ef = OpenAIEmbeddings(lambda: ("https://x/v1/embeddings", "k", "m"))
+    assert ef.embed_documents(["a"]) == [[0.5]]
+    assert ef.embed_query(["a"]) == [[0.5]]

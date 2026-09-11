@@ -186,3 +186,4 @@ def test_seed_path_index_uses_the_configured_endpoint(jobs, monkeypatch):
     assert type(index).__name__ == "ChromaVectorIndex"
     assert sdk_bridge._CONFIG.embedding_api_url == "https://ai.example/v1/embeddings"
     assert sdk_bridge._CONFIG.embedding_api_key == "k" and sdk_bridge._CONFIG.embedding_model == "bge-m3"
+
