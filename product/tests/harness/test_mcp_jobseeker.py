@@ -135,3 +135,22 @@ def test_apply_to_job_puts_the_seeker_in_the_pipeline(jobs):
     # Unknown job, or nothing to send: says so, changes nothing.
     assert json.loads(jobs.apply_to_job(job_id="nope", resume_text="x"))["ok"] is False
     assert json.loads(jobs.apply_to_job(job_id="job-go", resume_text="  "))["ok"] is False
+
+
+def test_search_jobs_goes_by_meaning_when_an_index_exists(jobs, monkeypatch):
+    """With embeddings configured the query is answered by the vector index —
+    any language — and the location filter still applies to the hits."""
+    class Index:
+        available = True
+
+        def search_jobs(self, candidate, top_k=10):
+            assert "護理師" in candidate.embed_text()
+            return [("job-ios", 0.9), ("job-go", 0.8)]
+
+    class Recruiter:
+        index = Index()
+
+    monkeypatch.setattr("app.sdk_bridge.build_recruiter", lambda cfg: Recruiter())
+    hits = _cards(jobs.search_jobs(query="護理師"))
+    assert [c["id"] for c in hits] == ["job-ios", "job-go"] and hits[0]["fields"]["score"] == "0.90"
+    assert [c["id"] for c in _cards(jobs.search_jobs(query="護理師", location="tokyo"))] == ["job-go"]

@@ -1,9 +1,11 @@
-"""Semantic retrieval over ChromaDB with Voyage embeddings.
+"""Semantic retrieval over ChromaDB with API embeddings.
 
 Embeddings are an API call, never a local model: no PyTorch, no ONNX runtime,
-nothing to download at import or at startup. Without a Voyage key this class
-reports `available == False` and every search returns nothing, so a caller can
-fall back to keyword search instead of failing.
+nothing to download at import or at startup. Two shapes of API: Voyage, or any
+OpenAI-compatible `/v1/embeddings` endpoint (a self-hosted model behind one).
+Without either configured this class reports `available == False` and every
+search returns nothing, so a caller can fall back to keyword search instead of
+failing.
 
 ChromaDB is imported lazily so that `import openrecruiter` stays cheap for the
 many callers who never touch retrieval.
@@ -73,6 +75,58 @@ class VoyageEmbeddings:
         return "cosine"
 
 
+class OpenAIEmbeddings:
+    """A ChromaDB embedding function over an OpenAI-compatible endpoint:
+    `POST <url> {"model", "input": [...]}` → `{"data": [{"index", "embedding"}]}`.
+    Resolved per call, like Voyage, so a key set at runtime applies."""
+
+    def __init__(self, resolve: Callable[[], tuple[str, str, str]]) -> None:
+        self._resolve = resolve  # → (url, api_key, model)
+
+    def __call__(self, input: list[str]) -> list[list[float]]:  # noqa: A002 - Chroma's name
+        url, api_key, model = self._resolve()
+        if not url or not api_key:
+            raise RuntimeError("No embeddings endpoint configured — semantic search is unavailable.")
+        resp = httpx.post(
+            url,
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={"input": list(input), "model": model},
+            timeout=60.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()["data"]
+        return [item["embedding"] for item in sorted(data, key=lambda d: d.get("index", 0))]
+
+    @staticmethod
+    def name() -> str:
+        return "openai"
+
+    def get_config(self) -> dict:
+        return {"model": self._resolve()[2]}
+
+    @staticmethod
+    def build_from_config(config: dict) -> "OpenAIEmbeddings":
+        model = config.get("model", "")
+        return OpenAIEmbeddings(lambda: ("", "", model))
+
+    def default_space(self) -> str:
+        return "cosine"
+
+
+def embeddings_configured(config: Config) -> bool:
+    return bool(config.embedding_api_url and config.embedding_api_key) or bool(config.voyage_api_key)
+
+
+def embedding_function(resolve: Callable[[], Config]) -> Any:
+    """The embedder a config asks for: the OpenAI-compatible endpoint when one
+    is set, else Voyage. Decided at collection-open time, per call thereafter."""
+    if resolve().embedding_api_url:
+        return OpenAIEmbeddings(
+            lambda: (resolve().embedding_api_url, resolve().embedding_api_key, resolve().embedding_model)
+        )
+    return VoyageEmbeddings(lambda: (resolve().voyage_api_key, resolve().voyage_model))
+
+
 class ChromaVectorIndex:
     """A `VectorIndex` over a persistent ChromaDB directory."""
 
@@ -88,7 +142,7 @@ class ChromaVectorIndex:
 
     @property
     def available(self) -> bool:
-        return bool(self._config().voyage_api_key)
+        return embeddings_configured(self._config())
 
     def _collection(self, name: str) -> Any:
         if self._client is None:
@@ -100,9 +154,7 @@ class ChromaVectorIndex:
                 path=str(self.path),
                 settings=ChromaSettings(anonymized_telemetry=False),
             )
-        embed = VoyageEmbeddings(
-            lambda: (self._config().voyage_api_key, self._config().voyage_model)
-        )
+        embed = embedding_function(self._config)
         return self._client.get_or_create_collection(
             name=name, embedding_function=embed, metadata={"hnsw:space": "cosine"}
         )
@@ -186,4 +238,4 @@ class ChromaVectorIndex:
         ]
 
 
-__all__ = ["ChromaVectorIndex", "VoyageEmbeddings"]
+__all__ = ["ChromaVectorIndex", "OpenAIEmbeddings", "VoyageEmbeddings", "embeddings_configured"]

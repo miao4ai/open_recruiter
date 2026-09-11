@@ -238,6 +238,31 @@ def apply_to_job(job_id: str, resume_text: str, name: str = "", email: str = "",
                       ensure_ascii=False)
 
 
+def _semantic_job_ids(query: str, location: str, top_k: int) -> str | None:
+    """Meaning first, words second: with an embeddings API configured the
+    query goes through the vector index — any language, any phrasing — and
+    the location filter applies to what comes back. None without an index,
+    so the keyword match below still answers."""
+    from app.sdk_bridge import build_recruiter
+
+    index = build_recruiter(_cfg()).index
+    if not index.available:
+        return None
+    hits = index.search_jobs(_transient_candidate(query), top_k=max(1, int(top_k)) * 3)
+    loc = _LOCATION_ALIASES.get(location.strip(), location.strip().lower())
+    cards = []
+    for job_id, score in hits:
+        row = db.get_job(job_id)
+        if row is None:
+            continue
+        if loc and loc not in (row.get("location") or "").lower() and not (loc == "remote" and row.get("remote")):
+            continue
+        cards.append(_job_card(row, score=score))
+        if len(cards) >= max(1, int(top_k)):
+            break
+    return json.dumps(cards)
+
+
 # Postings name roles in English; a seeker tapping a Chinese or Japanese role
 # button does not. Longest phrases first so 机器学习工程师 is not split into
 # 机器学习 + 工程师 before the whole phrase is tried.
@@ -297,6 +322,10 @@ def search_jobs(query: str = "", location: str = "", top_k: int = 10) -> str:
     cards: id, title, subtitle (company · location), price (salary), detail,
     fields{company, location, remote, posted_date, skills}."""
     tokens = [t for t in re.split(r"[\s,、/]+", _english_roles(query).lower()) if t]
+    if tokens:
+        semantic = _semantic_job_ids(query, location, top_k)
+        if semantic is not None:
+            return semantic
     loc = _LOCATION_ALIASES.get(location.strip(), location.strip().lower())
     scored = []
     for row in db.list_jobs() or []:

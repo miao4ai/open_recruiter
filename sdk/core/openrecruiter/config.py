@@ -28,8 +28,13 @@ class Config:
     openai_api_key: str = ""
 
     # Embeddings are an API call, never a local model — see the vector store.
+    # Either Voyage, or any OpenAI-compatible /v1/embeddings endpoint (a
+    # self-hosted model, say); the endpoint wins when both are set.
     voyage_api_key: str = ""
     voyage_model: str = DEFAULT_EMBED_MODEL
+    embedding_api_url: str = ""
+    embedding_api_key: str = ""
+    embedding_model: str = ""
 
     max_tokens: int = 4096
 
@@ -60,6 +65,9 @@ class Config:
             openai_api_key=os.getenv("OPENAI_API_KEY", ""),
             voyage_api_key=os.getenv("VOYAGE_API_KEY", ""),
             voyage_model=os.getenv("VOYAGE_MODEL", DEFAULT_EMBED_MODEL),
+            embedding_api_url=os.getenv("EMBEDDING_API_URL", ""),
+            embedding_api_key=os.getenv("EMBEDDING_API_KEY", ""),
+            embedding_model=os.getenv("EMBEDDING_MODEL", ""),
         )
 
 

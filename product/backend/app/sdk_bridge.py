@@ -204,6 +204,9 @@ def to_sdk_config(cfg: Config) -> SDKConfig:
     _CONFIG.openai_api_key = cfg.openai_api_key
     _CONFIG.voyage_api_key = cfg.voyage_api_key
     _CONFIG.voyage_model = cfg.voyage_model
+    _CONFIG.embedding_api_url = cfg.embedding_api_url
+    _CONFIG.embedding_api_key = cfg.embedding_api_key
+    _CONFIG.embedding_model = cfg.embedding_model
     if not _CONFIG.llm_model:
         _CONFIG.__post_init__()
     return _CONFIG
@@ -217,7 +220,7 @@ def vector_index(cfg: Config):
     """
     global _INDEX
 
-    if not cfg.voyage_api_key:
+    if not (cfg.voyage_api_key or (cfg.embedding_api_url and cfg.embedding_api_key)):
         return NullVectorIndex()
     if _INDEX is None:
         from app.vectorstore import CHROMA_DIR

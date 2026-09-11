@@ -53,7 +53,7 @@ def main() -> None:
             unindexed += 1
         n += 1
     print(f"seed-jobs: {n} jobs from {path}" +
-          (f"; {unindexed} not indexed (recommend_jobs needs VOYAGE_API_KEY)" if unindexed else ""))
+          (f"; {unindexed} not indexed (recommend_jobs needs an embeddings API)" if unindexed else ""))
 
 
 if __name__ == "__main__":
