@@ -35,7 +35,7 @@ def main() -> None:
 
     doc = json.load(open(path, encoding="utf-8"))
     rows = doc["jobs"] if isinstance(doc, dict) else doc
-    n, unindexed = 0, 0
+    n, unindexed, first_error = 0, 0, ""
     for j in rows:
         job = Job(
             title=j["title"], company=j.get("company", ""), location=j.get("location", ""),
@@ -49,11 +49,13 @@ def main() -> None:
         try:
             vectorstore.index_job(job_id=job.id, text=job.embed_text(),
                                   metadata={"title": job.title, "company": job.company})
-        except Exception:  # noqa: BLE001 — no embeddings key: keyword search still works
+        except Exception as exc:  # noqa: BLE001 — no embeddings key: keyword search still works
             unindexed += 1
+            if not first_error:
+                first_error = f"{type(exc).__name__}: {exc}"
         n += 1
     print(f"seed-jobs: {n} jobs from {path}" +
-          (f"; {unindexed} not indexed (recommend_jobs needs an embeddings API)" if unindexed else ""))
+          (f"; {unindexed} not indexed — {first_error}" if unindexed else "; all indexed"))
 
 
 if __name__ == "__main__":
