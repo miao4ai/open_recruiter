@@ -154,3 +154,15 @@ def test_search_jobs_goes_by_meaning_when_an_index_exists(jobs, monkeypatch):
     hits = _cards(jobs.search_jobs(query="護理師"))
     assert [c["id"] for c in hits] == ["job-ios", "job-go"] and hits[0]["fields"]["score"] == "0.90"
     assert [c["id"] for c in _cards(jobs.search_jobs(query="護理師", location="tokyo"))] == ["job-go"]
+
+
+def test_settings_config_carries_the_embeddings_endpoint(monkeypatch):
+    """The Config the seeder and the MCP build (via get_config) must include
+    the env-only embeddings endpoint, or nothing is ever indexed."""
+    for k, v in {"EMBEDDING_API_URL": "https://ai.example/v1/embeddings",
+                 "EMBEDDING_API_KEY": "k", "EMBEDDING_MODEL": "bge-m3"}.items():
+        monkeypatch.setenv(k, v)
+    from app.routes.settings import _build_config
+    cfg = _build_config()
+    assert cfg.embedding_api_url == "https://ai.example/v1/embeddings"
+    assert cfg.embedding_api_key == "k" and cfg.embedding_model == "bge-m3"
