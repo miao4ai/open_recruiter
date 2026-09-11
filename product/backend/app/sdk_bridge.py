@@ -220,6 +220,13 @@ def vector_index(cfg: Config):
     """
     global _INDEX
 
+    # The index reads _CONFIG (the shared SDK config) for its embeddings
+    # credentials, and only to_sdk_config populates it. Callers that reach the
+    # index WITHOUT going through build_recruiter — the seeder, vectorstore's
+    # module helpers — would otherwise leave _CONFIG blank and the embedder
+    # would fall back to an empty Voyage key. Refresh it here so every path is
+    # correct.
+    to_sdk_config(cfg)
     if not (cfg.voyage_api_key or (cfg.embedding_api_url and cfg.embedding_api_key)):
         return NullVectorIndex()
     if _INDEX is None:

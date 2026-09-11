@@ -166,3 +166,23 @@ def test_settings_config_carries_the_embeddings_endpoint(monkeypatch):
     cfg = _build_config()
     assert cfg.embedding_api_url == "https://ai.example/v1/embeddings"
     assert cfg.embedding_api_key == "k" and cfg.embedding_model == "bge-m3"
+
+
+def test_seed_path_index_uses_the_configured_endpoint(jobs, monkeypatch):
+    """vector_index must populate the shared SDK config, or a caller that does
+    not go through build_recruiter (the seeder) gets an embedder with no key
+    even though the endpoint is configured."""
+    from app import config as appcfg
+    from app import sdk_bridge
+    from app.routes import settings as settings_mod
+
+    monkeypatch.setenv("EMBEDDING_API_URL", "https://ai.example/v1/embeddings")
+    monkeypatch.setenv("EMBEDDING_API_KEY", "k")
+    monkeypatch.setenv("EMBEDDING_MODEL", "bge-m3")
+    cfg = settings_mod._build_config()
+    index = sdk_bridge.vector_index(cfg)
+    # Real index (not the null one), and the shared config the embedder reads
+    # now carries the endpoint.
+    assert type(index).__name__ == "ChromaVectorIndex"
+    assert sdk_bridge._CONFIG.embedding_api_url == "https://ai.example/v1/embeddings"
+    assert sdk_bridge._CONFIG.embedding_api_key == "k" and sdk_bridge._CONFIG.embedding_model == "bge-m3"
