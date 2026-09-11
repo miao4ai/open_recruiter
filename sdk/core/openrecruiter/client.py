@@ -73,8 +73,10 @@ class Recruiter:
     # ── defaults ─────────────────────────────────────────────────────────
 
     def _default_index(self, data_dir: Path) -> VectorIndex:
-        if not self.config.voyage_api_key:
-            log.info("No Voyage key — semantic retrieval disabled, ranking falls back to the LLM.")
+        from openrecruiter.store.vector import embeddings_configured
+
+        if not embeddings_configured(self.config):
+            log.info("No embeddings configured — semantic retrieval disabled, ranking falls back to the LLM.")
             return NullVectorIndex()
         # The config object is passed by reference so a key set later still applies.
         return ChromaVectorIndex(lambda: self.config, data_dir / "chroma_data")

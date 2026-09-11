@@ -35,6 +35,10 @@ class Config:
     # Voyage AI — cloud embeddings for semantic search (replaces local model)
     voyage_api_key: str = ""
     voyage_model: str = "voyage-4-lite"
+    # Or an OpenAI-compatible /v1/embeddings endpoint (env only; wins over Voyage).
+    embedding_api_url: str = ""
+    embedding_api_key: str = ""
+    embedding_model: str = ""
 
     email_backend: str = "console"
     sendgrid_api_key: str = ""
@@ -77,6 +81,9 @@ def load_config_from_env() -> Config:
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
         voyage_api_key=os.getenv("VOYAGE_API_KEY", ""),
         voyage_model=os.getenv("VOYAGE_MODEL", "voyage-4-lite"),
+        embedding_api_url=os.getenv("EMBEDDING_API_URL", ""),
+        embedding_api_key=os.getenv("EMBEDDING_API_KEY", ""),
+        embedding_model=os.getenv("EMBEDDING_MODEL", ""),
         email_backend=os.getenv("EMAIL_BACKEND", "console"),
         sendgrid_api_key=os.getenv("SENDGRID_API_KEY", ""),
         email_from=os.getenv("EMAIL_FROM", "recruiter@example.com"),

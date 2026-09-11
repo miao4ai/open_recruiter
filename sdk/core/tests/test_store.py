@@ -147,3 +147,35 @@ def test_a_failed_index_is_logged(monkeypatch, caplog, job):
 def test_search_already_degraded_this_way(monkeypatch, job):
     index = _index_with(monkeypatch, RuntimeError("boom"))
     assert index.search_candidates(job) == []
+
+
+def test_openai_compatible_embeddings_are_a_second_way_in(monkeypatch):
+    """A self-hosted /v1/embeddings behind an OpenAI-shaped API makes the index
+    available without a Voyage key, and the request is the OpenAI shape."""
+    from openrecruiter.config import Config
+    from openrecruiter.store import vector
+    from openrecruiter.store.vector import ChromaVectorIndex, OpenAIEmbeddings, embedding_function
+
+    cfg = Config(embedding_api_url="https://ai.example/v1/embeddings", embedding_api_key="k", embedding_model="bge-m3")
+    assert ChromaVectorIndex(lambda: cfg, "/tmp/unused").available
+    assert not ChromaVectorIndex(lambda: Config(), "/tmp/unused").available
+    assert isinstance(embedding_function(lambda: cfg), OpenAIEmbeddings)
+
+    seen = {}
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"data": [{"index": 1, "embedding": [0.2]}, {"index": 0, "embedding": [0.1]}]}
+
+    def fake_post(url, headers, json, timeout):
+        seen.update(url=url, auth=headers["Authorization"], body=json)
+        return Resp()
+
+    monkeypatch.setattr(vector.httpx, "post", fake_post)
+    out = embedding_function(lambda: cfg)(["a", "b"])
+    assert out == [[0.1], [0.2]]  # back in input order
+    assert seen["url"] == cfg.embedding_api_url and seen["auth"] == "Bearer k"
+    assert seen["body"] == {"input": ["a", "b"], "model": "bge-m3"}
