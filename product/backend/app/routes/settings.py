@@ -30,6 +30,11 @@ def _build_config() -> Config:
         openai_api_key=db.get("openai_api_key", env.openai_api_key),
         voyage_api_key=db.get("voyage_api_key", env.voyage_api_key),
         voyage_model=db.get("voyage_model", env.voyage_model),
+        # An OpenAI-compatible embeddings endpoint is env-only (a deployment
+        # detail, not a user setting), so it is never overridden from the db.
+        embedding_api_url=env.embedding_api_url,
+        embedding_api_key=env.embedding_api_key,
+        embedding_model=env.embedding_model,
         email_backend=db.get("email_backend", env.email_backend),
         sendgrid_api_key=db.get("sendgrid_api_key", env.sendgrid_api_key),
         email_from=db.get("email_from", env.email_from),
