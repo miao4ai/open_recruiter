@@ -29,7 +29,19 @@ JOBS_COLLECTION = "jobs"
 CANDIDATES_COLLECTION = "candidates"
 
 
-class VoyageEmbeddings:
+class _ChromaEF:
+    """chromadb 1.5 dispatches to ``embed_documents`` (add) and ``embed_query``
+    (search); earlier versions call the object. Subclasses implement ``__call__``
+    only; these two forward to it so one class works across versions."""
+
+    def embed_documents(self, input):  # noqa: A002 - chroma's name
+        return self(input)
+
+    def embed_query(self, input):  # noqa: A002 - chroma's name
+        return self(input)
+
+
+class VoyageEmbeddings(_ChromaEF):
     """A ChromaDB embedding function backed by the Voyage API.
 
     The key is resolved through a callable on every call rather than captured at
@@ -75,7 +87,7 @@ class VoyageEmbeddings:
         return "cosine"
 
 
-class OpenAIEmbeddings:
+class OpenAIEmbeddings(_ChromaEF):
     """A ChromaDB embedding function over an OpenAI-compatible endpoint:
     `POST <url> {"model", "input": [...]}` → `{"data": [{"index", "embedding"}]}`.
     Resolved per call, like Voyage, so a key set at runtime applies."""

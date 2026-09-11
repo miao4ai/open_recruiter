@@ -13,6 +13,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from openrecruiter.store.vector import CANDIDATES_COLLECTION, JOBS_COLLECTION
+
 
 log = logging.getLogger(__name__)
 
