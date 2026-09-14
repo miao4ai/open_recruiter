@@ -9,9 +9,15 @@ outreach, and run an agent that does all of it through tools.
     job = r.add_job(jd_text)
     matches = r.rank(job.id, top_k=10)
 
-No local model is downloaded, at import or at runtime. Embeddings are an API
-call and chat is a hosted provider, so the package runs on CPU, on macOS, and in
-a container without a GPU.
+No local model is downloaded unless you ask for one. Chat is a hosted provider
+and embeddings default to an API call, so the package runs on CPU, on macOS, and
+in a container without a GPU; `embedding_provider="local"` opts into a
+sentence-transformers model and the `local-embeddings` extra that carries it.
+
+Which embedding backend is yours to choose — Voyage, Cohere, Gemini, any
+OpenAI-compatible endpoint, Ollama, a local model, or your own `Embedder`:
+
+    r = Recruiter(embedding_provider="cohere", embedding_api_key="...")
 """
 
 from openrecruiter.agent import Agent, PendingApproval
@@ -26,6 +32,8 @@ from openrecruiter.events import (
     ToolCall,
     ToolResult,
 )
+from openrecruiter.providers.embeddings import PROVIDERS as EMBEDDING_PROVIDERS
+from openrecruiter.providers.embeddings import Embedder
 from openrecruiter.ranking import APIRanker, EmbeddingRanker, Ranker, TwoStageRanker
 from openrecruiter.store import (
     ChromaVectorIndex,
@@ -37,7 +45,7 @@ from openrecruiter.store import (
 from openrecruiter.tools import Tool, ToolRegistry, tool
 from openrecruiter.types import Candidate, CandidateStatus, EmailDraft, Job, Match
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 __all__ = [
     "APIRanker",
@@ -48,7 +56,9 @@ __all__ = [
     "CandidateStatus",
     "ChromaVectorIndex",
     "Config",
+    "EMBEDDING_PROVIDERS",
     "EmailDraft",
+    "Embedder",
     "EmbeddingRanker",
     "Event",
     "Finished",

@@ -23,9 +23,10 @@ Wheels are also attached to each [Release](https://github.com/miao4ai/open_recru
 They are not in the repository's Packages panel because GitHub Packages has no Python
 registry.
 
-No local model is downloaded, at import or at runtime. Embeddings are an API call and chat is
-a hosted provider, so it runs on CPU, on macOS, and in a container with no GPU — 97 packages
-installed, none of them a training stack.
+No local model is downloaded unless you ask for one. Chat is a hosted provider and embeddings
+default to an API call, so it runs on CPU, on macOS, and in a container with no GPU — and the
+default install carries no training stack. `embedding_provider="local"` is the one way in, and
+it is an extra you opt into rather than something every install pays for.
 
 ## Quick start
 
@@ -41,8 +42,9 @@ for match in r.rank(job.id, top_k=10):
     print(f"{match.score:.2f}  {match.candidate_id}  {match.reasoning}")
 ```
 
-Without a Voyage key, retrieval is disabled and ranking falls back to the LLM — the package
-still works, it just reads every candidate instead of shortlisting first.
+Voyage is the default, not a requirement — see [Embeddings](#embeddings) for the others.
+With no embedding backend at all, retrieval is disabled and ranking falls back to the LLM: the
+package still works, it just reads every candidate instead of shortlisting first.
 
 Everything is a constructor argument with a working default:
 
@@ -320,6 +322,93 @@ caller can fall back.
 Backends that need a local model live in their own distributions — `recruitgpt` for the
 distilled ranker, `openrecruiter-fairness` for bias-aware reranking — so nothing heavy reaches
 this install. Both must lazy-load: no download until a user selects that backend.
+
+---
+
+## Embeddings
+
+Retrieval needs an embedder, and which one is yours to pick. Name a provider and its endpoint
+and a default model come with it:
+
+```python
+from openrecruiter import Recruiter
+
+r = Recruiter(anthropic_api_key="sk-ant-...", voyage_api_key="pa-...")          # the default
+
+r = Recruiter(anthropic_api_key="sk-ant-...",                                   # or any other
+              embedding_provider="cohere", embedding_api_key="co-...")
+
+r = Recruiter(anthropic_api_key="sk-ant-...", embedding_provider="ollama")       # no key needed
+```
+
+| `embedding_provider` | Default model | Needs |
+|---|---|---|
+| `voyage` *(default)* | `voyage-4-lite` | key |
+| `cohere` | `embed-v4.0` | key |
+| `gemini` | `gemini-embedding-001` | key |
+| `openai` | `text-embedding-3-small` | key |
+| `jina` | `jina-embeddings-v5-text-small` | key |
+| `mistral` | `mistral-embed` | key |
+| `ollama` | `nomic-embed-text` | — |
+| `openai_compatible` | — | `embedding_api_url` |
+| `local` | `BAAI/bge-small-en-v1.5` | the `local-embeddings` extra |
+
+`embedding_model` and `embedding_api_url` override any row. `openai_compatible` is the row for
+everything unnamed — Together, SiliconFlow, DeepInfra, a vLLM or Text Embeddings Inference
+server of your own:
+
+```python
+r = Recruiter(
+    anthropic_api_key="sk-ant-...",
+    embedding_provider="openai_compatible",
+    embedding_api_url="http://tei.internal/v1/embeddings",
+    embedding_model="BAAI/bge-m3",
+)
+```
+
+Three of these shapes are genuinely different — Voyage, Cohere and Gemini each have their own
+request body — and the rest speak OpenAI's `/v1/embeddings`, so they share one backend and
+differ only by a row. Adding a vendor is usually a row, not a class.
+
+Queries and documents are not embedded the same way. Voyage and Cohere ask which one a text is
+and answer differently for each, so a query sent as a document retrieves measurably worse;
+ChromaDB says which it wants and the distinction is carried into the request body. Backends
+whose API has no such parameter ignore it.
+
+`local` runs a sentence-transformers model in-process, with no API call and no key:
+
+```bash
+pip install "openrecruiter[local-embeddings]"
+```
+
+The import is deferred to the first embed, so a package that merely *offers* local embeddings
+does not make every other install carry torch.
+
+For a backend this package has never heard of, hand one in whole. Subclass `Embedder` and
+write one method — it supplies the rest of the interface ChromaDB insists on:
+
+```python
+from openrecruiter import Embedder, Recruiter
+
+
+class Constant(Embedder):
+    chroma_name = "constant"        # ChromaDB records this on the collection
+
+    def embed(self, texts, *, query):
+        return [[0.1, 0.2, 0.3] for _ in texts]
+
+
+r = Recruiter(anthropic_api_key="sk-ant-...", embedder=Constant())
+```
+
+Not subclassing is possible but fussier: ChromaDB validates the object and requires
+`__call__(self, input)` exactly, alongside `name()`, `embed_documents` and `embed_query`. A
+missing `__call__` is accepted by this package and rejected at the first search.
+
+> **Changing an embedder means reindexing.** Vectors from two models are not comparable, so an
+> index built by one and searched with another returns plausible, wrong neighbours. Each
+> collection records what wrote it; reopening it with a different one is refused, loudly, and
+> searches return nothing rather than nonsense. Reindex, or point `data_dir` somewhere new.
 
 ---
 

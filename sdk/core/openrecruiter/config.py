@@ -27,14 +27,18 @@ class Config:
     anthropic_api_key: str = ""
     openai_api_key: str = ""
 
-    # Embeddings are an API call, never a local model — see the vector store.
-    # Either Voyage, or any OpenAI-compatible /v1/embeddings endpoint (a
-    # self-hosted model, say); the endpoint wins when both are set.
-    voyage_api_key: str = ""
-    voyage_model: str = DEFAULT_EMBED_MODEL
+    # Which embedding backend, by name — see providers/embeddings.py for the
+    # registry. Left empty it is inferred from the fields below, so configs
+    # written before providers had names keep working. The url and model default
+    # to the provider's own; set either to override.
+    embedding_provider: str = ""
     embedding_api_url: str = ""
     embedding_api_key: str = ""
     embedding_model: str = ""
+    # Voyage had its own pair before the provider registry existed. Still the
+    # default backend, and still read when `embedding_api_key` is empty.
+    voyage_api_key: str = ""
+    voyage_model: str = DEFAULT_EMBED_MODEL
 
     max_tokens: int = 4096
 
@@ -65,6 +69,7 @@ class Config:
             openai_api_key=os.getenv("OPENAI_API_KEY", ""),
             voyage_api_key=os.getenv("VOYAGE_API_KEY", ""),
             voyage_model=os.getenv("VOYAGE_MODEL", DEFAULT_EMBED_MODEL),
+            embedding_provider=os.getenv("EMBEDDING_PROVIDER", ""),
             embedding_api_url=os.getenv("EMBEDDING_API_URL", ""),
             embedding_api_key=os.getenv("EMBEDDING_API_KEY", ""),
             embedding_model=os.getenv("EMBEDDING_MODEL", ""),

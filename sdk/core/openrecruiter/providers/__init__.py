@@ -1,4 +1,6 @@
-"""LLM providers. Only cloud providers with a token — no local inference here."""
+"""Model providers: chat over a hosted API, embeddings over whichever backend
+the host picked — including, if it asks for one, a local model.
+"""
 
 from openrecruiter.providers.llm import LLM, LLMError
 

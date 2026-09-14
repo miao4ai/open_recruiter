@@ -1,14 +1,18 @@
-"""Semantic retrieval over ChromaDB with API embeddings.
+"""Semantic retrieval over ChromaDB, with the embedding backend left open.
 
-Embeddings are an API call, never a local model: no PyTorch, no ONNX runtime,
-nothing to download at import or at startup. Two shapes of API: Voyage, or any
-OpenAI-compatible `/v1/embeddings` endpoint (a self-hosted model behind one).
-Without either configured this class reports `available == False` and every
+Which backend is a configuration question, answered in
+`openrecruiter.providers.embeddings`: Voyage by default, Cohere, Gemini, any
+OpenAI-compatible endpoint, or a local sentence-transformers model behind an
+optional extra. Nothing heavy is imported unless that last one is asked for, so
+a normal install still has no torch in it.
+
+An embedder can also be handed in whole — ``ChromaVectorIndex(config,
+embedder=...)`` — for a backend this package has never heard of.
+
+With nothing configured this class reports ``available == False`` and every
 search returns nothing, so a caller can fall back to keyword search instead of
-failing.
-
-ChromaDB is imported lazily so that `import openrecruiter` stays cheap for the
-many callers who never touch retrieval.
+failing. ChromaDB itself is imported lazily so that ``import openrecruiter``
+stays cheap for the many callers who never touch retrieval.
 """
 
 from __future__ import annotations
@@ -17,126 +21,40 @@ import logging
 from pathlib import Path
 from typing import Any, Callable
 
-import httpx
-
 from openrecruiter.config import Config
+from openrecruiter.providers.embeddings import (
+    Embedder,
+    OpenAICompatibleEmbeddings,
+    VoyageEmbeddings,
+    configured,
+    embedder_for,
+)
 from openrecruiter.types import Candidate, Job
 
 log = logging.getLogger(__name__)
 
-VOYAGE_API_URL = "https://api.voyageai.com/v1/embeddings"
 JOBS_COLLECTION = "jobs"
 CANDIDATES_COLLECTION = "candidates"
 
+# Recorded on each collection so reopening it with a different embedder is
+# caught rather than silently answered with incomparable vectors.
+EMBEDDER_KEY = "openrecruiter:embedder"
 
-class _ChromaEF:
-    """chromadb 1.5 dispatches to ``embed_documents`` (add) and ``embed_query``
-    (search); earlier versions call the object. Subclasses implement ``__call__``
-    only; these two forward to it so one class works across versions."""
-
-    def embed_documents(self, input):  # noqa: A002 - chroma's name
-        return self(input)
-
-    def embed_query(self, input):  # noqa: A002 - chroma's name
-        return self(input)
+# The old name for the OpenAI-compatible backend, kept so existing imports work.
+OpenAIEmbeddings = OpenAICompatibleEmbeddings
 
 
-class VoyageEmbeddings(_ChromaEF):
-    """A ChromaDB embedding function backed by the Voyage API.
-
-    The key is resolved through a callable on every call rather than captured at
-    construction. Hosts let users paste a key into a settings screen *after* the
-    process has started; capturing it once means the index silently never works
-    until a restart.
-    """
-
-    def __init__(self, resolve: Callable[[], tuple[str, str]]) -> None:
-        self._resolve = resolve
-
-    def __call__(self, input: list[str]) -> list[list[float]]:  # noqa: A002 - Chroma's name
-        api_key, model = self._resolve()
-        if not api_key:
-            raise RuntimeError(
-                "No Voyage API key configured — semantic search is unavailable."
-            )
-        resp = httpx.post(
-            VOYAGE_API_URL,
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={"input": list(input), "model": model, "input_type": "document"},
-            timeout=60.0,
-        )
-        resp.raise_for_status()
-        data = resp.json()["data"]
-        # Voyage tags each item with its index; sort so order matches the input.
-        return [item["embedding"] for item in sorted(data, key=lambda d: d["index"])]
-
-    # ChromaDB persists and rebuilds embedding functions by name.
-    @staticmethod
-    def name() -> str:
-        return "voyage"
-
-    def get_config(self) -> dict:
-        return {"model": self._resolve()[1]}
-
-    @staticmethod
-    def build_from_config(config: dict) -> "VoyageEmbeddings":
-        model = config.get("model", "voyage-4-lite")
-        return VoyageEmbeddings(lambda: ("", model))
-
-    def default_space(self) -> str:
-        return "cosine"
-
-
-class OpenAIEmbeddings(_ChromaEF):
-    """A ChromaDB embedding function over an OpenAI-compatible endpoint:
-    `POST <url> {"model", "input": [...]}` → `{"data": [{"index", "embedding"}]}`.
-    Resolved per call, like Voyage, so a key set at runtime applies."""
-
-    def __init__(self, resolve: Callable[[], tuple[str, str, str]]) -> None:
-        self._resolve = resolve  # → (url, api_key, model)
-
-    def __call__(self, input: list[str]) -> list[list[float]]:  # noqa: A002 - Chroma's name
-        url, api_key, model = self._resolve()
-        if not url or not api_key:
-            raise RuntimeError("No embeddings endpoint configured — semantic search is unavailable.")
-        resp = httpx.post(
-            url,
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={"input": list(input), "model": model},
-            timeout=60.0,
-        )
-        resp.raise_for_status()
-        data = resp.json()["data"]
-        return [item["embedding"] for item in sorted(data, key=lambda d: d.get("index", 0))]
-
-    @staticmethod
-    def name() -> str:
-        return "openai"
-
-    def get_config(self) -> dict:
-        return {"model": self._resolve()[2]}
-
-    @staticmethod
-    def build_from_config(config: dict) -> "OpenAIEmbeddings":
-        model = config.get("model", "")
-        return OpenAIEmbeddings(lambda: ("", "", model))
-
-    def default_space(self) -> str:
-        return "cosine"
+class EmbedderMismatch(RuntimeError):
+    """A collection was written by a different embedder than the one configured."""
 
 
 def embeddings_configured(config: Config) -> bool:
-    return bool(config.embedding_api_url and config.embedding_api_key) or bool(config.voyage_api_key)
+    return configured(config)
 
 
-def embedding_function(resolve: Callable[[], Config]) -> Any:
-    """The embedder a config asks for: the OpenAI-compatible endpoint when one
-    is set, else Voyage. Decided at collection-open time, per call thereafter."""
-    if resolve().embedding_api_url:
-        return OpenAIEmbeddings(
-            lambda: (resolve().embedding_api_url, resolve().embedding_api_key, resolve().embedding_model)
-        )
-    return VoyageEmbeddings(lambda: (resolve().voyage_api_key, resolve().voyage_model))
+def embedding_function(resolve: Callable[[], Config]) -> Embedder:
+    """The embedder a config asks for, by provider name."""
+    return embedder_for(resolve)
 
 
 class ChromaVectorIndex:
@@ -146,15 +64,22 @@ class ChromaVectorIndex:
         self,
         config: Config | Callable[[], Config],
         path: str | Path = "chroma_data",
+        *,
+        embedder: Any = None,
     ) -> None:
         # Accept a callable so a host whose settings change at runtime stays correct.
         self._config = config if callable(config) else (lambda: config)
         self.path = Path(path)
+        self._embedder = embedder
         self._client: Any = None
 
     @property
     def available(self) -> bool:
-        return embeddings_configured(self._config())
+        # A hand-built embedder answers for itself; there is no config to inspect.
+        return True if self._embedder is not None else embeddings_configured(self._config())
+
+    def _embed(self) -> Any:
+        return self._embedder if self._embedder is not None else embedding_function(self._config)
 
     def _collection(self, name: str) -> Any:
         if self._client is None:
@@ -166,10 +91,15 @@ class ChromaVectorIndex:
                 path=str(self.path),
                 settings=ChromaSettings(anonymized_telemetry=False),
             )
-        embed = embedding_function(self._config)
-        return self._client.get_or_create_collection(
-            name=name, embedding_function=embed, metadata={"hnsw:space": "cosine"}
+        embed = self._embed()
+        stamp = _stamp(embed)
+        collection = self._client.get_or_create_collection(
+            name=name,
+            embedding_function=embed,
+            metadata={"hnsw:space": "cosine", EMBEDDER_KEY: stamp},
         )
+        _check_embedder(collection, stamp, name)
+        return collection
 
     # ── indexing ─────────────────────────────────────────────────────────
 
@@ -204,6 +134,8 @@ class ChromaVectorIndex:
             self._collection(collection).upsert(
                 ids=[record_id], documents=[text], metadatas=[metadata]
             )
+        except EmbedderMismatch as exc:
+            log.error("%s", exc)
         except Exception as exc:  # noqa: BLE001 - network, auth, quota, disk
             log.warning("Could not index %s in %s: %s", record_id, collection, exc)
 
@@ -218,6 +150,8 @@ class ChromaVectorIndex:
             return
         try:
             self._collection(collection).delete(ids=[record_id])
+        except EmbedderMismatch as exc:
+            log.error("%s", exc)
         except Exception as exc:  # noqa: BLE001
             log.warning("Could not remove %s from %s: %s", record_id, collection, exc)
 
@@ -236,6 +170,11 @@ class ChromaVectorIndex:
             res = self._collection(collection).query(
                 query_texts=[text], n_results=top_k, include=["distances"]
             )
+        except EmbedderMismatch as exc:
+            # Returning nothing is the point: the alternative is a ranked list
+            # of confident nonsense drawn from an incomparable vector space.
+            log.error("%s", exc)
+            return []
         except Exception as exc:
             # Retrieval failing should degrade the result set, not the request.
             log.warning("Vector search on %s failed: %s", collection, exc)
@@ -250,4 +189,45 @@ class ChromaVectorIndex:
         ]
 
 
-__all__ = ["ChromaVectorIndex", "OpenAIEmbeddings", "VoyageEmbeddings", "embeddings_configured"]
+def _stamp(embed: Any) -> str:
+    """`provider:model` for whatever embedder this is, including a custom one."""
+    name = getattr(embed, "name", None)
+    provider = name() if callable(name) else type(embed).__name__
+    model = ""
+    try:
+        model = (embed.get_config() or {}).get("model", "")
+    except Exception:  # noqa: BLE001 - a custom embedder need not implement it
+        pass
+    return f"{provider}:{model}"
+
+
+def _check_embedder(collection: Any, stamp: str, name: str) -> None:
+    """Refuse a collection whose vectors were written by a different embedder.
+
+    Two models' vectors are not comparable, so reusing an index across a provider
+    or model change produces plausible, wrong neighbours — the worst failure this
+    module has, because nothing looks broken. A collection written before the
+    stamp existed carries no record of its embedder and is left alone: there is
+    nothing to compare, and refusing every older index would be worse.
+    """
+    written = (getattr(collection, "metadata", None) or {}).get(EMBEDDER_KEY)
+    if not written or written == stamp:
+        return
+    raise EmbedderMismatch(
+        f"Collection {name!r} was indexed with {written!r} but {stamp!r} is configured. "
+        f"Vectors from two models cannot be compared: reindex after the change, "
+        f"or point the index at a different directory."
+    )
+
+
+# The other backends live in `openrecruiter.providers.embeddings`; these two are
+# re-exported because they were importable from here before the registry existed.
+__all__ = [
+    "ChromaVectorIndex",
+    "EmbedderMismatch",
+    "OpenAICompatibleEmbeddings",
+    "OpenAIEmbeddings",
+    "VoyageEmbeddings",
+    "embedding_function",
+    "embeddings_configured",
+]

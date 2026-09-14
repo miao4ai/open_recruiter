@@ -7,6 +7,10 @@ the tool set are all constructor arguments with working defaults. Used plainly:
 
     r = Recruiter(anthropic_api_key="sk-ant-...", voyage_api_key="pa-...")
     job = r.add_job(open("jd.txt").read())
+
+Embeddings are Voyage unless told otherwise — `embedding_provider="cohere"`,
+`"gemini"`, `"jina"`, `"ollama"`, `"local"` and the rest of the registry in
+`providers/embeddings.py`, or `embedder=` with one of your own.
     r.add_candidate(open("resume.txt").read())
 
     for match in r.rank(job.id):
@@ -21,6 +25,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 from openrecruiter.agent import Agent, PendingApproval
 from openrecruiter.config import Config
@@ -52,6 +57,7 @@ class Recruiter:
         store: Store | None = None,
         index: VectorIndex | None = None,
         ranker: Ranker | None = None,
+        embedder: Any = None,
         extra_tools: list[Tool] | None = None,
         system: str = AGENT_SYSTEM,
         data_dir: str | Path = ".",
@@ -62,6 +68,7 @@ class Recruiter:
 
         data_dir = Path(data_dir)
         self.store = store or SQLiteStore(data_dir / "openrecruiter.db")
+        self._embedder = embedder
         self.index = index if index is not None else self._default_index(data_dir)
         self.ranker = ranker or self._default_ranker()
 
@@ -75,11 +82,15 @@ class Recruiter:
     def _default_index(self, data_dir: Path) -> VectorIndex:
         from openrecruiter.store.vector import embeddings_configured
 
-        if not embeddings_configured(self.config):
+        # An embedder handed in answers for itself — there is no provider or key
+        # for this to check, which is the point of passing one.
+        if self._embedder is None and not embeddings_configured(self.config):
             log.info("No embeddings configured — semantic retrieval disabled, ranking falls back to the LLM.")
             return NullVectorIndex()
         # The config object is passed by reference so a key set later still applies.
-        return ChromaVectorIndex(lambda: self.config, data_dir / "chroma_data")
+        return ChromaVectorIndex(
+            lambda: self.config, data_dir / "chroma_data", embedder=self._embedder
+        )
 
     def _default_ranker(self) -> Ranker:
         """Retrieve then rerank when embeddings exist; otherwise rerank directly.
