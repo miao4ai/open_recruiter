@@ -1,5 +1,13 @@
 # MCP Server — recruiter tools for external agents
 
+> **Two servers, different audiences.** This page is about the **app's** server, which
+> serves the desktop app's own database and adds the evaluation swarm. The **SDK's**
+> server — `sdk/mcp`, published as `openrecruiter-mcp` — is the one to point people at
+> who do not run the app: it installs with `pip`, serves any `openrecruiter` data
+> directory, publishes whatever tools a `Recruiter` carries (host-registered ones
+> included), and withholds writes unless `--write` is passed. See
+> [sdk/mcp/README.md](../../sdk/mcp/README.md).
+
 `product/backend/app/mcp_server.py` exposes the recruiter's **matching & evaluation**
 capabilities as an [MCP](https://modelcontextprotocol.io) server over **stdio**
 (default) or **streamable HTTP**, so any MCP client (Claude Desktop, Cursor,

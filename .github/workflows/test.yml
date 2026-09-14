@@ -96,6 +96,12 @@ jobs:
       - name: Run the SDK test suite
         working-directory: sdk/core
         run: uv run python -m pytest tests/ -v
+      - name: Install the MCP server's dependencies
+        working-directory: sdk/mcp
+        run: uv sync
+      - name: Run the MCP server's test suite
+        working-directory: sdk/mcp
+        run: uv run python -m pytest tests/ -v
 
   # Every SDK and research package must build and import on its own — that is the
   # whole promise of `pip install openrecruiter` without the rest of the repo.
@@ -109,6 +115,7 @@ jobs:
         include:
           - { path: sdk/core,           module: openrecruiter }
           - { path: sdk/fairness,       module: openrecruiter_fairness }
+          - { path: sdk/mcp,            module: openrecruiter_mcp }
           - { path: sdk/recruitgpt,     module: recruitgpt }
           - { path: research/fairness,  module: openrecruiter_research_fairness }
           - { path: research/recruitgpt, module: recruitgpt_research }

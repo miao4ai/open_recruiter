@@ -16,6 +16,7 @@ members = [
     "product/backend",
     "sdk/core",
     "sdk/fairness",
+    "sdk/mcp",
     "sdk/recruitgpt",
     "research/fairness",
     "research/recruitgpt",

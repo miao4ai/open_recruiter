@@ -125,6 +125,7 @@ sdk/                   ← published Python packages, each `pip install`-able on
   core/                ← openrecruiter — the engine: types, stores, ranking, tools, agent
   fairness/            ← openrecruiter-fairness — fairness-aware ranking backend
   recruitgpt/          ← recruitgpt — distilled ranking model backend
+  mcp/                 ← openrecruiter-mcp — the engine's tools as an MCP server (stdio)
 
 research/              ← reproducible experiments behind the SDKs
   fairness/            ← bias evaluation, anonymization, counterfactual testing
