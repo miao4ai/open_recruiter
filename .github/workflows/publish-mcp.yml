@@ -1,0 +1,140 @@
+name: Publish MCP server
+
+# The MCP server ships on its own cadence from the engine it serves, so it has
+# its own tag:
+#
+#   git tag sdk-mcp-v0.1.0 && git push origin sdk-mcp-v0.1.0
+#
+# The tag's version must match sdk/mcp/pyproject.toml — the build checks, so a
+# mismatch fails before anything is published.
+
+on:
+  push:
+    tags:
+      - "sdk-mcp-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Check the tag matches the package version
+        id: version
+        working-directory: sdk/mcp
+        run: |
+          set -euo pipefail
+          version=$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_NAME#sdk-mcp-v}" != "$version" ] && [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match pyproject version $version" >&2
+            exit 1
+          fi
+
+      - name: Run the test suite
+        working-directory: sdk/mcp
+        run: uv sync && uv run python -m pytest tests/ -q
+
+      - name: Build
+        working-directory: sdk/mcp
+        run: uv build --out-dir dist
+
+      # Installing from the repo proves nothing — and here it would prove less
+      # than usual, because the workspace resolves `openrecruiter` to the local
+      # checkout. A clean environment has to reach the published engine.
+      - name: Install the wheel in a clean environment and start the server
+        working-directory: sdk/mcp
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install --quiet dist/*.whl
+          /tmp/venv/bin/python - <<'PY'
+          import openrecruiter_mcp as m
+          print("imported", m.__name__, m.__version__)
+          PY
+          # A console script that does not answer an MCP handshake is not a
+          # release; list the tools over stdio the way a client would.
+          /tmp/venv/bin/pip install --quiet mcp
+          /tmp/venv/bin/python - <<'PY'
+          import asyncio, os, tempfile
+          from mcp import ClientSession, StdioServerParameters
+          from mcp.client.stdio import stdio_client
+
+          async def main():
+              with tempfile.TemporaryDirectory() as d:
+                  params = StdioServerParameters(
+                      command="/tmp/venv/bin/openrecruiter-mcp",
+                      args=["--data-dir", d],
+                      env={**os.environ, "ANTHROPIC_API_KEY": "ci-key"},
+                  )
+                  async with stdio_client(params) as (r, w):
+                      async with ClientSession(r, w) as s:
+                          await s.initialize()
+                          names = [t.name for t in (await s.list_tools()).tools]
+                          print("tools:", names)
+                          assert "rank_candidates" in names, names
+                          assert "create_job" not in names, "writes must be off by default"
+
+          asyncio.run(main())
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openrecruiter-mcp-dist
+          path: sdk/mcp/dist/*
+
+  release:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: openrecruiter-mcp-dist
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          name: openrecruiter-mcp ${{ needs.build.outputs.version }}
+          body: |
+            Open Recruiter's recruiting tools, in any MCP client.
+
+            ```bash
+            pip install https://github.com/miao4ai/open_recruiter/releases/download/${{ github.ref_name }}/openrecruiter_mcp-${{ needs.build.outputs.version }}-py3-none-any.whl
+            ```
+
+            Or straight from the repository:
+
+            ```bash
+            uvx --from "git+https://github.com/miao4ai/open_recruiter.git@${{ github.ref_name }}#subdirectory=sdk/mcp" openrecruiter-mcp
+            ```
+
+            See [sdk/mcp/README.md](https://github.com/miao4ai/open_recruiter/blob/main/sdk/mcp/README.md)
+            for wiring it into Claude Desktop, Cursor, or any other MCP client.
+
+  # Off until PyPI Trusted Publishing is configured for this repository, the same
+  # as the engine's. `openrecruiter` is already on PyPI, so once this is on the
+  # install is just `uvx openrecruiter-mcp`.
+  pypi:
+    needs: build
+    if: github.ref_type == 'tag' && vars.PUBLISH_TO_PYPI == 'true'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: openrecruiter-mcp-dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
