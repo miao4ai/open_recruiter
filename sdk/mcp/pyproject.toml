@@ -1,6 +1,6 @@
 [project]
 name = "openrecruiter-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Open Recruiter as an MCP server — the SDK's recruiting tools, in any MCP client."
 keywords = ["mcp", "model-context-protocol", "recruiting", "ats", "claude", "agent"]
 readme = "README.md"
@@ -9,7 +9,7 @@ license = { text = "MIT" }
 # The engine plus the MCP transport, and nothing else: this package is a bridge
 # between two things that already exist, so it carries no dependency of its own.
 dependencies = [
-    "openrecruiter>=0.1.2",
+    "openrecruiter>=0.1.3",
     "mcp>=1.2",
 ]
 

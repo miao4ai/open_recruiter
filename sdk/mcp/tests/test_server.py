@@ -15,10 +15,13 @@ from openrecruiter import Config, Recruiter, Tool
 
 from openrecruiter_mcp.server import (
     WRITE_TOOLS,
+    BearerGate,
     _as_function,
+    _writes_enabled,
     build_recruiter,
     build_server,
-    _writes_enabled,
+    http_app,
+    tools_for,
 )
 
 
@@ -56,7 +59,11 @@ def test_writes_are_withheld_by_default(recruiter):
 
 
 def test_writes_can_be_turned_on(recruiter):
-    assert WRITE_TOOLS <= set(_tools(build_server(recruiter, write=True)))
+    """Scoped to the set: WRITE_TOOLS spans both audiences, and `apply_to_job`
+    belongs to the seeker's, so it is rightly absent here."""
+    published = set(_tools(build_server(recruiter, write=True)))
+    assert (WRITE_TOOLS & set(recruiter.tools.names())) <= published
+    assert "apply_to_job" not in published
 
 
 def test_a_host_registered_tool_comes_along(recruiter):
@@ -215,3 +222,147 @@ def test_the_data_directory_is_created_if_missing(tmp_path, monkeypatch):
     assert target.is_dir()
     assert (target / "openrecruiter.db").exists()
     assert r.tools.names()
+
+
+# ── two audiences ────────────────────────────────────────────────────────────
+
+
+SEEKER_TOOLS = {"search_jobs", "recommend_jobs", "match_resume_to_job", "apply_to_job"}
+
+
+def test_the_seeker_set_is_what_a_consumer_app_asks_for(recruiter):
+    """A chat app helping someone find work needs these four and none of the
+    hiring side's — which is the whole reason the sets are separate."""
+    published = set(_tools(build_server(recruiter, tools="seeker", write=True)))
+
+    assert published == SEEKER_TOOLS
+    assert not (published & set(recruiter.tools.names()))
+
+
+def test_the_default_is_still_the_recruiter_set(recruiter):
+    assert set(_tools(build_server(recruiter))) == set(recruiter.tools.names()) - WRITE_TOOLS
+
+
+def test_all_publishes_both_sides(recruiter):
+    published = set(_tools(build_server(recruiter, tools="all", write=True)))
+    assert published == set(recruiter.tools.names()) | SEEKER_TOOLS
+
+
+def test_a_hosts_own_tool_outranks_a_built_in_of_the_same_name(recruiter):
+    """An application that specialises `search_jobs` should keep its version."""
+    recruiter.tools.register(
+        Tool(
+            name="search_jobs",
+            description="Ours, with the company's own filters.",
+            parameters={"type": "object", "properties": {}},
+            fn=lambda: [],
+        )
+    )
+    tool = _tools(build_server(recruiter, tools="all"))["search_jobs"]
+    assert tool.description == "Ours, with the company's own filters."
+
+
+def test_an_unknown_tool_set_is_refused(recruiter):
+    with pytest.raises(ValueError, match="unknown tool set"):
+        tools_for(recruiter, "nobody")
+
+
+# ── the write gate is scoped to the set ──────────────────────────────────────
+
+
+def test_a_seeker_deployment_can_accept_applications_without_handing_out_create_job(recruiter):
+    """The point of scoping the gate: charbit needs apply_to_job, and must not
+    get the hiring side's writes as the price of it."""
+    published = set(_tools(build_server(recruiter, tools="seeker", write=True)))
+
+    assert "apply_to_job" in published
+    assert "create_job" not in published and "set_candidate_status" not in published
+
+
+def test_applying_is_withheld_by_default_like_every_other_write(recruiter):
+    published = set(_tools(build_server(recruiter, tools="seeker")))
+    assert published == SEEKER_TOOLS - {"apply_to_job"}
+
+
+def test_a_tool_the_host_marked_for_approval_is_gated_too(recruiter):
+    """`requires_approval` is the SDK's word for "reaches outside the system",
+    so it should not need repeating in this package's name list."""
+    recruiter.tools.register(
+        Tool(
+            name="send_offer",
+            description="Emails an offer.",
+            parameters={"type": "object", "properties": {}},
+            fn=lambda: None,
+            requires_approval=True,
+        )
+    )
+    assert "send_offer" not in _tools(build_server(recruiter))
+    assert "send_offer" in _tools(build_server(recruiter, write=True))
+
+
+# ── HTTP, for a remote caller ────────────────────────────────────────────────
+
+
+def test_the_bearer_gate_refuses_a_request_without_the_token():
+    sent = []
+
+    async def send(msg):
+        sent.append(msg)
+
+    async def receive():
+        return {"type": "http.request"}
+
+    async def app(scope, receive, send):
+        sent.append({"type": "reached-the-app"})
+
+    gate = BearerGate(app, "s3cret")
+    scope = {"type": "http", "headers": [(b"authorization", b"Bearer wrong")]}
+    asyncio.run(gate(scope, receive, send))
+
+    assert sent[0]["status"] == 401
+    assert not any(m.get("type") == "reached-the-app" for m in sent)
+
+
+def test_the_bearer_gate_lets_the_right_token_through():
+    reached = []
+
+    async def send(msg):
+        pass
+
+    async def receive():
+        return {"type": "http.request"}
+
+    async def app(scope, receive, send):
+        reached.append(True)
+
+    gate = BearerGate(app, "s3cret")
+    scope = {"type": "http", "headers": [(b"authorization", b"Bearer s3cret")]}
+    asyncio.run(gate(scope, receive, send))
+
+    assert reached == [True]
+
+
+def test_the_http_app_is_stateless_json_at_slash_mcp(recruiter):
+    """The mode a server-side connector speaks: one JSON-RPC request per POST,
+    a JSON body back, no SSE stream and no session to keep."""
+    app = http_app(build_server(recruiter, tools="seeker"), token="s3cret")
+    assert isinstance(app, BearerGate)
+    assert http_app(build_server(recruiter)) is not None
+
+
+def test_a_tool_that_already_returned_json_is_not_encoded_twice(recruiter):
+    """The seeker tools hand back a JSON array of cards as a string. Wrapping it
+    again gives a connector one quoted string where it expected a list — which
+    is what a live HTTP call caught, and no build-only test could."""
+    recruiter.tools.register(
+        Tool(
+            name="cards",
+            description="Returns cards, pre-encoded.",
+            parameters={"type": "object", "properties": {}},
+            fn=lambda: json.dumps([{"id": "j1", "title": "Engineer"}]),
+        )
+    )
+    result = asyncio.run(build_server(recruiter).call_tool("cards", {}))
+
+    parsed = json.loads(result.content[0].text)
+    assert isinstance(parsed, list) and parsed[0]["id"] == "j1"
