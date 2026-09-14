@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from openrecruiter.providers.embeddings import Embedder
 from openrecruiter.store.base import NullVectorIndex, Store, VectorIndex
 from openrecruiter.store.sqlite import SQLiteStore
 from openrecruiter.types import Candidate, CandidateStatus, Job, Match
@@ -153,7 +154,7 @@ def test_openai_compatible_embeddings_are_a_second_way_in(monkeypatch):
     """A self-hosted /v1/embeddings behind an OpenAI-shaped API makes the index
     available without a Voyage key, and the request is the OpenAI shape."""
     from openrecruiter.config import Config
-    from openrecruiter.store import vector
+    from openrecruiter.providers import embeddings as backends
     from openrecruiter.store.vector import ChromaVectorIndex, OpenAIEmbeddings, embedding_function
 
     cfg = Config(embedding_api_url="https://ai.example/v1/embeddings", embedding_api_key="k", embedding_model="bge-m3")
@@ -174,7 +175,7 @@ def test_openai_compatible_embeddings_are_a_second_way_in(monkeypatch):
         seen.update(url=url, auth=headers["Authorization"], body=json)
         return Resp()
 
-    monkeypatch.setattr(vector.httpx, "post", fake_post)
+    monkeypatch.setattr(backends.httpx, "post", fake_post)
     out = embedding_function(lambda: cfg)(["a", "b"])
     assert out == [[0.1], [0.2]]  # back in input order
     assert seen["url"] == cfg.embedding_api_url and seen["auth"] == "Bearer k"
@@ -184,7 +185,7 @@ def test_openai_compatible_embeddings_are_a_second_way_in(monkeypatch):
 def test_embedders_expose_the_methods_chroma_1_5_calls(monkeypatch):
     """chromadb 1.5 calls embed_documents on add and embed_query on search;
     both must exist and delegate to __call__ (older chroma calls the object)."""
-    from openrecruiter.store import vector
+    from openrecruiter.providers import embeddings as backends
     from openrecruiter.store.vector import OpenAIEmbeddings
 
     class Resp:
@@ -194,7 +195,103 @@ def test_embedders_expose_the_methods_chroma_1_5_calls(monkeypatch):
         def json(self):
             return {"data": [{"index": 0, "embedding": [0.5]}]}
 
-    monkeypatch.setattr(vector.httpx, "post", lambda *a, **k: Resp())
-    ef = OpenAIEmbeddings(lambda: ("https://x/v1/embeddings", "k", "m"))
+    monkeypatch.setattr(backends.httpx, "post", lambda *a, **k: Resp())
+    ef = OpenAIEmbeddings(
+        lambda: backends.Settings("openai_compatible", "https://x/v1/embeddings", "k", "m")
+    )
     assert ef.embed_documents(["a"]) == [[0.5]]
     assert ef.embed_query(["a"]) == [[0.5]]
+
+
+# ── the embedder is an open seam, and changing it is guarded ──────────────
+
+
+class _Axis(Embedder):
+    """An embedder of one's own: a point on an axis chosen by the first letter.
+
+    Subclassing is the documented route because ChromaDB validates the object it
+    is handed and insists on `__call__(self, input)` — which the base supplies.
+    A duck-typed class with only `embed_documents`/`embed_query` is accepted by
+    this package and rejected by ChromaDB at the first collection it opens, so
+    these tests index and search for real rather than only constructing.
+    """
+
+    chroma_name = "axis"
+
+    def embed(self, texts, *, query):
+        return [[float(bool(t and t[0].lower() < "n")), 0.5, 0.25] for t in texts]
+
+
+def test_an_embedder_can_be_handed_in_whole(tmp_path, job):
+    """A backend this package has never heard of should not require a whole
+    `VectorIndex` reimplementation to reach — and it answers for availability
+    itself, since there is no provider or key for the config to be asked about."""
+    from openrecruiter.config import Config
+    from openrecruiter.store.vector import ChromaVectorIndex
+
+    index = ChromaVectorIndex(lambda: Config(), tmp_path / "chroma", embedder=_Axis())
+    assert index.available  # no embedding key anywhere in that Config
+
+    index.index_job(job)
+    assert index._collection("jobs").count() == 1
+    assert [jid for jid, _ in index.search_jobs(_candidate_named("Ada"))] == [job.id]
+
+
+def test_a_recruiter_passes_its_embedder_down(tmp_path, job):
+    from openrecruiter import Recruiter
+    from openrecruiter.store.vector import ChromaVectorIndex
+
+    r = Recruiter(anthropic_api_key="sk-x", embedder=_Axis(), data_dir=tmp_path)
+    assert isinstance(r.index, ChromaVectorIndex) and r.index.available
+
+    r.index.index_job(job)
+    assert r.index._collection("jobs").count() == 1
+
+
+def _candidate_named(name: str) -> Candidate:
+    return Candidate(name=name, resume_summary="cuda and nccl at scale")
+
+
+def test_reusing_an_index_after_a_model_change_is_refused():
+    """Vectors from two models are not comparable, so the old index would answer
+    with plausible, wrong neighbours — the one failure here that looks fine."""
+    from openrecruiter.store.vector import EmbedderMismatch, _check_embedder
+
+    class Col:
+        metadata = {"openrecruiter:embedder": "voyage:voyage-4-lite"}
+
+    _check_embedder(Col(), "voyage:voyage-4-lite", "jobs")  # same: fine
+
+    with pytest.raises(EmbedderMismatch, match="reindex"):
+        _check_embedder(Col(), "cohere:embed-v4.0", "jobs")
+
+
+def test_an_index_written_before_the_stamp_existed_is_left_alone():
+    """There is nothing to compare it against, and refusing every older index
+    would be a worse answer than trusting it."""
+    from openrecruiter.store.vector import _check_embedder
+
+    class Old:
+        metadata = {"hnsw:space": "cosine"}
+
+    _check_embedder(Old(), "voyage:voyage-4-lite", "jobs")  # must not raise
+
+
+def test_a_mismatch_costs_the_search_not_the_request(monkeypatch, caplog, job):
+    """The guard has to reach the caller as "no results" plus a loud log, the way
+    every other retrieval failure in this module does."""
+    from openrecruiter.config import Config
+    from openrecruiter.store.vector import ChromaVectorIndex, EmbedderMismatch
+
+    index = ChromaVectorIndex(lambda: Config(voyage_api_key="pa-x"), "/tmp/unused")
+    monkeypatch.setattr(
+        index,
+        "_collection",
+        lambda name: (_ for _ in ()).throw(EmbedderMismatch("indexed with voyage, cohere configured")),
+    )
+
+    with caplog.at_level("ERROR"):
+        assert index.search_candidates(job) == []
+        index.index_job(job)  # must not raise either
+    assert "cohere configured" in caplog.text
+

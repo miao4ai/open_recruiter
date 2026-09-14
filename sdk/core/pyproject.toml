@@ -1,6 +1,6 @@
 [project]
 name = "openrecruiter"
-version = "0.1.1"
+version = "0.1.2"
 description = "The recruiting engine behind Open Recruiter — parse, retrieve, rank, and an agent over tools."
 keywords = ["recruiting", "ats", "llm", "agent", "ranking", "candidate-search"]
 readme = "README.md"
@@ -14,6 +14,13 @@ dependencies = [
     "httpx>=0.27",
     "chromadb>=0.5",
 ]
+
+[project.optional-dependencies]
+# Embeddings from a local sentence-transformers model instead of an API. Kept
+# out of the default install because it pulls the whole torch stack: a package
+# that merely offers local embeddings must not make every other install carry
+# them. The import is deferred to first use, so nothing loads unless asked.
+local-embeddings = ["sentence-transformers>=3.0"]
 
 [build-system]
 requires = ["hatchling"]

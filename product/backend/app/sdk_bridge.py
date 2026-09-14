@@ -25,6 +25,7 @@ from openrecruiter import (
     NullVectorIndex,
     Recruiter,
 )
+from openrecruiter.store.vector import embeddings_configured
 
 from app import database as db
 from app.config import Config
@@ -207,6 +208,12 @@ def to_sdk_config(cfg: Config) -> SDKConfig:
     _CONFIG.embedding_api_url = cfg.embedding_api_url
     _CONFIG.embedding_api_key = cfg.embedding_api_key
     _CONFIG.embedding_model = cfg.embedding_model
+    # This app is pinned to Voyage. The SDK's embedding-provider registry exists
+    # for anyone building on the package, not as a setting here — the one
+    # exception being a deployment that points the whole container at an
+    # OpenAI-compatible endpoint through the environment, which the MCP staging
+    # image does.
+    _CONFIG.embedding_provider = "openai_compatible" if cfg.embedding_api_url else "voyage"
     if not _CONFIG.llm_model:
         _CONFIG.__post_init__()
     return _CONFIG
@@ -227,7 +234,7 @@ def vector_index(cfg: Config):
     # would fall back to an empty Voyage key. Refresh it here so every path is
     # correct.
     to_sdk_config(cfg)
-    if not (cfg.voyage_api_key or (cfg.embedding_api_url and cfg.embedding_api_key)):
+    if not embeddings_configured(_CONFIG):
         return NullVectorIndex()
     if _INDEX is None:
         from app.vectorstore import CHROMA_DIR
