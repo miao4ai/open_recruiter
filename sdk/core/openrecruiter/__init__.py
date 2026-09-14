@@ -42,10 +42,10 @@ from openrecruiter.store import (
     Store,
     VectorIndex,
 )
-from openrecruiter.tools import Tool, ToolRegistry, tool
+from openrecruiter.tools import Tool, ToolRegistry, build_seeker_tools, tool
 from openrecruiter.types import Candidate, CandidateStatus, EmailDraft, Job, Match
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 __all__ = [
     "APIRanker",
@@ -75,6 +75,7 @@ __all__ = [
     "ToolCall",
     "ToolRegistry",
     "ToolResult",
+    "build_seeker_tools",
     "TwoStageRanker",
     "VectorIndex",
     "__version__",
